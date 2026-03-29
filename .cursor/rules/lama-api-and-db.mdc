@@ -1,0 +1,19 @@
+---
+description: API contract, Prisma safety, and runtime diagnostics
+alwaysApply: true
+---
+
+# API + DB Safety
+
+- For `apps/api` changes:
+  - validate/sanitize query params (`page`, `limit`, `search`, etc.)
+  - return explicit errors (`4xx` for invalid input) instead of generic `500`
+- Keep DB flow deterministic:
+  - after Prisma schema updates, run `npm run db:push` (or `npm run db:migrate`)
+  - then run smoke checks
+- Preserve request tracing:
+  - keep `x-request-id` middleware active
+  - include `requestId` in error responses
+  - log structured error payloads with method/path
+- Do not break CORS when dev ports change (support localhost dynamic ports in dev).
+

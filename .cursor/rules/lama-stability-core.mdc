@@ -1,0 +1,22 @@
+---
+description: Lama stability guardrails for every change
+alwaysApply: true
+---
+
+# Lama Stability Core
+
+- Solve root cause first, never patch only symptoms.
+- Keep shared models in `packages/shared-types` and import from `@lama-stage/shared-types`.
+- Never leave compiled `.js` files in `apps/api/src`; source code there is TypeScript-only.
+- Keep API response contract stable:
+  - list endpoints: `{ data: [...], meta: { total, page, lastPage } }`
+  - detail/create/update: `{ data: object }`
+- Before marking task done:
+  - run `npm run build`
+  - run `npm run smoke` (set `API_URL` if API is on non-default port)
+- If build/smoke fails, task is not complete.
+ - For every substantial feature or domain change (new module, major refactor, new PDF/document type, new external integration), update `status.md` with:
+   - a short description of the feature/domain and its purpose,
+   - pointers to main backend/frontend modules and key docs in `docs/`,
+   - any non-obvious conventions or cross-cutting contracts other LLMs must respect.
+

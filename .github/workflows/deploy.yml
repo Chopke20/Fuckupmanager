@@ -1,0 +1,25 @@
+name: Deploy to Hetzner
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: root
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          envs: DATABASE_URL
+          script: |
+            cd /var/www/lamaapp
+            git pull origin main
+            chmod +x deploy.sh
+            ./deploy.sh
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

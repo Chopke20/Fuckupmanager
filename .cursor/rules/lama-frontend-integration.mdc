@@ -1,0 +1,17 @@
+---
+description: Frontend integration rules for clients/orders modules
+alwaysApply: true
+---
+
+# Frontend Integration Rules
+
+- Keep `apps/web` API clients aligned with backend envelope format.
+- For lists (`orders`, `clients`) consume `{ data, meta }` and map both fields.
+- For detail/create/update safely unwrap `res.data?.data ?? res.data`.
+- Keep Vite shared-types alias pointing to ESM build:
+  - `@lama-stage/shared-types` -> `packages/shared-types/dist/esm`
+- After contract changes, verify pages:
+  - `Klienci`
+  - `Zlecenia`
+  with no runtime import errors and no request `500`.
+

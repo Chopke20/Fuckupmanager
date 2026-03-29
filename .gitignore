@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+*.tsbuildinfo
+
+# Nie commituj skompilowanych .js w src (źródła to .ts)
+apps/api/src/**/*.js
+!apps/api/src/**/*.config.js
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# DB (SQLite)
+*.db
+*.db-journal
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+.vercel

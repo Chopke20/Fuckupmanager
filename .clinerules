@@ -1,0 +1,31 @@
+# Zasady Projektu Lama - Stabilność i brak regresji
+
+## 1) Monorepo i typy (źródło prawdy)
+- Wspólne typy/schematy tylko w `packages/shared-types`.
+- Import zawsze z `@lama-stage/shared-types` (nie `@lama/shared-types`).
+- Po zmianie `packages/shared-types` zawsze wykonaj `npm run build -w packages/shared-types`.
+
+## 2) Moduły ESM/CJS i artefakty
+- Frontend (`apps/web`) używa aliasu do ESM: `packages/shared-types/dist/esm`.
+- API nie może mieć skompilowanych `.js` w `apps/api/src` (tylko `.ts`).
+- Build outputy trzymamy wyłącznie w `dist/`.
+
+## 3) Prisma i baza
+- Po zmianie `apps/api/prisma/schema.prisma` wykonaj co najmniej `npm run db:push` (lub `npm run db:migrate`).
+- Dopiero potem uruchamiaj API i smoke-check.
+
+## 4) Kontrakt API (obowiązkowy)
+- Listy (`clients`, `orders`): `{ data: [...], meta: { total, page, lastPage } }`.
+- Detal/create/update: `{ data: <obiekt> }`.
+- Frontendowe klienty API muszą mapować odpowiedzi zgodnie z tym kontraktem.
+
+## 5) Odporność zmian
+- Parametry paginacji i filtry waliduj/sanitizuj, nie dopuszczaj do 500.
+- Backend błędy loguj z `requestId`, metodą i ścieżką.
+- Nie dodawaj nowych funkcji, dopóki aktualny błąd produkcyjny nie jest zamknięty.
+
+## 6) Weryfikacja końcowa (Definition of Done)
+- Uruchom `npm run build` w root.
+- Uruchom `npm run smoke` (dla niestandardowego API portu ustaw `API_URL`).
+- Jeśli którykolwiek krok nie przejdzie, zadanie nie jest ukończone.
+

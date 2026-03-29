@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "ES2022",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "moduleResolution": "node",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "baseUrl": ".",
+    "paths": {
+      "@lama-stage/shared-types": ["../../packages/shared-types/dist/index.d.ts"],
+      "@lama-stage/shared-types/*": ["../../packages/shared-types/dist/*"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

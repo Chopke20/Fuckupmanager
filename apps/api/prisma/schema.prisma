@@ -1,0 +1,406 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String   @id @default(uuid())
+  username         String?  @unique
+  email            String   @unique
+  passwordHash     String
+  fullName         String?
+  role             String   @default("OPERATOR_FULL")
+  isActive         Boolean  @default(true)
+  emailVerifiedAt  DateTime?
+  mustChangePassword Boolean @default(false)
+  lastLoginAt      DateTime?
+  createdById      String?
+  createdBy        User?    @relation("UserCreatedUsers", fields: [createdById], references: [id])
+  createdUsers     User[]   @relation("UserCreatedUsers")
+  sessions         Session[]
+  invitationsSent  InvitationToken[]   @relation("InvitationCreatedBy")
+  passwordResetTokens PasswordResetToken[]
+  auditLogs        AuditLog[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("users")
+}
+
+model RoleDefinition {
+  id              String   @id @default(uuid())
+  roleKey         String   @unique
+  displayName     String
+  description     String?
+  permissionsJson String
+  isSystem        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("role_definitions")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorUserId String
+  actorUser   User    @relation(fields: [actorUserId], references: [id], onDelete: Cascade)
+  actorEmail  String
+  module      String
+  action      String
+  targetType  String?
+  targetId    String?
+  result      String   @default("SUCCESS")
+  details     String?
+  requestId   String?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@index([actorUserId, createdAt])
+  @@index([module, createdAt])
+  @@map("audit_logs")
+}
+
+model InvitationToken {
+  id          String   @id @default(uuid())
+  tokenHash   String   @unique
+  email       String
+  role        String   @default("OPERATOR_FULL")
+  fullName    String?
+  expiresAt   DateTime
+  usedAt      DateTime?
+  invitedById String
+  invitedBy   User     @relation("InvitationCreatedBy", fields: [invitedById], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@index([email, expiresAt])
+  @@map("invitation_tokens")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, expiresAt])
+  @@map("password_reset_tokens")
+}
+
+model Session {
+  id               String   @id @default(uuid())
+  sessionTokenHash String   @unique
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userAgent        String?
+  ipAddress        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime @default(now())
+  lastUsedAt       DateTime @default(now())
+
+  @@index([userId, expiresAt])
+  @@map("sessions")
+}
+
+model Client {
+  id          String   @id @default(uuid())
+  companyName String   @unique
+  contactName String?
+  address     String?
+  nip         String?
+  email       String?
+  phone       String?
+  notes       String?
+  isDeleted   Boolean  @default(false)
+  deletedAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orders Order[]
+
+  @@map("clients")
+}
+
+model OrderYearSequence {
+  year      Int      @id
+  lastNumber Int     @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@map("order_year_sequences")
+}
+
+model Order {
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+  notes       String?  // notatki wewnętrzne (osobne od opisu)
+  status       String  @default("DRAFT")
+  venue        String?
+  venuePlaceId String?
+
+  dateFrom DateTime
+  dateTo   DateTime
+  startDate DateTime @default(now())
+  endDate   DateTime @default(now())
+
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id])
+
+  discountGlobal Float @default(0)
+  vatRate        Float @default(23)
+
+  // Numeracja zleceń (rok + numer w roku); nadawane przy tworzeniu
+  orderYear   Int?
+  orderNumber Int?
+
+  // Oferta PDF (AUTO): wersja rośnie przy każdym Generuj
+  offerVersion     Int     @default(0)
+  offerNumber      String? @unique
+  offerValidityDays Int    @default(14)
+  projectContactKey String?
+  currency         String  @default("PLN")
+  exchangeRateEur  Float?
+
+  isRecurring     Boolean @default(false)
+  isDeleted       Boolean @default(false)
+  deletedAt       DateTime?
+  recurringConfig String?
+  parentOrderId   String?
+  parentOrder     Order?  @relation("RecurringOrders", fields: [parentOrderId], references: [id])
+  childOrders     Order[] @relation("RecurringOrders")
+
+  documentExports OrderDocumentExport[]
+  documentDrafts  OrderDocumentDraft[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stages          OrderStage[]
+  equipmentItems  OrderEquipmentItem[]
+  productionItems OrderProductionItem[]
+
+  @@unique([orderYear, orderNumber])
+  @@map("orders")
+}
+
+model CalendarNoteEvent {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  dateFrom    DateTime
+  dateTo      DateTime
+  allDay      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([dateFrom, dateTo])
+  @@map("calendar_note_events")
+}
+
+model OrderStage {
+  id        String    @id @default(uuid())
+  orderId   String
+  order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  type      String    @default("CUSTOM")
+  label     String?
+  date      DateTime
+  timeStart String?
+  timeEnd   String?
+  notes     String?
+  sortOrder Int       @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@map("order_stages")
+}
+
+model Equipment {
+  id            String   @id @default(uuid())
+  name          String
+  description   String?
+  category      String
+  subcategory   String?
+  dailyPrice    Float
+  stockQuantity Int      @default(1)
+  unit          String   @default("szt.")
+  internalCode  String?  @unique
+  technicalNotes String?
+  imageUrl      String?
+  visibleInOffer Boolean @default(true)
+  pricingRule   String?
+  isDeleted     Boolean  @default(false)
+  deletedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orderItems    OrderEquipmentItem[]
+  reservations  EquipmentReservation[]
+  blocks        EquipmentBlock[]
+
+  @@map("equipment")
+}
+
+model OrderEquipmentItem {
+  id          String  @id @default(uuid())
+  orderId     String
+  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  equipmentId String?
+  equipment   Equipment? @relation(fields: [equipmentId], references: [id])
+
+  name        String
+  description String?
+  category    String  @default("Inne")
+  quantity    Int     @default(1)
+  unitPrice   Float
+  days        Int     @default(1)
+  discount    Float   @default(0)
+  pricingRule String?
+  visibleInOffer Boolean @default(true)
+  isRental       Boolean @default(false)
+  sortOrder      Int     @default(0)
+
+  // Individual reservation dates for this equipment item
+  dateFrom    DateTime?
+  dateTo      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reservations EquipmentReservation[]
+
+  @@map("order_equipment_items")
+}
+
+model OrderProductionItem {
+  id      String @id @default(uuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  rateType    String  @default("FLAT")
+  rateValue   Float
+  units       Float    @default(1)
+  discount    Float    @default(0)
+  stageIds    String?
+  isTransport Boolean @default(false)
+  isAutoCalculated Boolean @default(true)
+  isSubcontractor Boolean @default(false)
+  visibleInOffer  Boolean @default(true)
+  sortOrder       Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("order_production_items")
+}
+
+model TransportPricingSettings {
+  id                 Int      @id @default(1)
+  rangesJson         String   @default("[{\"fromKm\":0,\"toKm\":50,\"flatNet\":150},{\"fromKm\":50,\"toKm\":100,\"flatNet\":250}]")
+  shortDistanceKm    Float    @default(50)
+  mediumDistanceKm   Float    @default(100)
+  shortDistanceNet   Float    @default(150)
+  mediumDistanceNet  Float    @default(250)
+  longDistancePerKm  Float    @default(1.15)
+  updatedAt          DateTime @updatedAt
+
+  @@map("transport_pricing_settings")
+}
+
+model OrderDocumentExport {
+  id             String   @id @default(uuid())
+  orderId        String
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  documentType   String   // OFFER | PROPOSAL | WAREHOUSE | BRIEF
+  documentNumber String
+  exportedAt     DateTime @default(now())
+  snapshot       String   // JSON payload with document data snapshot
+
+  createdAt      DateTime @default(now())
+
+  @@unique([orderId, documentType, documentNumber])
+  @@index([orderId, documentType])
+  @@index([documentType, documentNumber])
+  @@map("order_document_exports")
+}
+
+model OrderDocumentDraft {
+  id           String   @id @default(uuid())
+  orderId      String
+  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  documentType String   // OFFER | PROPOSAL | WAREHOUSE | BRIEF
+  payload      String   // JSON payload with editable draft data
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([orderId, documentType])
+  @@index([orderId, documentType])
+  @@map("order_document_drafts")
+}
+
+model EquipmentReservation {
+  id                   String @id @default(uuid())
+  equipmentId          String
+  equipment            Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  orderId              String
+  orderEquipmentItemId String
+  orderEquipmentItem   OrderEquipmentItem @relation(fields: [orderEquipmentItemId], references: [id], onDelete: Cascade)
+
+  date     DateTime
+  quantity Int
+
+  @@unique([equipmentId, orderEquipmentItemId, date])
+  @@index([equipmentId, date])
+  @@map("equipment_reservations")
+}
+
+model EquipmentBlock {
+  id          String   @id @default(uuid())
+  equipmentId String
+  equipment   Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+
+  quantity    Int      @default(1)
+  dateFrom    DateTime
+  dateTo      DateTime
+  note        String?
+
+  createdAt   DateTime @default(now())
+
+  @@index([equipmentId, dateFrom, dateTo])
+  @@map("equipment_blocks")
+}
+
+/// Profil firmy (wystawca dokumentów) — wspólne źródło danych dla oferty i przyszłych formularzy; jeden oznaczony jako domyślny.
+model IssuerProfile {
+  id          String   @id @default(uuid())
+  profileKey  String   @unique
+  companyName String
+  address     String
+  nip         String
+  email       String
+  phone       String?
+  sortOrder   Int      @default(0)
+  isDefault   Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isDefault])
+  @@index([sortOrder])
+  @@map("issuer_profiles")
+}
