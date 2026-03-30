@@ -17,18 +17,30 @@ import issuerProfilesRouter from './modules/issuer-profiles/issuer-profiles.rout
 import dataportRouter from './modules/dataport/dataport.router'
 import { requireAuth, requireModuleAccess, requirePermission } from './shared/middleware/auth.middleware'
 
+const PRODUCTION_FRONTEND_ORIGINS = ['https://fuckupmanager.lamastage.pl'] as const
+
+function splitOrigins(raw: string | undefined, fallback: string): string[] {
+  const s = (raw ?? fallback).trim()
+  return s.split(',').map((o) => o.trim().replace(/\/$/, '')).filter(Boolean)
+}
+
 export function createApp() {
   const app = express()
 
   // Security
   app.use(helmet())
-  const frontendOrigin = process.env.FRONTEND_ORIGIN ?? process.env.CORS_ORIGIN ?? 'http://localhost:5173'
+  const configuredOrigins = splitOrigins(
+    process.env.FRONTEND_ORIGIN ?? process.env.CORS_ORIGIN,
+    'http://localhost:5173'
+  )
+  const allowedOrigins = new Set<string>([...configuredOrigins, ...PRODUCTION_FRONTEND_ORIGINS])
   const isDev = process.env.NODE_ENV !== 'production'
   app.use(cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true)
-      if (origin === frontendOrigin) return callback(null, true)
-      if (isDev && /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) {
+      const normalized = origin.replace(/\/$/, '')
+      if (allowedOrigins.has(normalized)) return callback(null, true)
+      if (isDev && /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(normalized)) {
         return callback(null, true)
       }
       return callback(new Error('Not allowed by CORS'))

@@ -27,3 +27,16 @@ export class ConflictError extends AppError {
     super(message, 409, 'CONFLICT')
   }
 }
+
+/** Rezerwacja sprzętu koliduje z innym zleceniem — obsługiwane w orders.controller (409). */
+export class EquipmentUnavailableError extends Error {
+  readonly code = 'EQUIPMENT_UNAVAILABLE' as const
+
+  constructor(
+    message: string,
+    public readonly details: unknown
+  ) {
+    super(message)
+    this.name = 'EquipmentUnavailableError'
+  }
+}

@@ -1,8 +1,22 @@
-import { PrismaClient, Prisma } from '@prisma/client';
-import { CreateOrderSchema, UpdateOrderSchema, CreateOrderEquipmentItemSchema, CreateOrderStageSchema, CreateOrderProductionItemSchema } from '@lama-stage/shared-types';
-import { z } from 'zod';
+import { PrismaClient, Prisma } from '@prisma/client'
+import { CreateOrderSchema, UpdateOrderSchema, CreateOrderEquipmentItemSchema, CreateOrderStageSchema, CreateOrderProductionItemSchema } from '@lama-stage/shared-types'
+import { z } from 'zod'
+import { EquipmentUnavailableError } from '../../shared/errors/AppError'
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient()
+
+const orderDetailInclude = {
+  client: true,
+  equipmentItems: {
+    include: {
+      equipment: true,
+    },
+  },
+  productionItems: true,
+  stages: true,
+} as const satisfies Prisma.OrderInclude
+
+export type OrderDetail = Prisma.OrderGetPayload<{ include: typeof orderDetailInclude }>
 
 export interface EquipmentAvailability {
   equipmentId: string;
@@ -83,30 +97,21 @@ export class OrdersService {
     return { data: orders.map((o) => this.normalizeOrderDates(o)), meta: { total, page, lastPage } };
   }
 
-  async getOrderById(id: string) {
+  async getOrderById(id: string): Promise<OrderDetail | null> {
     const order = await prisma.order.findFirst({
       where: { id, isDeleted: false },
-      include: {
-        client: true,
-        equipmentItems: {
-          include: {
-            equipment: true,
-          },
-        },
-        productionItems: true,
-        stages: true,
-      },
-    });
-    if (!order) return null;
-    const normalized = this.normalizeOrderDates(order) as typeof order;
+      include: orderDetailInclude,
+    })
+    if (!order) return null
+    const normalized = this.normalizeOrderDates(order) as OrderDetail
     if (Array.isArray(normalized.productionItems)) {
-      normalized.productionItems = normalized.productionItems.map((p: any) => ({
+      normalized.productionItems = normalized.productionItems.map((p) => ({
         ...p,
         rateValue: Number(p.rateValue),
         units: Number(p.units),
-      })) as any;
+      }))
     }
-    return normalized;
+    return normalized
   }
 
   /**
@@ -212,10 +217,7 @@ export class OrdersService {
         )
         .join('; ');
 
-      const error = new Error(`Niektóry sprzęt jest niedostępny: ${errorDetails}`);
-      (error as any).code = 'EQUIPMENT_UNAVAILABLE';
-      (error as any).details = unavailableItems;
-      throw error;
+      throw new EquipmentUnavailableError(`Niektóry sprzęt jest niedostępny: ${errorDetails}`, unavailableItems)
     }
   }
 
@@ -262,7 +264,7 @@ export class OrdersService {
           sortOrder: item.sortOrder ?? 0,
           dateFrom: item.dateFrom ? new Date(item.dateFrom) : startDate,
           dateTo: item.dateTo ? new Date(item.dateTo) : endDate,
-          ...(item.equipmentId ? { equipment: { connect: { id: item.equipmentId } } } : {}),
+          equipmentId: item.equipmentId ?? null,
         })) : [],
       },
       productionItems: {
@@ -354,7 +356,7 @@ export class OrdersService {
                 sortOrder: item.sortOrder ?? 0,
                 dateFrom: item.dateFrom ? new Date(item.dateFrom) : startDate,
                 dateTo: item.dateTo ? new Date(item.dateTo) : endDate,
-                ...(item.equipmentId ? { equipment: { connect: { id: item.equipmentId } } } : {}),
+                equipmentId: item.equipmentId ?? null,
               })),
             },
           }

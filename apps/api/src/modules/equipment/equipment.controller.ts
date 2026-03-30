@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '../../prisma/client'
 import { NotFoundError } from '../../shared/errors/AppError'
 import { PaginationSchema } from '@lama-stage/shared-types'
@@ -41,7 +42,7 @@ export const getEquipment = async (req: Request, res: Response, next: NextFuncti
 
     const deletedOnly = deletedOnlyQuery === 'true' || deletedOnlyQuery === '1';
 
-    const where: any = { isDeleted: deletedOnly }
+    const where: Prisma.EquipmentWhereInput = { isDeleted: deletedOnly }
     // ZASOBY są tylko w zakładce Zasoby – w liście sprzętu zawsze wykluczamy
     const excludeZasoby = category !== 'ZASOBY'
     if (category && category !== 'all') {
@@ -80,7 +81,7 @@ export const getEquipment = async (req: Request, res: Response, next: NextFuncti
       : equipmentRaw
     const lastPage = Math.ceil(total / limit) || 1
 
-    const parsedEquipment = equipment.map((eq: any) => ({
+    const parsedEquipment = equipment.map((eq) => ({
       ...eq,
       pricingRule: eq.pricingRule && typeof eq.pricingRule === 'string' ? JSON.parse(eq.pricingRule) : eq.pricingRule,
     }))
@@ -263,7 +264,7 @@ export const getEquipmentAvailability = async (req: Request, res: Response, next
     if (!equipment) {
       throw new NotFoundError('Sprzęt')
     }
-    const reservedQuantity = reservations.reduce((sum: number, r: any) => sum + r.quantity, 0)
+    const reservedQuantity = reservations.reduce((sum, r) => sum + r.quantity, 0)
     const available = equipment.stockQuantity - reservedQuantity
     res.json({
       equipmentId,

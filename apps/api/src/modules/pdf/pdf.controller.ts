@@ -3,7 +3,7 @@ import { prisma } from '../../prisma/client'
 import puppeteer from 'puppeteer'
 import { ZodError } from 'zod'
 import { OrderOfferSnapshotSchema, type OrderOfferSnapshot } from '@lama-stage/shared-types'
-import { buildOfferHtmlV5 } from './offer-v5-builder'
+import { buildOfferHtmlV5, type OrderLike } from './offer-v5-builder'
 import {
   areOfferSnapshotContentsEqual,
   buildOrderOfferSnapshotFromOrder,
@@ -238,19 +238,25 @@ export class PdfController {
       }
 
       const parsed = OrderOfferSnapshotSchema.safeParse(snapshotRaw)
-      const raw = snapshotRaw as Record<string, any>
+      const raw = snapshotRaw as Record<string, unknown>
+      let issuedAtFallback: string | undefined
+      if (typeof raw.generatedAt === 'string') {
+        issuedAtFallback = raw.generatedAt
+      } else {
+        const dd = raw.documentDraft
+        if (dd && typeof dd === 'object' && dd !== null && 'issuedAt' in dd) {
+          const v = (dd as { issuedAt?: unknown }).issuedAt
+          if (typeof v === 'string') issuedAtFallback = v
+        }
+      }
       const issuedAt: string | undefined =
-        parsed.success && parsed.data.generatedAt
-          ? parsed.data.generatedAt
-          : typeof raw?.generatedAt === 'string'
-            ? raw.generatedAt
-            : raw?.documentDraft?.issuedAt
+        parsed.success && parsed.data.generatedAt ? parsed.data.generatedAt : issuedAtFallback
 
       const html = parsed.success
         ? buildOfferHtmlV5(orderOfferSnapshotToPdfOrderLike(parsed.data), exportRecord.documentNumber, {
             issuedAt,
           })
-        : buildOfferHtmlV5(raw as any, exportRecord.documentNumber, { issuedAt })
+        : buildOfferHtmlV5(raw as OrderLike, exportRecord.documentNumber, { issuedAt })
       const pdfBuffer = await this.renderPdf(html)
 
       const filename = `Oferta-${exportRecord.documentNumber}.pdf`

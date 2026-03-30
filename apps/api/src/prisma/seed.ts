@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, type Prisma } from '@prisma/client'
 import fs from 'fs'
 import path from 'path'
 import csv from 'csv-parser'
@@ -16,11 +16,11 @@ async function seedClients() {
     return
   }
 
-  const clients: any[] = []
-  await new Promise((resolve, reject) => {
+  const clients: Prisma.ClientCreateInput[] = []
+  await new Promise<void>((resolve, reject) => {
     fs.createReadStream(filePath, { encoding: 'utf-8' })
       .pipe(csv())
-      .on('data', (row) => {
+      .on('data', (row: Record<string, string | undefined>) => {
         const companyName = row['Nazwa Firmy/Instytucji']?.trim()
         const contactName = row['Imię i Nazwisko']?.trim()
         const address = row['Adres']?.trim()
@@ -182,11 +182,11 @@ async function seedEquipment() {
     return
   }
 
-  const equipment: any[] = []
-  await new Promise((resolve, reject) => {
+  const equipment: Prisma.EquipmentCreateInput[] = []
+  await new Promise<void>((resolve, reject) => {
     fs.createReadStream(filePath, { encoding: 'utf-8' })
       .pipe(csv())
-      .on('data', (row) => {
+      .on('data', (row: Record<string, string | undefined>) => {
         const category = row['Kategoria']?.trim()
         const name = row['Nazwa']?.trim()
         const priceStr = row['Cena']?.trim()
@@ -242,11 +242,11 @@ async function seedResources() {
     return
   }
 
-  const resources: any[] = []
-  await new Promise((resolve, reject) => {
+  const resources: Prisma.EquipmentCreateInput[] = []
+  await new Promise<void>((resolve, reject) => {
     fs.createReadStream(filePath, { encoding: 'utf-8' })
       .pipe(csv())
-      .on('data', (row) => {
+      .on('data', (row: Record<string, string | undefined>) => {
         const kategoria = row['Kategoria']?.trim()
         const name = row['Nazwa']?.trim()
         const priceStr = row['Cena']?.trim()

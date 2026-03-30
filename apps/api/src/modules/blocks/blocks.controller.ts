@@ -1,6 +1,7 @@
-import { Request, Response } from 'express';
-import { prisma } from '../../prisma/client';
-import { z } from 'zod';
+import { Request, Response } from 'express'
+import type { Prisma } from '@prisma/client'
+import { prisma } from '../../prisma/client'
+import { z } from 'zod'
 
 const createBlockSchema = z.object({
   equipmentId: z.string().uuid(),
@@ -16,12 +17,13 @@ export const getBlocks = async (req: Request, res: Response) => {
   try {
     const { equipmentId, dateFrom, dateTo } = req.query;
 
-    const where: any = {};
-    if (equipmentId) where.equipmentId = equipmentId;
+    const where: Prisma.EquipmentBlockWhereInput = {}
+    if (equipmentId) where.equipmentId = String(equipmentId)
     if (dateFrom || dateTo) {
-      where.AND = [];
-      if (dateFrom) where.AND.push({ dateFrom: { gte: new Date(dateFrom as string) } });
-      if (dateTo) where.AND.push({ dateTo: { lte: new Date(dateTo as string) } });
+      const and: Prisma.EquipmentBlockWhereInput[] = []
+      if (dateFrom) and.push({ dateFrom: { gte: new Date(dateFrom as string) } })
+      if (dateTo) and.push({ dateTo: { lte: new Date(dateTo as string) } })
+      where.AND = and
     }
 
     const blocks = await prisma.equipmentBlock.findMany({
@@ -97,9 +99,12 @@ export const updateBlock = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Block not found' });
     }
 
-    const updatedData: any = { ...validatedData };
-    if (validatedData.dateFrom) updatedData.dateFrom = new Date(validatedData.dateFrom);
-    if (validatedData.dateTo) updatedData.dateTo = new Date(validatedData.dateTo);
+    const { dateFrom: df, dateTo: dt, ...rest } = validatedData
+    const updatedData: Prisma.EquipmentBlockUpdateInput = {
+      ...rest,
+      ...(df !== undefined ? { dateFrom: new Date(df) } : {}),
+      ...(dt !== undefined ? { dateTo: new Date(dt) } : {}),
+    }
 
     const updatedBlock = await prisma.equipmentBlock.update({
       where: { id },

@@ -1,0 +1,44 @@
+---
+description: Lama Stage production host, deploy pipeline, paths, and server ops
+alwaysApply: true
+---
+
+# Lama Stage — środowisko produkcyjne
+
+## Serwer
+- Provider: Hetzner CX23 (Ubuntu 24.04)
+- IP / SSH: `root@204.168.181.239`
+- Domena: https://fuckupmanager.lamastage.pl
+- Katalog aplikacji: `/var/www/lamaapp`
+
+## Stack (monorepo npm workspaces)
+- Frontend: `apps/web` (React/Vite) → artefakt buildu: **`apps/web/dist`** (nie `frontend/dist`)
+- Backend: `apps/api` (Node/Express + Prisma) → wejście po buildzie: **`apps/api/dist/index.js`**
+- Wspólne typy: `packages/shared-types` → import `@lama-stage/shared-types`
+- Baza: PostgreSQL (`lamadb`, użytkownik `lamauser`) na tym samym serwerze
+- **`DATABASE_URL` i hasła tylko w env serwera / sekretach CI — nigdy w repozytorium, regułach ani w kodzie źródłowym**
+
+## Runtime na produkcji
+- Process manager: **PM2**, nazwa procesu: **`lamaapp`**
+- Reverse proxy: **nginx**
+
+## Prisma (produkcja i schema)
+- Provider w `schema.prisma`: **`postgresql`** — **nigdy nie zmieniaj na `sqlite`**
+- Po zmianie `schema.prisma` lokalnie: `npx prisma generate` oraz migracja/push zgodnie z regułami API+DB
+- Na serwerze po zmianie schematu / deployu: `npx prisma generate` → **`pm2 restart lamaapp`**
+
+## Deploy
+- Każdy push do brancha **`main`** → GitHub Actions → deploy na serwer
+- Workflow: `.github/workflows/deploy.yml`
+- Skrypt root: `deploy.sh`
+- Deploy ręczny: `ssh root@204.168.181.239` → `cd /var/www/lamaapp` → `git pull origin main && ./deploy.sh`
+
+## TypeScript w backendzie
+- W `apps/api` **`noImplicitAny` jest wyłączone** — nowy kod dopasowuj do istniejącego poziomu ścisłości typów
+
+## Przydatne komendy na serwerze
+- `pm2 status` — stan procesów
+- `pm2 logs lamaapp` — logi na żywo
+- `pm2 restart lamaapp` — restart aplikacji
+- `systemctl reload nginx` — przeładowanie nginx
+- `tail -20 /var/log/nginx/error.log` — ostatnie błędy nginx

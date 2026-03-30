@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { CreateOrderSchema, UpdateOrderSchema } from '@lama-stage/shared-types';
 import { ordersService } from './orders.service';
-import { AppError } from '../../shared/errors/AppError';
+import { AppError, EquipmentUnavailableError } from '../../shared/errors/AppError';
 import { calculateEquipmentAvailability } from './equipment-availability.service';
 
 export const getAllOrders = async (req: Request, res: Response, next: NextFunction) => {
@@ -38,12 +38,12 @@ export const createOrder = (req: Request, res: Response, next: NextFunction) => 
     const validatedData = CreateOrderSchema.parse(req.body);
     ordersService.createOrder(validatedData)
       .then(order => res.status(201).json({ success: true, data: order }))
-      .catch(error => {
-        if (error.code === 'EQUIPMENT_UNAVAILABLE') {
+      .catch((error: unknown) => {
+        if (error instanceof EquipmentUnavailableError) {
           return res.status(409).json({
             success: false,
             message: error.message,
-            code: 'EQUIPMENT_UNAVAILABLE',
+            code: error.code,
             details: error.details,
           });
         }
@@ -62,12 +62,12 @@ export const updateOrder = (req: Request, res: Response, next: NextFunction) => 
     
     ordersService.updateOrder(id, validatedData)
       .then(order => res.json({ success: true, data: order }))
-      .catch(error => {
-        if (error.code === 'EQUIPMENT_UNAVAILABLE') {
+      .catch((error: unknown) => {
+        if (error instanceof EquipmentUnavailableError) {
           return res.status(409).json({
             success: false,
             message: error.message,
-            code: 'EQUIPMENT_UNAVAILABLE',
+            code: error.code,
             details: error.details,
           });
         }

@@ -1,4 +1,4 @@
-import { User } from '@prisma/client'
+import type { User } from '@prisma/client'
 import { AppError } from '../../shared/errors/AppError'
 import { prisma } from '../../prisma/client'
 import { hashPassword, randomToken, sha256, verifyPassword } from './auth.crypto'

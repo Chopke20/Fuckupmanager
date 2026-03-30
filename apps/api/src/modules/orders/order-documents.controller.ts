@@ -67,7 +67,7 @@ export const listOrderDocumentExports = async (req: Request, res: Response, next
     if (!orderId) throw new AppError('Missing order ID', 400)
 
     const documentType = typeof req.query.documentType === 'string' ? req.query.documentType : undefined
-    const where: any = { orderId }
+    const where: Prisma.OrderDocumentExportWhereInput = { orderId }
     if (documentType) {
       where.documentType = documentType
     }
@@ -216,7 +216,7 @@ export const updateOrderDocumentDraft = async (req: Request, res: Response, next
       throw new AppError('Brak payload draftu dokumentu', 400)
     }
 
-    let payload: any = rawPayload
+    let payload: unknown = rawPayload
     if (documentType === 'OFFER') {
       payload = OfferDocumentDraftSchema.parse(rawPayload)
     } else if (documentType === 'WAREHOUSE') {

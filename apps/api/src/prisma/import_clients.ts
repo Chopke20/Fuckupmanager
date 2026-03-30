@@ -64,12 +64,13 @@ async function importClients() {
         })
         console.log(`Zaimportowano: ${finalCompanyName}`)
         imported++
-      } catch (error: any) {
-        if (error.code === 'P2002') {
+      } catch (error: unknown) {
+        if (error && typeof error === 'object' && 'code' in error && (error as { code?: string }).code === 'P2002') {
           console.log(`Klient już istnieje: ${finalCompanyName}`)
           skipped++
         } else {
-          console.error(`Błąd przy imporcie ${finalCompanyName}:`, error.message)
+          const msg = error instanceof Error ? error.message : String(error)
+          console.error(`Błąd przy imporcie ${finalCompanyName}:`, msg)
         }
       }
     }

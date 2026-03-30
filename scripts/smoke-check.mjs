@@ -1,9 +1,19 @@
 #!/usr/bin/env node
 /**
  * Smoke check: weryfikuje, że API odpowiada i endpointy zwracają oczekiwany format.
- * Uruchom gdy API działa (npm run dev). Domyślnie: http://localhost:3000
+ * Zwykle wywoływane przez `npm run smoke` (run-smoke.mjs uruchomi API jeśli trzeba).
+ * Domyślnie: http://127.0.0.1:3000 (unika ECONNREFUSED ::1 na Windowsie).
  */
-const API_BASE = process.env.API_URL || 'http://localhost:3000';
+function normalizeApiBase(url) {
+  try {
+    const u = new URL(url);
+    if (u.hostname === 'localhost') u.hostname = '127.0.0.1';
+    return u.toString().replace(/\/$/, '');
+  } catch {
+    return url.replace(/\/$/, '');
+  }
+}
+const API_BASE = normalizeApiBase(process.env.API_URL || 'http://127.0.0.1:3000');
 const SMOKE_EMAIL = process.env.SMOKE_EMAIL || process.env.SEED_ADMIN_EMAIL || 'biuro@lamastage.pl';
 const SMOKE_PASSWORD = process.env.SMOKE_PASSWORD || process.env.SEED_ADMIN_PASSWORD || 'admin1234';
 

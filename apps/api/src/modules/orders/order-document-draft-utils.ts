@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client'
+import type { Order, PrismaClient } from '@prisma/client'
 import {
   OfferDocumentDraftSchema,
   WarehouseDocumentDraftSchema,
@@ -54,9 +54,14 @@ export async function resolveDefaultIssuerForDraft(
   return { ...DEFAULT_ISSUER_PROFILES.LAMA_STAGE }
 }
 
+type OrderOfferDraftFields = Pick<
+  Order,
+  'name' | 'offerValidityDays' | 'projectContactKey' | 'currency' | 'exchangeRateEur' | 'vatRate'
+>
+
 export async function buildOfferDefaultDraft(
   db: Pick<PrismaClient, 'issuerProfile'>,
-  order: any
+  order: OrderOfferDraftFields
 ): Promise<OfferDocumentDraft> {
   const issuer = await resolveDefaultIssuerForDraft(db)
   return OfferDocumentDraftSchema.parse({
@@ -70,7 +75,7 @@ export async function buildOfferDefaultDraft(
   })
 }
 
-export function buildDefaultDraft(order: any, documentType: DocumentType) {
+export function buildDefaultDraft(order: Pick<Order, 'name'>, documentType: DocumentType) {
   if (documentType === 'OFFER') {
     throw new Error('Użyj buildOfferDefaultDraft() dla OFFER — domyślny wystawca jest w bazie')
   }

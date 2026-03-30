@@ -257,7 +257,7 @@ export function buildOfferHtmlV5(
 
   const stageTypeLabels: Record<string, string> = { MONTAZ: 'Montaż', EVENT: 'Wydarzenie', DEMONTAZ: 'Demontaż', CUSTOM: 'Inne' }
   const stageById = new Map(
-    (order.stages ?? []).map((s: any) => {
+    (order.stages ?? []).map((s) => {
       const d = new Date(s.date)
       const dateStr = Number.isNaN(d.getTime())
         ? '—'

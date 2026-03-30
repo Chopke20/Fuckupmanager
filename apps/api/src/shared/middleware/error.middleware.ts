@@ -1,5 +1,13 @@
 import { Request, Response, NextFunction } from 'express'
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 import { AppError } from '../errors/AppError'
+
+type ErrorResponseBody = {
+  message: string
+  code?: string
+  details?: unknown
+  field?: string
+}
 
 export const errorMiddleware = (
   err: Error,
@@ -19,11 +27,11 @@ export const errorMiddleware = (
   console.error(JSON.stringify(logPayload))
 
   if (err instanceof AppError) {
-    const errorResponse: any = {
+    const errorResponse: ErrorResponseBody = {
       message: err.message,
       code: err.code,
     }
-    if (err.details) {
+    if (err.details !== undefined) {
       errorResponse.details = err.details
     }
     return res.status(err.statusCode).json({
@@ -32,9 +40,7 @@ export const errorMiddleware = (
     })
   }
 
-  // Prisma errors
-  if (err.name === 'PrismaClientKnownRequestError') {
-    // @ts-ignore
+  if (err instanceof PrismaClientKnownRequestError) {
     if (err.code === 'P2025') {
       return res.status(404).json({
         error: {
@@ -44,16 +50,21 @@ export const errorMiddleware = (
         requestId,
       })
     }
-    // @ts-ignore
     if (err.code === 'P2002') {
-      const target = (err as any).meta?.target as string[] | undefined
-      const isInternalCode = Array.isArray(target) && target.includes('internalCode')
+      const meta = err.meta
+      const target = Array.isArray(meta?.target)
+        ? (meta!.target as unknown[]).filter((t): t is string => typeof t === 'string')
+        : undefined
+      const isInternalCode = Boolean(target?.includes('internalCode'))
+      const body: { message: string; code: string; field?: string } = {
+        message: isInternalCode
+          ? 'Kod wewnętrzny jest już używany przez inny sprzęt lub zasób.'
+          : 'Konflikt danych - unikalne pole już istnieje',
+        code: 'CONFLICT',
+      }
+      if (isInternalCode) body.field = 'internalCode'
       return res.status(409).json({
-        error: {
-          message: isInternalCode ? 'Kod wewnętrzny jest już używany przez inny sprzęt lub zasób.' : 'Konflikt danych - unikalne pole już istnieje',
-          code: 'CONFLICT',
-          ...(isInternalCode && { field: 'internalCode' }),
-        },
+        error: body,
         requestId,
       })
     }

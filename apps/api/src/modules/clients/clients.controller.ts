@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '../../prisma/client'
 import { NotFoundError } from '../../shared/errors/AppError'
 import { PaginationSchema } from '@lama-stage/shared-types'
@@ -19,7 +20,7 @@ export const getClients = async (req: Request, res: Response, next: NextFunction
     const deletedOnly = deletedOnlyQuery === 'true' || deletedOnlyQuery === '1';
 
     const term = typeof searchQuery === 'string' ? searchQuery.trim() : '';
-    const where: any = deletedOnly ? { isDeleted: true } : { isDeleted: false };
+    const where: Prisma.ClientWhereInput = deletedOnly ? { isDeleted: true } : { isDeleted: false }
     if (term) {
       where.OR = [
         { companyName: { contains: term } },

@@ -14,4 +14,5 @@ alwaysApply: true
   - `Klienci`
   - `Zlecenia`
   with no runtime import errors and no request `500`.
+- Build produkcyjny serwowany przez nginx to **`apps/web/dist`** (por. reguła produkcyjna); smoke lokalny: `npm run smoke` / `API_URL` według potrzeb.
 

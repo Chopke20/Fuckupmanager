@@ -8,8 +8,22 @@ jobs:
   build-and-smoke:
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: file:./apps/api/prisma/ci.db
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/lama_ci
       NODE_ENV: test
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: lama_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d lama_ci"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,8 +37,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Prepare sqlite schema
-        run: npx prisma db push --schema apps/api/prisma/schema.prisma --skip-generate
+      - name: Prisma db push + seed
+        run: |
+          npx prisma db push --schema apps/api/prisma/schema.prisma
+          npm run db:seed -w apps/api
 
       - name: Build all packages
         run: npm run build
@@ -37,7 +53,7 @@ jobs:
       - name: Wait for API health
         run: |
           for i in {1..30}; do
-            if curl -sf http://localhost:3000/health > /dev/null; then
+            if curl -sf http://127.0.0.1:3000/health > /dev/null; then
               echo "API is up"
               exit 0
             fi

@@ -1,4 +1,5 @@
 import { Request, Response } from 'express'
+import type { TransportPricingSettings } from '@prisma/client'
 import { prisma } from '../../prisma/client'
 import { UpdateTransportPricingSettingsSchema } from '@lama-stage/shared-types'
 import { writeAuditLog } from '../auth/audit.service'
@@ -68,9 +69,8 @@ function normalizeRanges(input: unknown): TransportRange[] | null {
 }
 
 export class FinanceController {
-  private async getOrCreateTransportSettings() {
-    const prismaAny = prisma as any
-    return prismaAny.transportPricingSettings.upsert({
+  private async getOrCreateTransportSettings(): Promise<TransportPricingSettings> {
+    return prisma.transportPricingSettings.upsert({
       where: { id: 1 },
       create: {
         id: 1,
@@ -80,7 +80,7 @@ export class FinanceController {
     })
   }
 
-  private getNormalizedSettings(settings: any) {
+  private getNormalizedSettings(settings: TransportPricingSettings) {
     const fromJson = (() => {
       try {
         return normalizeRanges(JSON.parse(settings.rangesJson ?? '[]'))
@@ -176,12 +176,11 @@ export class FinanceController {
         flatNet: round2(row.flatNet),
       }))
 
-    const prismaAny = prisma as any
     const beforeRaw = await this.getOrCreateTransportSettings()
     const before = this.getNormalizedSettings(beforeRaw)
     const first = ranges[0] ?? DEFAULT_TRANSPORT_RANGES[0] ?? { fromKm: 0, toKm: 50, flatNet: 150 }
     const second = ranges[1] ?? first
-    const updated = await prismaAny.transportPricingSettings.upsert({
+    const updated = await prisma.transportPricingSettings.upsert({
       where: { id: 1 },
       create: {
         id: 1,
@@ -204,7 +203,7 @@ export class FinanceController {
     const after = this.getNormalizedSettings(updated)
 
     const user = res.locals.user as { id?: string; email?: string } | undefined
-    const requestId = (req as any).requestId as string | undefined
+    const requestId = typeof res.locals.requestId === 'string' ? res.locals.requestId : undefined
     if (user?.id && user?.email) {
       const details = {
         before: {

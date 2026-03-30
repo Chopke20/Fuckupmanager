@@ -5,7 +5,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "dev": "ts-node-dev --respawn --prefer-ts-exts src/index.ts",
-    "build": "tsc",
+    "build": "prisma generate --schema prisma/schema.prisma && tsc",
     "db:push": "prisma db push --schema prisma/schema.prisma",
     "db:migrate": "prisma migrate dev --schema prisma/schema.prisma",
     "db:seed": "ts-node src/prisma/seed.ts",
