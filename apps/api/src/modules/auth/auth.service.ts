@@ -3,6 +3,7 @@ import { AppError } from '../../shared/errors/AppError'
 import { prisma } from '../../prisma/client'
 import { hashPassword, randomToken, sha256, verifyPassword } from './auth.crypto'
 import { sendInviteEmail, sendPasswordResetEmail } from './auth.mail'
+import { assertSmtpMailConfigured } from './smtp.mailer'
 import {
   CreateRoleDefinitionSchema,
   PERMISSIONS,
@@ -156,15 +157,21 @@ export class AuthService {
       return
     }
 
+    assertSmtpMailConfigured()
     const rawToken = randomToken()
-    await prisma.passwordResetToken.create({
+    const resetRow = await prisma.passwordResetToken.create({
       data: {
         tokenHash: sha256(rawToken),
         userId: user.id,
         expiresAt: futureDate(RESET_TTL_MINUTES, 'minutes'),
       },
     })
-    await sendPasswordResetEmail(user.email, rawToken)
+    try {
+      await sendPasswordResetEmail(user.email, rawToken)
+    } catch (err) {
+      await prisma.passwordResetToken.delete({ where: { id: resetRow.id } }).catch(() => {})
+      throw err
+    }
   }
 
   async resetPassword(token: string, password: string) {
@@ -213,7 +220,9 @@ export class AuthService {
       throw new AppError('Wybrana rola nie istnieje.', 404, 'ROLE_NOT_FOUND')
     }
 
-    await prisma.invitationToken.create({
+    assertSmtpMailConfigured()
+
+    const invitation = await prisma.invitationToken.create({
       data: {
         tokenHash: sha256(rawToken),
         email: normalizedEmail,
@@ -224,7 +233,12 @@ export class AuthService {
       },
     })
 
-    await sendInviteEmail(normalizedEmail, rawToken)
+    try {
+      await sendInviteEmail(normalizedEmail, rawToken)
+    } catch (err) {
+      await prisma.invitationToken.delete({ where: { id: invitation.id } }).catch(() => {})
+      throw err
+    }
   }
 
   async acceptInvitation(token: string, password: string, userAgent?: string, ipAddress?: string) {
@@ -366,15 +380,21 @@ export class AuthService {
     if (!user || !user.isActive) {
       throw new AppError('Użytkownik nie istnieje lub jest nieaktywny.', 404, 'USER_NOT_FOUND')
     }
+    assertSmtpMailConfigured()
     const rawToken = randomToken()
-    await prisma.passwordResetToken.create({
+    const resetRow = await prisma.passwordResetToken.create({
       data: {
         tokenHash: sha256(rawToken),
         userId: user.id,
         expiresAt: futureDate(RESET_TTL_MINUTES, 'minutes'),
       },
     })
-    await sendPasswordResetEmail(user.email, rawToken)
+    try {
+      await sendPasswordResetEmail(user.email, rawToken)
+    } catch (err) {
+      await prisma.passwordResetToken.delete({ where: { id: resetRow.id } }).catch(() => {})
+      throw err
+    }
   }
 
   async listRoles() {

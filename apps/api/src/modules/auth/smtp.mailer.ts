@@ -31,6 +31,11 @@ function readConfig(): SmtpConfig {
   return { host, port, user, pass, from }
 }
 
+/** Fail fast before persisting invitations / reset tokens when SMTP is not configured. */
+export function assertSmtpMailConfigured(): void {
+  readConfig()
+}
+
 function onceData(socket: SocketLike): Promise<string> {
   return new Promise((resolve, reject) => {
     const onData = (chunk: Buffer) => {

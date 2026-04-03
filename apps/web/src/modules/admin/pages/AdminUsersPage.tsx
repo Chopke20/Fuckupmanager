@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { isAxiosError } from 'axios'
 import { PERMISSIONS, Permission, UserPublic } from '@lama-stage/shared-types'
 import ConfirmationModal from '../../../shared/components/ConfirmationModal'
 import {
@@ -216,11 +217,23 @@ export default function AdminUsersPage() {
     })
   }, [transportSettingsQuery.data])
 
-  const handleInvite = async (e: FormEvent) => {
+  const handleInvite = (e: FormEvent) => {
     e.preventDefault()
     if (!inviteEmail) return
-    await inviteMutation.mutateAsync()
+    inviteMutation.mutate()
   }
+
+  const inviteErrorMessage = (() => {
+    const err = inviteMutation.error
+    if (!err) return null
+    if (isAxiosError(err)) {
+      const msg = err.response?.data && typeof err.response.data === 'object' && err.response.data !== null && 'error' in err.response.data
+        ? (err.response.data as { error?: { message?: string } }).error?.message
+        : undefined
+      return msg || err.message
+    }
+    return err instanceof Error ? err.message : 'Nie udało się wysłać zaproszenia.'
+  })()
 
   const togglePermission = (perm: Permission, list: Permission[], setter: (next: Permission[]) => void) => {
     if (list.includes(perm)) setter(list.filter((p) => p !== perm))
@@ -399,6 +412,9 @@ export default function AdminUsersPage() {
 
       <section className="bg-card border border-border rounded-lg p-4">
         <h2 className="text-sm font-semibold mb-3">Zaproś użytkownika</h2>
+        <p className="text-xs text-muted-foreground mb-3">
+          Nowe konto pojawi się na liście dopiero po otwarciu linku z maila i ustawieniu hasła.
+        </p>
         <form onSubmit={handleInvite} className="grid md:grid-cols-4 gap-2">
           <input
             type="email"
@@ -428,6 +444,9 @@ export default function AdminUsersPage() {
             {inviteMutation.isPending ? 'Wysyłanie...' : 'Wyślij zaproszenie'}
           </button>
         </form>
+        {inviteMutation.isError && inviteErrorMessage ? (
+          <p className="text-xs text-destructive mt-2">{inviteErrorMessage}</p>
+        ) : null}
       </section>
 
       <section className="bg-card border border-border rounded-lg p-4 overflow-x-auto">
