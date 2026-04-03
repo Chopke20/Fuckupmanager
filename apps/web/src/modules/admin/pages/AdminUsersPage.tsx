@@ -227,6 +227,9 @@ export default function AdminUsersPage() {
     const err = inviteMutation.error
     if (!err) return null
     if (isAxiosError(err)) {
+      if (err.code === 'ECONNABORTED') {
+        return 'Serwer nie odpowiedział na czas (często wolny lub zablokowany SMTP). Sprawdź SMTP_HOST / port i firewall na VPS.'
+      }
       const msg = err.response?.data && typeof err.response.data === 'object' && err.response.data !== null && 'error' in err.response.data
         ? (err.response.data as { error?: { message?: string } }).error?.message
         : undefined

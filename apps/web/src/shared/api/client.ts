@@ -1,8 +1,12 @@
 import axios from 'axios'
 
+/** Limit czasu żądań (np. SMTP na serwerze): bez tego UI zostaje na „Wysyłanie…”. */
+const API_REQUEST_TIMEOUT_MS = 120_000
+
 const axiosInstance = axios.create({
   baseURL: '/api',
   withCredentials: true,
+  timeout: API_REQUEST_TIMEOUT_MS,
   headers: {
     'Content-Type': 'application/json',
   },

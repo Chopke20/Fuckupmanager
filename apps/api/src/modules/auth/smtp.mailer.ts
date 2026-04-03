@@ -36,19 +36,43 @@ export function assertSmtpMailConfigured(): void {
   readConfig()
 }
 
+function smtpReadTimeoutMs(): number {
+  const n = Number(process.env.SMTP_READ_TIMEOUT_MS ?? 25000)
+  return Number.isFinite(n) && n > 0 ? n : 25000
+}
+
+function smtpConnectTimeoutMs(): number {
+  const n = Number(process.env.SMTP_CONNECT_TIMEOUT_MS ?? 20000)
+  return Number.isFinite(n) && n > 0 ? n : 20000
+}
+
 function onceData(socket: SocketLike): Promise<string> {
+  const readMs = smtpReadTimeoutMs()
   return new Promise((resolve, reject) => {
+    let settled = false
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      socket.off('data', onData)
+      socket.off('error', onError)
+      reject(new Error(`SMTP: brak odpowiedzi serwera w ciągu ${Math.round(readMs / 1000)} s`))
+    }, readMs)
+
     const onData = (chunk: Buffer) => {
-      cleanup()
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      socket.off('data', onData)
+      socket.off('error', onError)
       resolve(chunk.toString('utf8'))
     }
     const onError = (error: Error) => {
-      cleanup()
-      reject(error)
-    }
-    const cleanup = () => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
       socket.off('data', onData)
       socket.off('error', onError)
+      reject(error)
     }
     socket.once('data', onData)
     socket.once('error', onError)
@@ -114,23 +138,90 @@ function buildMessage(config: SmtpConfig, payload: MailPayload): string {
 }
 
 function createPlainSocket(config: SmtpConfig): Promise<net.Socket> {
+  const ms = smtpConnectTimeoutMs()
   return new Promise((resolve, reject) => {
-    const socket = net.createConnection({ host: config.host, port: config.port }, () => resolve(socket))
-    socket.once('error', reject)
+    let settled = false
+    const socket = net.createConnection({ host: config.host, port: config.port })
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      socket.destroy()
+      socket.off('connect', onConnect)
+      socket.off('error', onError)
+      reject(new Error(`SMTP: nie udało się połączyć z ${config.host}:${config.port} w ciągu ${Math.round(ms / 1000)} s (firewall / zły host / port)?`))
+    }, ms)
+
+    const done = (fn: () => void) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      socket.off('connect', onConnect)
+      socket.off('error', onError)
+      fn()
+    }
+
+    const onConnect = () => done(() => resolve(socket))
+    const onError = (err: Error) => done(() => reject(err))
+    socket.once('connect', onConnect)
+    socket.once('error', onError)
   })
 }
 
 function createTlsSocket(config: SmtpConfig): Promise<tls.TLSSocket> {
+  const ms = smtpConnectTimeoutMs()
   return new Promise((resolve, reject) => {
-    const socket = tls.connect({ host: config.host, port: config.port, servername: config.host }, () => resolve(socket))
-    socket.once('error', reject)
+    let settled = false
+    const socket = tls.connect({ host: config.host, port: config.port, servername: config.host })
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      socket.destroy()
+      socket.off('secureConnect', onSecure)
+      socket.off('error', onError)
+      reject(new Error(`SMTP (TLS): timeout połączenia z ${config.host}:${config.port} (${Math.round(ms / 1000)} s)`))
+    }, ms)
+
+    const done = (fn: () => void) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      socket.off('secureConnect', onSecure)
+      socket.off('error', onError)
+      fn()
+    }
+
+    const onSecure = () => done(() => resolve(socket))
+    const onError = (err: Error) => done(() => reject(err))
+    socket.once('secureConnect', onSecure)
+    socket.once('error', onError)
   })
 }
 
 function upgradeToTls(socket: net.Socket, config: SmtpConfig): Promise<tls.TLSSocket> {
+  const ms = smtpConnectTimeoutMs()
   return new Promise((resolve, reject) => {
-    const secure = tls.connect({ socket, servername: config.host }, () => resolve(secure))
-    secure.once('error', reject)
+    let settled = false
+    const secure = tls.connect({ socket, servername: config.host })
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      secure.destroy()
+      reject(new Error(`SMTP STARTTLS: timeout (${Math.round(ms / 1000)} s)`))
+    }, ms)
+
+    const done = (fn: () => void) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      secure.off('secureConnect', onSecure)
+      secure.off('error', onError)
+      fn()
+    }
+
+    const onSecure = () => done(() => resolve(secure))
+    const onError = (err: Error) => done(() => reject(err))
+    secure.once('secureConnect', onSecure)
+    secure.once('error', onError)
   })
 }
 
