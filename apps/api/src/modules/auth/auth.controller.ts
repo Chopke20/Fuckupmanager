@@ -179,24 +179,46 @@ export async function createInvitation(req: Request, res: Response, next: NextFu
       parsed.data.role,
       parsed.data.fullName
     )
-    await auditAdminAction(req, res, {
-      module: 'admin.users',
-      action: 'invite.create',
-      targetType: 'UserInvitation',
-      targetId: parsed.data.email.toLowerCase(),
-      result: 'SUCCESS',
-      details: `role=${parsed.data.role}`,
-    })
+    try {
+      await auditAdminAction(req, res, {
+        module: 'admin.users',
+        action: 'invite.create',
+        targetType: 'UserInvitation',
+        targetId: parsed.data.email.toLowerCase(),
+        result: 'SUCCESS',
+        details: `role=${parsed.data.role}`,
+      })
+    } catch (auditErr) {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          requestId: res.locals.requestId || req.header('x-request-id'),
+          context: 'audit.invite.success',
+          message: (auditErr as Error).message,
+        })
+      )
+    }
     res.status(201).json({ data: { success: true } })
   } catch (error) {
-    await auditAdminAction(req, res, {
-      module: 'admin.users',
-      action: 'invite.create',
-      targetType: 'UserInvitation',
-      targetId: typeof req.body?.email === 'string' ? req.body.email.toLowerCase() : undefined,
-      result: 'FAILURE',
-      details: (error as Error).message,
-    })
+    try {
+      await auditAdminAction(req, res, {
+        module: 'admin.users',
+        action: 'invite.create',
+        targetType: 'UserInvitation',
+        targetId: typeof req.body?.email === 'string' ? req.body.email.toLowerCase() : undefined,
+        result: 'FAILURE',
+        details: (error as Error).message,
+      })
+    } catch (auditErr) {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          requestId: res.locals.requestId || req.header('x-request-id'),
+          context: 'audit.invite.failure',
+          message: (auditErr as Error).message,
+        })
+      )
+    }
     next(error)
   }
 }

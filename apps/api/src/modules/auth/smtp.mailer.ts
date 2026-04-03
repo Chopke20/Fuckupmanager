@@ -19,6 +19,27 @@ interface SmtpConfig {
   from: string
 }
 
+/**
+ * RFC 5321: argument EHLO to domena klienta, nie hostname serwera SMTP.
+ * Błędne EHLO smtp.gmail.com potrafi psuć sesje z niektórymi dostawcami.
+ */
+function smtpEhloIdentifier(): string {
+  const explicit = process.env.SMTP_EHLO_DOMAIN?.trim()
+  if (explicit) return explicit.replace(/\s+/g, '') || 'localhost'
+  const isProd = process.env.NODE_ENV === 'production'
+  const base =
+    (isProd && process.env.APP_BASE_URL_PROD?.trim()) || process.env.APP_BASE_URL?.trim()
+  if (base) {
+    try {
+      const host = new URL(base.startsWith('http') ? base : `https://${base}`).hostname
+      if (host) return host
+    } catch {
+      /* ignore */
+    }
+  }
+  return 'localhost'
+}
+
 function readConfig(): SmtpConfig {
   const host = process.env.SMTP_HOST
   const port = Number(process.env.SMTP_PORT ?? 587)
@@ -226,19 +247,20 @@ function upgradeToTls(socket: net.Socket, config: SmtpConfig): Promise<tls.TLSSo
 }
 
 async function openSmtpConnection(config: SmtpConfig): Promise<SocketLike> {
+  const ehlo = smtpEhloIdentifier()
   if (config.port === 465) {
     const secureSocket = await createTlsSocket(config)
     await readResponse(secureSocket)
-    await sendCommand(secureSocket, `EHLO ${config.host}`, [250])
+    await sendCommand(secureSocket, `EHLO ${ehlo}`, [250])
     return secureSocket
   }
 
   const plainSocket = await createPlainSocket(config)
   await readResponse(plainSocket)
-  await sendCommand(plainSocket, `EHLO ${config.host}`, [250])
+  await sendCommand(plainSocket, `EHLO ${ehlo}`, [250])
   await sendCommand(plainSocket, 'STARTTLS', [220])
   const secureSocket = await upgradeToTls(plainSocket, config)
-  await sendCommand(secureSocket, `EHLO ${config.host}`, [250])
+  await sendCommand(secureSocket, `EHLO ${ehlo}`, [250])
   return secureSocket
 }
 

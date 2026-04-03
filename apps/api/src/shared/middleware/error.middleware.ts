@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express'
+import { Prisma } from '@prisma/client'
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 import { AppError } from '../errors/AppError'
 
@@ -40,6 +41,17 @@ export const errorMiddleware = (
     })
   }
 
+  if (err instanceof Prisma.PrismaClientValidationError) {
+    const isDev = process.env.NODE_ENV !== 'production'
+    return res.status(400).json({
+      error: {
+        message: isDev ? err.message : 'Nieprawidłowe dane zapisu do bazy.',
+        code: 'VALIDATION_ERROR',
+      },
+      requestId,
+    })
+  }
+
   if (err instanceof PrismaClientKnownRequestError) {
     if (err.code === 'P2025') {
       return res.status(404).json({
@@ -68,6 +80,34 @@ export const errorMiddleware = (
         requestId,
       })
     }
+    if (err.code === 'P2021') {
+      return res.status(503).json({
+        error: {
+          message:
+            'Baza nie jest zsynchronizowana z aplikacją (brakuje tabel). Na serwerze: cd apps/api && npx prisma migrate deploy && pm2 restart lamaapp',
+          code: 'DB_SCHEMA_OUT_OF_SYNC',
+        },
+        requestId,
+      })
+    }
+    if (err.code === 'P2003') {
+      return res.status(400).json({
+        error: {
+          message:
+            'Błąd spójności danych (np. konto zapraszającego nie istnieje w bazie). Zaloguj się ponownie lub uruchom migracje Prisma.',
+          code: 'FOREIGN_KEY_VIOLATION',
+        },
+        requestId,
+      })
+    }
+    const isDevPrisma = process.env.NODE_ENV !== 'production'
+    return res.status(500).json({
+      error: {
+        message: isDevPrisma ? err.message : `Błąd bazy danych (${err.code}). Szczegóły w logach PM2.`,
+        code: err.code || 'DATABASE_ERROR',
+      },
+      requestId,
+    })
   }
 
   // Default error (w development zwracaj szczegóły)
