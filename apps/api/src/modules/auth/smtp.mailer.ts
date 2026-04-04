@@ -104,54 +104,66 @@ function smtpConnectTimeoutMs(): number {
   return Number.isFinite(n) && n > 0 ? n : 20000
 }
 
-function onceData(socket: SocketLike): Promise<string> {
-  const readMs = smtpReadTimeoutMs()
-  return new Promise((resolve, reject) => {
-    let settled = false
-    const timer = setTimeout(() => {
-      if (settled) return
-      settled = true
-      socket.off('data', onData)
-      socket.off('error', onError)
-      reject(new Error(`SMTP: brak odpowiedzi serwera w ciągu ${Math.round(readMs / 1000)} s`))
-    }, readMs)
-
-    const onData = (chunk: Buffer) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      socket.off('data', onData)
-      socket.off('error', onError)
-      resolve(chunk.toString('utf8'))
-    }
-    const onError = (error: Error) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      socket.off('data', onData)
-      socket.off('error', onError)
-      reject(error)
-    }
-    socket.once('data', onData)
-    socket.once('error', onError)
-  })
-}
-
 function parseResponseCode(raw: string): number {
   const code = Number(raw.slice(0, 3))
   if (!Number.isFinite(code)) return 0
   return code
 }
 
-async function readResponse(socket: SocketLike): Promise<string> {
-  let raw = await onceData(socket)
-  while (raw.length >= 4 && raw[3] === '-') {
-    const tail = await onceData(socket)
-    raw += tail
-    const lastLine = raw.trimEnd().split(/\r?\n/).pop() ?? ''
-    if (lastLine[3] !== '-') break
-  }
-  return raw
+/**
+ * Odczyt odpowiedzi SMTP z buforem — jeden pakiet TCP może zawierać tylko fragment linii;
+ * stary kod brał wyłącznie pierwszy chunk i potrafił źle parsować kody lub wisieć aż do timeoutu.
+ */
+function readResponse(socket: SocketLike): Promise<string> {
+  const readMs = smtpReadTimeoutMs()
+  return new Promise((resolve, reject) => {
+    let buffer = ''
+    let out = ''
+    let settled = false
+
+    const cleanup = () => {
+      clearTimeout(timer)
+      socket.off('data', onData)
+      socket.off('error', onError)
+    }
+
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(new Error(`SMTP: brak odpowiedzi serwera w ciągu ${Math.round(readMs / 1000)} s`))
+    }, readMs)
+
+    const onError = (err: Error) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(err)
+    }
+
+    const onData = (chunk: Buffer) => {
+      if (settled) return
+      buffer += chunk.toString('utf8')
+      for (;;) {
+        const idx = buffer.indexOf('\r\n')
+        if (idx === -1) return
+        const line = buffer.slice(0, idx)
+        buffer = buffer.slice(idx + 2)
+        out += `${line}\r\n`
+        const isContinuation = line.length >= 4 && line[3] === '-'
+        const isFinal = /^\d{3} /.test(line)
+        if (!isContinuation && isFinal) {
+          settled = true
+          cleanup()
+          resolve(out)
+          return
+        }
+      }
+    }
+
+    socket.on('data', onData)
+    socket.once('error', onError)
+  })
 }
 
 async function sendCommand(socket: SocketLike, command: string, expectedCodes: number[]): Promise<string> {
@@ -168,6 +180,15 @@ function mimeEncodeUtf8(value: string): string {
   return `=?UTF-8?B?${Buffer.from(value, 'utf8').toString('base64')}?=`
 }
 
+/** RFC 5321: linie treści zaczynające się od "." muszą mieć dodatkowy prefix "." */
+function dotStuffSmtpBody(text: string): string {
+  const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+  return normalized
+    .split('\n')
+    .map((ln) => (ln.startsWith('.') ? `.${ln}` : ln))
+    .join('\r\n')
+}
+
 function buildMessage(fromHeader: string, payload: MailPayload): string {
   const boundary = `----lama-${Date.now().toString(36)}`
   const subject = mimeEncodeUtf8(payload.subject)
@@ -182,13 +203,13 @@ function buildMessage(fromHeader: string, payload: MailPayload): string {
     'Content-Type: text/plain; charset="UTF-8"',
     'Content-Transfer-Encoding: 8bit',
     '',
-    payload.text,
+    dotStuffSmtpBody(payload.text),
     '',
     `--${boundary}`,
     'Content-Type: text/html; charset="UTF-8"',
     'Content-Transfer-Encoding: 8bit',
     '',
-    payload.html,
+    dotStuffSmtpBody(payload.html),
     '',
     `--${boundary}--`,
     '',
