@@ -5,6 +5,7 @@ alwaysApply: true
 
 # Lama Stability Core
 
+- Produkcja jest już podpięta pod **Git + zewnętrzny serwer** (VPS, deploy z `main`); szczegóły w regule **Lama Stage — środowisko produkcyjne**.
 - Solve root cause first, never patch only symptoms.
 - Keep shared models in `packages/shared-types` and import from `@lama-stage/shared-types`.
 - Never leave compiled `.js` files in `apps/api/src`; source code there is TypeScript-only.

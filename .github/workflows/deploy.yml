@@ -15,11 +15,21 @@ jobs:
           host: ${{ secrets.HETZNER_HOST }}
           username: root
           key: ${{ secrets.HETZNER_SSH_KEY }}
-          envs: DATABASE_URL
+          envs: DATABASE_URL,OPENROUTER_API_KEY,GOOGLE_MAPS_API_KEY,SMTP_HOST,SMTP_PORT,SMTP_USER,SMTP_PASS,SMTP_FROM,SMTP_EHLO_DOMAIN,APP_BASE_URL_PROD,NODE_ENV
           script: |
             cd /var/www/lamaapp
-            git pull origin main
+            git fetch origin main && git reset --hard origin/main
             chmod +x deploy.sh
             ./deploy.sh
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          SMTP_EHLO_DOMAIN: ${{ secrets.SMTP_EHLO_DOMAIN }}
+          APP_BASE_URL_PROD: ${{ secrets.APP_BASE_URL_PROD }}
+          NODE_ENV: production

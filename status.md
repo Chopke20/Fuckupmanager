@@ -17,7 +17,8 @@ Lama Stage to wewnętrzna aplikacja dla firmy eventowej do kompleksowego **zarz�
     - `AUTH_ACCOUNTS_AND_PERMISSIONS.md` – twarda specyfikacja auth/permissions,
     - `PLAN_ZLECENIE_REFACTOR.md` – jak ma wyglądać docelowy formularz zlecenia (UI, finanse, cykle),
     - `PLAN_OFERTA_PDF.md`, `SPEC_IMPLEMENTACJI_OFERY_PDF_AUTO.md` – plan i spec oferty PDF,
-    - `dev-runbook.md` i `docs/stability-reports/*` – sposób uruchamiania, raporty stabilności.
+    - `dev-runbook.md` i `docs/stability-reports/*` – sposób uruchamiania, raporty stabilności,
+    - `production-repair-runbook.md` – **procedura naprawy produkcji** (VPS: Prisma, env/SMTP/API, PDF/Chromium, PM2, nginx).
 
 - **Główne domeny biznesowe (backend + frontend)**
   - **Klienci (`clients`)**

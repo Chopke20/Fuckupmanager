@@ -277,7 +277,20 @@ export class PdfController {
   }
 
   private async renderPdf(html: string): Promise<Buffer> {
-    const browser = await puppeteer.launch({ headless: true })
+    const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH?.trim()
+    const launchTimeoutMs = Number(process.env.PUPPETEER_LAUNCH_TIMEOUT_MS ?? 90000)
+    const browser = await puppeteer.launch({
+      headless: true,
+      ...(executablePath ? { executablePath } : {}),
+      timeout: Number.isFinite(launchTimeoutMs) && launchTimeoutMs > 0 ? launchTimeoutMs : 90000,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--font-render-hinting=none',
+      ],
+    })
     const page = await browser.newPage()
 
     const footerMatch =
@@ -313,7 +326,12 @@ export class PdfController {
       : '<div style="width:100%"></div>'
 
     const htmlWithoutFooter = footerMatch ? html.replace(footerMatch[0], '') : html
-    await page.setContent(htmlWithoutFooter, { waitUntil: 'networkidle0' })
+    const contentTimeoutMs = Number(process.env.PUPPETEER_CONTENT_TIMEOUT_MS ?? 45000)
+    await page.setContent(htmlWithoutFooter, {
+      // networkidle0 potrafi wisieć na VPS (fonty z zewnątrz / DNS) — PDF nie wymaga idle sieci
+      waitUntil: 'domcontentloaded',
+      timeout: Number.isFinite(contentTimeoutMs) && contentTimeoutMs > 0 ? contentTimeoutMs : 45000,
+    })
     await page.emulateMediaType('print')
     const pdfBuffer = await page.pdf({
       format: 'A4',
