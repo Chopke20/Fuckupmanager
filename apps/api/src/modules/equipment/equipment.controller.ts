@@ -4,24 +4,36 @@ import { prisma } from '../../prisma/client'
 import { NotFoundError } from '../../shared/errors/AppError'
 import { PaginationSchema } from '@lama-stage/shared-types'
 
-/** Prefiksy kodów: sprzęt (bez ZASOBY) = SPR-, zasoby = ZAS-. Kody w formacie PREFIX-00001. */
-const CODE_PREFIX_EQUIPMENT = 'SPR-'
-const CODE_PREFIX_RESOURCES = 'ZAS-'
+/** Nowe kody: sprzęt = EQP-, zasoby = RES- (5 cyfr). Skan uwzględnia legacy SPR-/ZAS- przy wyliczaniu kolejnego numeru. */
+const CODE_PREFIX_EQUIPMENT = 'EQP-'
+const CODE_PREFIX_RESOURCES = 'RES-'
+const LEGACY_PREFIX_EQUIPMENT = 'SPR-'
+const LEGACY_PREFIX_RESOURCES = 'ZAS-'
 const CODE_NUMBER_PAD = 5
 
 async function getNextInternalCode(category: string): Promise<string> {
   const prefix = category === 'ZASOBY' ? CODE_PREFIX_RESOURCES : CODE_PREFIX_EQUIPMENT
+  const legacyPrefix = category === 'ZASOBY' ? LEGACY_PREFIX_RESOURCES : LEGACY_PREFIX_EQUIPMENT
   const list = await prisma.equipment.findMany({
-    where: { internalCode: { not: null, startsWith: prefix } },
+    where: {
+      OR: [
+        { internalCode: { not: null, startsWith: prefix } },
+        { internalCode: { not: null, startsWith: legacyPrefix } },
+      ],
+    },
     select: { internalCode: true },
   })
   let maxNum = 0
   for (const row of list) {
     const code = row.internalCode
     if (!code) continue
-    const numPart = code.slice(prefix.length)
-    const num = parseInt(numPart, 10)
-    if (!Number.isNaN(num) && num > maxNum) maxNum = num
+    for (const p of [prefix, legacyPrefix]) {
+      if (code.startsWith(p)) {
+        const numPart = code.slice(p.length)
+        const num = parseInt(numPart, 10)
+        if (!Number.isNaN(num) && num > maxNum) maxNum = num
+      }
+    }
   }
   const next = maxNum + 1
   return `${prefix}${String(next).padStart(CODE_NUMBER_PAD, '0')}`

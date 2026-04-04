@@ -14,6 +14,22 @@ import {
   buildDocumentNumber,
   parseJsonSafely,
 } from './order-document-draft-utils'
+
+/** Offer export version from `documentNumber`: new `OFR-YY-NNNN-vV` or legacy `N.V.YYYY`. */
+function parseOfferVersionFromDocumentNumber(documentNumber: string): number {
+  const trimmed = documentNumber.trim()
+  const mNew = /^OFR-\d{2}-\d{4}-v(\d+)$/i.exec(trimmed)
+  if (mNew) {
+    const v = parseInt(mNew[1]!, 10)
+    return Number.isNaN(v) ? 0 : v
+  }
+  const parts = trimmed.split('.')
+  if (parts.length >= 3) {
+    const v = parseInt(parts[1]!, 10)
+    return Number.isNaN(v) ? 0 : v
+  }
+  return 0
+}
 import { buildOrderOfferSnapshotFromOrder, loadOfferDraftPayload } from './offer-snapshot-merge'
 
 /** Po usunięciu eksportu OFFER: `offerVersion` / `offerNumber` = najwyższa wersja z pozostałych snapshotów, albo reset (0 / null). */
@@ -34,13 +50,10 @@ async function syncOrderOfferFromRemainingExports(tx: Prisma.TransactionClient, 
   let maxVersion = 0
   let documentNumberForMax: string | null = null
   for (const e of remaining) {
-    const parts = e.documentNumber.split('.')
-    if (parts.length >= 3) {
-      const v = parseInt(parts[1]!, 10)
-      if (!Number.isNaN(v) && v >= maxVersion) {
-        maxVersion = v
-        documentNumberForMax = e.documentNumber
-      }
+    const v = parseOfferVersionFromDocumentNumber(e.documentNumber)
+    if (v > 0 && v >= maxVersion) {
+      maxVersion = v
+      documentNumberForMax = e.documentNumber
     }
   }
 

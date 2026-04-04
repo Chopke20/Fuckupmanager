@@ -1,13 +1,13 @@
 /**
- * Przypisuje unikalne kody SPR-00001, ZAS-00001 wszystkim rekordom w equipment.
+ * Przypisuje unikalne kody EQP-00001, RES-00001 wszystkim rekordom w equipment.
  * Uruchom przed `prisma db push` po dodaniu @unique na internalCode, jeśli w bazie są duplikaty.
  * np. npx ts-node scripts/normalize-internal-codes.ts (z katalogu apps/api)
  */
 import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
-const PREFIX_EQUIPMENT = 'SPR-'
-const PREFIX_RESOURCES = 'ZAS-'
+const PREFIX_EQUIPMENT = 'EQP-'
+const PREFIX_RESOURCES = 'RES-'
 const PAD = 5
 
 async function main() {
@@ -24,7 +24,7 @@ async function main() {
     })
     idx += 1
   }
-  console.log(`Przypisano ${equipment.length} kodów SPR-*`)
+  console.log(`Przypisano ${equipment.length} kodów EQP-*`)
 
   const resources = await prisma.equipment.findMany({
     where: { category: 'ZASOBY' },
@@ -39,7 +39,7 @@ async function main() {
     })
     idx += 1
   }
-  console.log(`Przypisano ${resources.length} kodów ZAS-*`)
+  console.log(`Przypisano ${resources.length} kodów RES-*`)
   console.log('Kody znormalizowane. Możesz uruchomić: npx prisma db push')
 }
 

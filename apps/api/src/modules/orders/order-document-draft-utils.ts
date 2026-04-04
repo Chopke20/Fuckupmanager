@@ -6,6 +6,8 @@ import {
   type OfferDocumentDraft,
 } from '@lama-stage/shared-types'
 
+export { buildDocumentNumber } from '@lama-stage/shared-types'
+
 export const DEFAULT_ISSUER_PROFILES = {
   LAMA_STAGE: {
     profileKey: 'LAMA_STAGE',
@@ -92,23 +94,4 @@ export function buildDefaultDraft(order: Pick<Order, 'name'>, documentType: Docu
     title: `${documentType} - ${order.name}`,
     notes: '',
   }
-}
-
-export function buildDocumentNumber(params: {
-  documentType: DocumentType
-  orderNumber: number
-  orderYear: number
-  version: number
-}) {
-  const { documentType, orderNumber, orderYear, version } = params
-  if (documentType === 'OFFER') {
-    return `${orderNumber}.${version}.${orderYear}`
-  }
-  const prefixMap: Record<string, string> = {
-    OFFER: 'OFF',
-    PROPOSAL: 'PRO',
-    WAREHOUSE: 'MAG',
-    BRIEF: 'BRF',
-  }
-  return `${prefixMap[documentType]}-${orderNumber}.${version}.${orderYear}`
 }

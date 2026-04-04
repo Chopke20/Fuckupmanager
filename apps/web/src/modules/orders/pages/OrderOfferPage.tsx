@@ -413,7 +413,7 @@ export default function OrderOfferPage() {
       const reused = res.headers['x-offer-number-reused'] === '1';
       if (reused) {
         setInfo(
-          'Treść oferty bez zmian względem ostatniego eksportu — ten sam numer oferty (numer.wersja.rok). Data w nagłówku PDF jest aktualna; lista snapshotów bez nowego wiersza.'
+          'Treść oferty bez zmian względem ostatniego eksportu — ten sam numer oferty (OFR-YY-NNNN-v#). Data w nagłówku PDF jest aktualna; lista snapshotów bez nowego wiersza.'
         );
       } else {
         setInfo('Zapisano nowy snapshot oferty i nadano kolejny numer wersji.');
@@ -1006,7 +1006,7 @@ export default function OrderOfferPage() {
           Snapshoty oferty (historia)
         </div>
         <p className="text-xs text-muted-foreground mb-3">
-          Numer oferty: <span className="font-mono">numer_zlecenia_w_roku.wersja_oferty.rok</span> — nadawany przy pierwszym eksporcie z nową treścią. Usunięcie snapshotu przelicza{' '}
+          Numer oferty: <span className="font-mono">OFR-YY-NNNN-v#</span> — nadawany przy pierwszym eksporcie z nową treścią. Usunięcie snapshotu przelicza{' '}
           <span className="font-mono">wersję</span> z pozostałych zapisów (lub reset, gdy nie ma żadnego).
         </p>
         {loadingExports ? (

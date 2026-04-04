@@ -33,7 +33,7 @@ export const OrderOfferSnapshotSchema = z.object({
   documentDraft: z.record(z.any()).optional(),
   /** ISO — moment zapisu snapshotu / wygenerowania PDF (opcjonalne dla starych eksportów). */
   generatedAt: z.string().datetime().optional(),
-  /** Numer oferty w formacie zlecenie.wersja.rok (jak w `OrderDocumentExport.documentNumber`). */
+  /** Document / offer reference (same string as `OrderDocumentExport.documentNumber`), e.g. OFR-26-0016-v3. */
   documentNumber: z.string().optional(),
 });
 

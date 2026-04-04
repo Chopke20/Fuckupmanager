@@ -34,7 +34,7 @@ exports.OrderOfferSnapshotSchema = zod_1.z.object({
     documentDraft: zod_1.z.record(zod_1.z.any()).optional(),
     /** ISO — moment zapisu snapshotu / wygenerowania PDF (opcjonalne dla starych eksportów). */
     generatedAt: zod_1.z.string().datetime().optional(),
-    /** Numer oferty w formacie zlecenie.wersja.rok (jak w `OrderDocumentExport.documentNumber`). */
+    /** Document / offer reference (same as `OrderDocumentExport.documentNumber`), e.g. OFR-26-0016-v3. */
     documentNumber: zod_1.z.string().optional(),
 });
 exports.OfferIssuerSchema = zod_1.z.object({

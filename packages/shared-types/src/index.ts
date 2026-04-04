@@ -35,3 +35,4 @@ export { AuditLogSchema } from './schemas/audit.schema';
 
 // Utility functions for orders
 export { calculateOrderNetValue, formatOrderNetValue } from './utils/orderCalculations';
+export { formatOrderReference, buildDocumentNumber } from './utils/orderReferenceFormat';

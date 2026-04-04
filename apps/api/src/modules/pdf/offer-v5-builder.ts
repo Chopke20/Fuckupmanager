@@ -3,7 +3,7 @@
  * Szablon: apps/api/src/modules/pdf/templates/offer-v5.html
  *
  * Mapowanie placeholder → źródło danych:
- * - {{OFFER_NUMBER}}     → offerNumberDisplay (np. num.wersja.rok)
+ * - {{OFFER_NUMBER}}     → offerNumberDisplay (e.g. OFR-26-0016-v3)
  * - {{HEADER_META}}     → Warszawa, DD.MM.RRRR · Ważna N dni (z draftu/snapshotu: offerValidityDays); data z options.issuedAt lub „teraz”
  * - {{COMPANY_NAME}}    → order.offerIssuer?.companyName ?? COMPANY
  * - {{COMPANY_DETAILS}} → NIP, adres, email, tel. z offerIssuer lub COMPANY (+ www dla domyślnej Lamy)

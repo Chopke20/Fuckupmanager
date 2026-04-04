@@ -40,10 +40,15 @@ async function loadOrderForPdf(orderId: string) {
 function getOfferNumberDisplay(order: OrderWithRelations, nextVersion?: number): string {
   if (order == null) return '—'
   const year = order.orderYear ?? new Date(order.createdAt).getFullYear()
-  const num = order.orderNumber ?? 0
+  const num = order.orderNumber
   const ver = nextVersion ?? (order.offerVersion ?? 0)
-  if (num === 0) return order.offerNumber ?? '—'
-  return `${num}.${ver}.${year}`
+  if (num == null || num < 1) return order.offerNumber ?? '—'
+  return buildDocumentNumber({
+    documentType: 'OFFER',
+    orderNumber: num,
+    orderYear: year,
+    version: ver,
+  })
 }
 
 export class PdfController {
@@ -87,7 +92,7 @@ export class PdfController {
 
   /**
    * Generuje PDF oferty i zapisuje snapshot (`OrderDocumentExport`), o ile treść oferty zmieniła się
-   * względem ostatniego eksportu. Format numeru: `{numerZleceniaWRoku}.{wersjaOferty}.{rok}`.
+   * względem ostatniego eksportu. Format numeru: `OFR-{YY}-{NNNN}-v{V}` (legacy snapshots: `N.V.YYYY`).
    * Gdy jedyna różnica to data wystawienia (ta sama treść co ostatni snapshot), **nie** podbija wersji
    * i **nie** tworzy nowego rekordu eksportu — PDF dostaje ten sam numer z aktualną datą w nagłówku.
    */
@@ -112,7 +117,12 @@ export class PdfController {
       const draftPayload = await loadOfferDraftPayload(prisma, orderId, order)
       const generatedAt = new Date().toISOString()
       const newVersion = (order.offerVersion ?? 0) + 1
-      const candidateOfferNumber = `${orderNumber}.${newVersion}.${orderYear}`
+      const candidateOfferNumber = buildDocumentNumber({
+        documentType: 'OFFER',
+        orderNumber,
+        orderYear,
+        version: newVersion,
+      })
 
       const candidateSnapshot = buildOrderOfferSnapshotFromOrder(order, draftPayload, {
         generatedAt,
@@ -284,7 +294,7 @@ export class PdfController {
 
   /**
    * PDF „Magazyn / załadunek” do wydruku: nagłówek jak oferta, lista sprzętu z pustymi kratkami (odhaczanie odręczne).
-   * Nie tworzy rekordu eksportu — numer MAG-*.{następna wersja}.{rok} jest „kolejnym” względem zapisanych snapshotów.
+   * Nie tworzy rekordu eksportu — numer `WHS-{YY}-{NNNN}-v{następna}` jest „kolejnym” względem zapisanych snapshotów.
    */
   async generateWarehousePdf(req: Request, res: Response) {
     try {

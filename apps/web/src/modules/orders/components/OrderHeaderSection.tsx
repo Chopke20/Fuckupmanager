@@ -127,7 +127,9 @@ export default function OrderHeaderSection({ isNewOrder, onChange }: OrderHeader
               {orderNumberDisplay}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {orderNumberDisplay !== '—' ? 'Numer nadany przy tworzeniu (tylko do odczytu).' : 'Numer w formacie ZL-X/YY zostanie nadany po zapisaniu zlecenia.'}
+              {orderNumberDisplay !== '—'
+                ? 'Numer nadany przy tworzeniu (tylko do odczytu).'
+                : 'Numer w formacie ORD-YY-NNNN zostanie nadany po zapisaniu zlecenia.'}
             </p>
           </div>
           <div>

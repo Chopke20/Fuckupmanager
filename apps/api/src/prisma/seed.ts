@@ -290,10 +290,10 @@ async function seedResources() {
   console.log('✅ Zasoby zaseedowane')
 }
 
-/** Przypisuje unikalne kody SPR-00001, ZAS-00001 itd. wszystkim rekordom (nadpisuje istniejące). */
+/** Przypisuje unikalne kody EQP-00001, RES-00001 itd. wszystkim rekordom (nadpisuje istniejące). */
 async function normalizeInternalCodes() {
-  const PREFIX_EQUIPMENT = 'SPR-'
-  const PREFIX_RESOURCES = 'ZAS-'
+  const PREFIX_EQUIPMENT = 'EQP-'
+  const PREFIX_RESOURCES = 'RES-'
   const PAD = 5
 
   const equipment = await prisma.equipment.findMany({
@@ -309,7 +309,7 @@ async function normalizeInternalCodes() {
     })
     idx += 1
   }
-  if (equipment.length > 0) console.log(`  Przypisano ${equipment.length} kodów SPR-*`)
+  if (equipment.length > 0) console.log(`  Przypisano ${equipment.length} kodów EQP-*`)
 
   const resources = await prisma.equipment.findMany({
     where: { category: 'ZASOBY' },
@@ -324,7 +324,7 @@ async function normalizeInternalCodes() {
     })
     idx += 1
   }
-  if (resources.length > 0) console.log(`  Przypisano ${resources.length} kodów ZAS-*`)
+  if (resources.length > 0) console.log(`  Przypisano ${resources.length} kodów RES-*`)
   console.log('✅ Kody wewnętrzne znormalizowane')
 }
 

@@ -303,7 +303,7 @@ export default function EquipmentFormModal({
                   setCodeError(null)
                 }}
                 className={`w-full px-2.5 py-1.5 text-sm border rounded bg-surface-2 ${codeError ? 'border-red-500' : 'border-border'}`}
-                placeholder={defaultCategory === 'ZASOBY' ? 'ZAS-00001' : 'SPR-00001'}
+                placeholder={defaultCategory === 'ZASOBY' ? 'RES-00001' : 'EQP-00001'}
               />
               {codeError && <p className="text-xs text-red-500 mt-1">{codeError}</p>}
             </div>

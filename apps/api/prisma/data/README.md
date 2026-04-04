@@ -16,4 +16,4 @@ cd apps/api && npm run db:seed
 
 Klienci są aktualizowani po `Nazwa Firmy/Instytucji` (upsert). Sprzęt i zasoby – po parze nazwa+kategoria (create lub update).
 
-**Kody wewnętrzne (sprzęt i zasoby):** Po seedzie każdy sprzęt dostaje unikalny kod `SPR-00001`, `SPR-00002`, … a zasoby `ZAS-00001`, `ZAS-00002`, … Kody są unikalne w całej tabeli; duplikaty są blokowane przez API. Nowe wpisy dostają proponowany kolejny kod (można go zmienić w formularzu).
+**Kody wewnętrzne (sprzęt i zasoby):** Po seedzie każdy sprzęt dostaje unikalny kod `EQP-00001`, `EQP-00002`, … a zasoby `RES-00001`, `RES-00002`, … Kody są unikalne w całej tabeli; duplikaty są blokowane przez API. Nowe wpisy dostają proponowany kolejny kod (można go zmienić w formularzu). Istniejące rekordy ze starymi prefiksami `SPR-` / `ZAS-` są uwzględniane przy wyliczaniu następnego numeru.

@@ -21,7 +21,7 @@ interface OfferPdfModalProps {
   }) => Promise<void>;
   lastOfferNumber: string | null | undefined;
   nextOfferNumber: string;
-  /** Numer zlecenia w formacie ZL-1/26 (powiązany z numerem oferty) */
+  /** Order reference display, e.g. ORD-26-0001 (ties to offer document number) */
   orderNumberDisplay?: string;
 }
 
@@ -166,7 +166,7 @@ export default function OfferPdfModal({
               <p>Numer zlecenia: <strong className="text-foreground font-mono">{orderNumberDisplay}</strong></p>
             )}
             <p>Ostatni numer oferty: <strong className="text-foreground">{lastOfferNumber ?? '—'}</strong></p>
-            <p>Następny numer oferty: <strong className="text-foreground">{nextOfferNumber}</strong> (numer.wersja.rok)</p>
+            <p>Następny numer oferty: <strong className="text-foreground">{nextOfferNumber}</strong> (OFR-YY-NNNN-v#)</p>
           </div>
         </div>
         <div className="flex gap-2 p-4 border-t border-border">
