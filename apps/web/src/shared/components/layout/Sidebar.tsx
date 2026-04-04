@@ -50,9 +50,12 @@ export default function Sidebar() {
           })}
         </ul>
       </nav>
-      <div className="p-3 border-t border-border">
-        <div className="text-xs text-muted-foreground">
-          v0.2.0 • Lama Stage © 2026
+      <div className="p-3 border-t border-border space-y-1.5">
+        <div className="text-xs text-muted-foreground leading-snug">
+          v.0.5.0 • Lama Stage © 2026
+        </div>
+        <div className="text-[10px] font-mono text-muted-foreground/90 bg-surface/80 border border-border rounded px-2 py-1 leading-tight break-all">
+          {typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'main-unknown'}
         </div>
       </div>
     </aside>
