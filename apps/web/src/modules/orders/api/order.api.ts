@@ -3,6 +3,79 @@ import { Order, CreateOrderDto, UpdateOrderDto } from '@lama-stage/shared-types'
 
 const API_BASE = '/api/orders';
 
+function filenameFromContentDisposition(cd: string | undefined, fallback: string): string {
+  if (!cd) return fallback;
+  const utf = /filename\*=UTF-8''([^;\n]+)/i.exec(cd);
+  if (utf?.[1]) {
+    try {
+      return decodeURIComponent(utf[1].trim());
+    } catch {
+      return fallback;
+    }
+  }
+  const q = /filename="([^"]+)"/i.exec(cd);
+  if (q?.[1]) return q[1];
+  const u = /filename=([^;\n]+)/i.exec(cd);
+  if (u?.[1]) return u[1].trim().replace(/^"|"$/g, '');
+  return fallback;
+}
+
+/** PDF magazynu / załadunku (wydruk z pustymi kratkami). */
+export async function downloadOrderWarehousePdf(orderId: string): Promise<void> {
+  try {
+    const res = await axios.get(`/api/pdf/warehouse/${orderId}/generate`, {
+      responseType: 'blob',
+      withCredentials: true,
+    });
+    const blob = res.data as Blob;
+    if (blob.type === 'application/json') {
+      const text = await blob.text();
+      let msg = 'Nie udało się wygenerować PDF magazynu.';
+      try {
+        const j = JSON.parse(text) as { error?: string };
+        if (typeof j.error === 'string') msg = j.error;
+      } catch {
+        //
+      }
+      throw new Error(msg);
+    }
+    const name = filenameFromContentDisposition(
+      res.headers['content-disposition'],
+      `Magazyn-${orderId}.pdf`
+    );
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (e: unknown) {
+    if (e instanceof Error && e.message !== 'Network Error' && !axios.isAxiosError(e)) throw e;
+    const ax = axios.isAxiosError(e) ? e : null;
+    const data = ax?.response?.data;
+    if (data instanceof Blob) {
+      const text = await data.text();
+      let msg = 'Nie udało się wygenerować PDF magazynu.';
+      try {
+        const j = JSON.parse(text) as { error?: string };
+        if (typeof j.error === 'string') msg = j.error;
+      } catch {
+        //
+      }
+      throw new Error(msg);
+    }
+    if (e instanceof Error) throw e;
+    throw new Error('Nie udało się pobrać PDF magazynu.');
+  }
+}
+
+export function getOrderWarehousePdfPreviewUrl(orderId: string): string {
+  return `/api/pdf/warehouse/${orderId}/generate?preview=1`;
+}
+
 export interface OrderDocumentExportMeta {
   id: string;
   orderId: string;

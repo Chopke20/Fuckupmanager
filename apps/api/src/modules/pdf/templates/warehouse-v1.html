@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Magazyn / załadunek — Lama Stage</title>
+<link href="https://fonts.googleapis.com/css2?family=Switzer:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --accent: #00FF7F;
+  --bg-muted: #f2f2f0;
+  --content-x: 18mm;
+  --ftr-h: 54px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Switzer', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 9pt;
+  color: #111;
+  background: #e0e0de;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.page {
+  width: 210mm;
+  min-height: 297mm;
+  margin: 24px auto;
+  background: #fff;
+  position: relative;
+  padding-bottom: 88px;
+}
+.hdr {
+  background: var(--bg-muted);
+  padding: 18px var(--content-x) 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1.5px solid #d0d0ce;
+}
+.hdr__logo { height: 40px; width: auto; }
+.hdr__right { text-align: right; }
+.hdr__offer-num {
+  font-size: 15pt;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #111;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.hdr__offer-num em {
+  font-style: normal;
+  background: var(--accent);
+  padding: 1px 7px 2px;
+  margin-left: 4px;
+}
+.hdr__meta {
+  font-size: 7.5pt;
+  font-weight: 400;
+  color: #888;
+  line-height: 1.5;
+}
+.body { padding: 20px var(--content-x) 0; }
+.parties {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-bottom: 14px;
+  border: 1.5px solid #111;
+}
+.parties__col { padding: 12px 14px; font-size: 8pt; line-height: 1.7; }
+.parties__col + .parties__col { border-left: 1.5px solid #111; }
+.parties__label {
+  font-size: 6pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: #999;
+  margin-bottom: 5px;
+}
+.parties__name { font-size: 9.5pt; font-weight: 600; color: #111; margin-bottom: 1px; }
+.parties__detail { color: #555; }
+.desc-box {
+  background: var(--bg-muted);
+  border-left: 3px solid var(--accent);
+  padding: 6px 12px 8px;
+  margin-bottom: 16px;
+  font-size: 8.5pt;
+  line-height: 1.55;
+  color: #333;
+}
+.desc-box__label {
+  font-size: 6pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: #888;
+  margin-bottom: 4px;
+}
+.sec-hdr { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.sec-hdr__bar { width: 3px; height: 14px; background: var(--accent); flex-shrink: 0; }
+.sec-hdr__title {
+  font-size: 6pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: #111;
+}
+.prod-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8pt;
+  margin-bottom: 20px;
+}
+.prod-table thead th {
+  font-size: 6pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #999;
+  padding: 4px 7px 5px;
+  text-align: right;
+  border-bottom: 1.5px solid #111;
+}
+.prod-table thead th.left { text-align: left; }
+.prod-table thead th.center { text-align: center; }
+.prod-table tbody tr { border-bottom: 1px solid #ececea; }
+.prod-table tbody td {
+  padding: 7px 7px;
+  color: #222;
+  text-align: right;
+  vertical-align: middle;
+}
+.prod-table tbody td.left { text-align: left; }
+.prod-table tbody td.center { text-align: center; }
+.prod-table tbody td.dim { color: #bbb; font-size: 7.5pt; }
+.chk-cell {
+  width: 32px;
+  text-align: center !important;
+  vertical-align: middle !important;
+}
+.chk-box {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid #111;
+  box-sizing: border-box;
+  vertical-align: middle;
+}
+.footer {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  border-top: 1.5px solid #111;
+  background: var(--bg-muted);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 8px 26px 10px;
+  font-size: 7.5pt;
+  color: #444;
+  line-height: 1.55;
+}
+.footer__col + .footer__col {
+  padding-left: 18px;
+  border-left: 1px solid #d8d8d6;
+  margin-left: 18px;
+}
+.footer__label {
+  font-size: 6pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: #111;
+  margin-bottom: 2px;
+  display: block;
+}
+body { orphans: 2; widows: 2; }
+.desc-box, .parties { page-break-inside: avoid; break-inside: avoid; }
+.sec-hdr { page-break-after: avoid; break-after: avoid; }
+.prod-table thead { display: table-header-group; }
+.prod-table tr { page-break-inside: avoid; break-inside: avoid; }
+@media print {
+  @page {
+    size: A4;
+    margin-left: 0;
+    margin-right: 0;
+    margin-top: 14mm;
+    margin-bottom: 25mm;
+  }
+  @page :first { margin-top: 0; }
+  body { background: #fff; }
+  .page { margin: 0; width: 100%; box-shadow: none; padding: 0; min-height: 0; }
+  .hdr {
+    position: relative;
+    margin: 0;
+    margin-top: -25px;
+    padding-top: calc(18px + 25px);
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+  .footer { position: fixed; bottom: 0; left: 0; right: 0; margin: 0; z-index: 10; }
+  .body {
+    padding-left: var(--content-x);
+    padding-right: var(--content-x);
+    padding-top: 8mm;
+    padding-bottom: calc(var(--ftr-h) + 8mm);
+  }
+  .footer { padding-left: var(--content-x); padding-right: var(--content-x); }
+}
+@media screen {
+  .page { box-shadow: 0 6px 40px rgba(0,0,0,0.14); }
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="hdr">
+    {{HDR_LOGO}}
+    <div class="hdr__right">
+      <div class="hdr__offer-num">Magazyn nr<em>{{DOC_NUMBER}}</em></div>
+      <div class="hdr__meta">{{HEADER_META}}</div>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="parties">
+      <div class="parties__col">
+        <div class="parties__label">Wystawca</div>
+        <div class="parties__name">{{COMPANY_NAME}}</div>
+        <div class="parties__detail">{{COMPANY_DETAILS}}</div>
+      </div>
+      <div class="parties__col">
+        <div class="parties__label">Kontrahent</div>
+        <div class="parties__name">{{CLIENT_NAME}}</div>
+        <div class="parties__detail">{{CLIENT_DETAILS}}</div>
+      </div>
+    </div>
+
+    <div class="desc-box">
+      <div class="desc-box__label">{{DESC_LABEL}}</div>
+      <div>{{DESC_BODY}}</div>
+    </div>
+
+    <div class="sec-hdr">
+      <div class="sec-hdr__bar"></div>
+      <div class="sec-hdr__title">Lista sprzętu — odhacz po załadunku (kratki do wypełnienia odręcznie)</div>
+    </div>
+
+    <table class="prod-table">
+      <thead>
+        <tr>
+          <th class="center" style="width:36px" title="Odhaczenie"></th>
+          <th class="center" style="width:32px">#</th>
+          <th class="left">Nazwa</th>
+          <th class="center" style="width:48px">Ilość</th>
+          <th class="center" style="width:40px">jm</th>
+        </tr>
+      </thead>
+      <tbody>{{EQUIPMENT_TBODY}}</tbody>
+    </table>
+  </div>
+
+  <div class="footer">
+    <div class="footer__col">{{FOOTER_LEFT}}</div>
+    <div class="footer__col">{{FOOTER_RIGHT}}</div>
+  </div>
+</div>
+</body>
+</html>

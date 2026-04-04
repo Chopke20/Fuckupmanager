@@ -1,14 +1,18 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, FileText, Plus, Save } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, Download, Eye, FileText, Plus, Save } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useOrder } from '../hooks/useOrders';
-import { orderApi, OrderDocumentExportMeta } from '../api/order.api';
+import {
+  orderApi,
+  OrderDocumentExportMeta,
+  downloadOrderWarehousePdf,
+  getOrderWarehousePdfPreviewUrl,
+} from '../api/order.api';
 import { formatOrderNumber } from '../utils/orderNumberFormat';
 
 type WarehouseDraft = {
   title: string;
   notes?: string;
-  checked: Record<string, boolean>;
 };
 
 function normalizeWarehouseDraft(payload: unknown, orderName: string): WarehouseDraft {
@@ -19,14 +23,7 @@ function normalizeWarehouseDraft(payload: unknown, orderName: string): Warehouse
   let title = typeof p.title === 'string' ? p.title.trim() : '';
   if (!title) title = `Magazyn / załadunek - ${orderName}`.trim() || 'Magazyn / załadunek';
   const notes = typeof p.notes === 'string' ? p.notes : '';
-  const checked: Record<string, boolean> = {};
-  const c = p.checked;
-  if (c && typeof c === 'object' && !Array.isArray(c)) {
-    for (const [k, v] of Object.entries(c)) {
-      if (typeof v === 'boolean') checked[k] = v;
-    }
-  }
-  return { title, notes: notes || undefined, checked };
+  return { title, notes: notes || undefined };
 }
 
 export default function OrderWarehousePage() {
@@ -40,6 +37,7 @@ export default function OrderWarehousePage() {
   const [loadingExports, setLoadingExports] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [creatingExport, setCreatingExport] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const equipmentSorted = useMemo(() => {
@@ -100,9 +98,7 @@ export default function OrderWarehousePage() {
 
   const createSnapshotExport = async () => {
     if (!id) return;
-    if (draft) {
-      await saveDraft();
-    }
+    if (draft) await saveDraft();
     setCreatingExport(true);
     setError(null);
     try {
@@ -116,15 +112,18 @@ export default function OrderWarehousePage() {
     }
   };
 
-  const setItemChecked = useCallback((itemId: string, value: boolean) => {
-    setDraft((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        checked: { ...prev.checked, [itemId]: value },
-      };
-    });
-  }, []);
+  const handleDownloadPdf = async () => {
+    if (!id) return;
+    setPdfLoading(true);
+    setError(null);
+    try {
+      await downloadOrderWarehousePdf(id);
+    } catch (e: any) {
+      setError(e instanceof Error ? e.message : 'Nie udało się pobrać PDF.');
+    } finally {
+      setPdfLoading(false);
+    }
+  };
 
   if (!id) return null;
 
@@ -151,18 +150,38 @@ export default function OrderWarehousePage() {
     );
   }
 
+  const previewUrl = getOrderWarehousePdfPreviewUrl(id);
+
   return (
     <div className="p-4 space-y-4">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <button
           type="button"
           onClick={() => navigate(`/orders/${id}`)}
-          className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors w-fit"
         >
           <ArrowLeft size={20} />
           Powrót do zlecenia
         </button>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={handleDownloadPdf}
+            disabled={pdfLoading}
+            className="px-3 py-1.5 text-sm border-2 border-primary text-primary bg-transparent rounded font-medium hover:bg-primary/10 flex items-center gap-1.5 disabled:opacity-50"
+          >
+            <Download size={16} />
+            {pdfLoading ? 'Generowanie PDF…' : 'Pobierz PDF (wydruk)'}
+          </button>
+          <a
+            href={previewUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3 py-1.5 text-sm border border-border rounded hover:bg-surface-2 inline-flex items-center gap-1.5"
+          >
+            <Eye size={16} />
+            Podgląd PDF
+          </a>
           <button
             type="button"
             onClick={saveDraft}
@@ -170,16 +189,16 @@ export default function OrderWarehousePage() {
             className="px-3 py-1.5 text-sm border border-border rounded hover:bg-surface-2 flex items-center gap-1.5 disabled:opacity-50"
           >
             <Save size={16} />
-            {savingDraft ? 'Zapisywanie...' : 'Zapisz draft'}
+            {savingDraft ? 'Zapisywanie…' : 'Zapisz tytuł i notatki'}
           </button>
           <button
             type="button"
             onClick={createSnapshotExport}
             disabled={creatingExport}
-            className="px-3 py-1.5 text-sm border-2 border-primary text-primary rounded font-medium hover:bg-primary/10 flex items-center gap-1.5 disabled:opacity-50"
+            className="px-3 py-1.5 text-sm border border-border rounded hover:bg-surface-2 flex items-center gap-1.5 disabled:opacity-50"
           >
             <Plus size={16} />
-            {creatingExport ? 'Tworzenie...' : 'Utwórz snapshot (eksport)'}
+            {creatingExport ? 'Tworzenie…' : 'Snapshot w systemie'}
           </button>
         </div>
       </div>
@@ -189,6 +208,14 @@ export default function OrderWarehousePage() {
           {error}
         </div>
       )}
+
+      <div className="max-w-3xl rounded-lg border border-border bg-surface-2/50 px-4 py-3 text-sm text-muted-foreground">
+        <p className="font-medium text-foreground mb-1">Do wydruku w magazynie</p>
+        <p>
+          PDF ma ten sam styl nagłówka co oferta i listę sprzętu z <strong>pustymi kratkami</strong> do odhaczenia ołówkiem.
+          Tytuł i notatki poniżej trafiają na dokument — zapisz je przed generowaniem PDF.
+        </p>
+      </div>
 
       <div className="max-w-5xl mx-auto bg-surface rounded-xl border border-border overflow-hidden">
         <div className="px-4 py-2 bg-surface-2 border-b border-border flex justify-between text-sm">
@@ -206,24 +233,24 @@ export default function OrderWarehousePage() {
             value={draft.title}
             onChange={(e) => setDraft((prev) => (prev ? { ...prev, title: e.target.value } : prev))}
             className="w-full px-3 py-2 text-sm bg-background border border-border rounded"
-            placeholder="Tytuł dokumentu"
+            placeholder="Tytuł na dokumencie PDF"
           />
           <textarea
             value={draft.notes || ''}
             onChange={(e) => setDraft((prev) => (prev ? { ...prev, notes: e.target.value } : prev))}
             className="w-full px-3 py-2 text-sm bg-background border border-border rounded min-h-[80px]"
-            placeholder="Notatki do dokumentu (opcjonalnie)"
+            placeholder="Notatki na dokumencie PDF (opcjonalnie)"
           />
 
-          <p className="text-xs text-muted-foreground">Lista sprzętu z zlecenia — zaznacz pozycje po załadunku. Stan zapisuje się w drafcie (przycisk „Zapisz draft”).</p>
+          <p className="text-xs text-muted-foreground">
+            Podgląd pozycji (kolejność jak w zleceniu). Na PDF są puste kwadraty zamiast pól do zaznaczania na ekranie.
+          </p>
 
           <div className="overflow-x-auto border border-border rounded">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-surface-2 border-b border-border">
-                  <th className="text-center py-2 px-2 w-12" title="Załadowane">
-                    ✓
-                  </th>
+                  <th className="text-left py-2 px-3">#</th>
                   <th className="text-left py-2 px-3">Nazwa</th>
                   <th className="text-left py-2 px-3">Ilość</th>
                   <th className="text-left py-2 px-3">Jednostka</th>
@@ -237,17 +264,9 @@ export default function OrderWarehousePage() {
                     </td>
                   </tr>
                 ) : (
-                  equipmentSorted.map((item: { id: string; name?: string; quantity?: number; equipment?: { unit?: string } | null }) => (
+                  equipmentSorted.map((item: { id: string; name?: string; quantity?: number; equipment?: { unit?: string } | null }, idx: number) => (
                     <tr key={item.id} className="border-b border-border/60 last:border-0">
-                      <td className="py-2 px-2 text-center align-middle">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 rounded border-border"
-                          checked={!!draft.checked[item.id]}
-                          onChange={(e) => setItemChecked(item.id, e.target.checked)}
-                          aria-label={`Załadowano: ${item.name || 'pozycja'}`}
-                        />
-                      </td>
+                      <td className="py-2 px-3 text-muted-foreground">{idx + 1}</td>
                       <td className="py-2 px-3">{item.name}</td>
                       <td className="py-2 px-3">{item.quantity ?? 1}</td>
                       <td className="py-2 px-3">{item.equipment?.unit || 'szt.'}</td>
@@ -261,11 +280,11 @@ export default function OrderWarehousePage() {
       </div>
 
       <div className="max-w-5xl mx-auto bg-surface rounded-xl border border-border p-4">
-        <div className="text-lg font-bold mb-3">Snapshoty magazynu (historia)</div>
+        <div className="text-lg font-bold mb-3">Snapshoty magazynu (historia w systemie)</div>
         {loadingExports ? (
-          <div className="text-sm text-muted-foreground">Ładowanie historii eksportów...</div>
+          <div className="text-sm text-muted-foreground">Ładowanie…</div>
         ) : exports.length === 0 ? (
-          <div className="text-sm text-muted-foreground">Brak snapshotów magazynu.</div>
+          <div className="text-sm text-muted-foreground">Brak zapisanych snapshotów.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

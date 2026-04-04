@@ -4,6 +4,12 @@ import puppeteer from 'puppeteer'
 import { ZodError } from 'zod'
 import { OrderOfferSnapshotSchema, type OrderOfferSnapshot } from '@lama-stage/shared-types'
 import { buildOfferHtmlV5, type OrderLike } from './offer-v5-builder'
+import { buildWarehousePdfHtml } from './warehouse-pdf-builder'
+import {
+  buildDocumentNumber,
+  parseJsonSafely,
+  resolveDefaultIssuerForDraft,
+} from '../orders/order-document-draft-utils'
 import {
   areOfferSnapshotContentsEqual,
   buildOrderOfferSnapshotFromOrder,
@@ -273,6 +279,112 @@ export class PdfController {
     } catch (error) {
       console.error('Błąd generowania PDF z eksportu:', error)
       res.status(500).json({ error: 'Błąd generowania oferty PDF z eksportu' })
+    }
+  }
+
+  /**
+   * PDF „Magazyn / załadunek” do wydruku: nagłówek jak oferta, lista sprzętu z pustymi kratkami (odhaczanie odręczne).
+   * Nie tworzy rekordu eksportu — numer MAG-*.{następna wersja}.{rok} jest „kolejnym” względem zapisanych snapshotów.
+   */
+  async generateWarehousePdf(req: Request, res: Response) {
+    try {
+      const orderId = req.params.orderId
+      if (!orderId) return res.status(400).json({ error: 'Brak ID zlecenia' })
+
+      const order = await prisma.order.findFirst({
+        where: { id: orderId, isDeleted: false },
+        include: {
+          client: true,
+          equipmentItems: {
+            include: { equipment: true },
+            orderBy: { sortOrder: 'asc' },
+          },
+        },
+      })
+      if (!order) return res.status(404).json({ error: 'Zlecenie nie znalezione' })
+
+      const orderYear = order.orderYear ?? new Date(order.createdAt).getFullYear()
+      const orderNumber = order.orderNumber
+      if (orderNumber == null || orderYear == null) {
+        return res.status(400).json({
+          error: 'Zlecenie nie ma nadanego numeru — nie można zbudować numeru dokumentu magazynu.',
+        })
+      }
+
+      const exportCount = await prisma.orderDocumentExport.count({
+        where: { orderId, documentType: 'WAREHOUSE' },
+      })
+      const version = exportCount + 1
+      const documentNumberDisplay = buildDocumentNumber({
+        documentType: 'WAREHOUSE',
+        orderNumber,
+        orderYear,
+        version,
+      })
+
+      const draftRecord = await prisma.orderDocumentDraft.findUnique({
+        where: {
+          orderId_documentType: {
+            orderId,
+            documentType: 'WAREHOUSE',
+          },
+        },
+      })
+      const parsedDraft = parseJsonSafely(draftRecord?.payload ?? null)
+      let draftTitle = ''
+      let draftNotes = ''
+      if (parsedDraft && typeof parsedDraft === 'object') {
+        const o = parsedDraft as Record<string, unknown>
+        if (typeof o.title === 'string') draftTitle = o.title
+        if (typeof o.notes === 'string') draftNotes = o.notes
+      }
+
+      const issuer = await resolveDefaultIssuerForDraft(prisma)
+      const generatedAt = new Date().toISOString()
+      const html = buildWarehousePdfHtml({
+        documentNumberDisplay,
+        issuedAt: generatedAt,
+        orderName: order.name,
+        orderNumber,
+        orderYear,
+        venue: order.venue,
+        startDate: order.startDate,
+        endDate: order.endDate,
+        draftTitle,
+        draftNotes,
+        issuer,
+        client: order.client
+          ? {
+              companyName: order.client.companyName,
+              nip: order.client.nip,
+              address: order.client.address,
+              contactName: order.client.contactName,
+              email: order.client.email,
+              phone: order.client.phone,
+            }
+          : null,
+        equipmentItems: order.equipmentItems.map((e) => ({
+          name: e.name,
+          quantity: e.quantity,
+          unit: e.equipment?.unit ?? 'szt.',
+          sortOrder: e.sortOrder,
+        })),
+        projectContactKey: order.projectContactKey,
+      })
+
+      const pdfBuffer = await this.renderPdf(html)
+      const filename = `Magazyn-${documentNumberDisplay}.pdf`
+      const inline =
+        req.query.inline === '1' || req.query.preview === '1' || req.query.preview === 'true'
+      res.setHeader('Content-Type', 'application/pdf')
+      res.setHeader(
+        'Content-Disposition',
+        inline ? `inline; filename="Magazyn-podglad.pdf"` : `attachment; filename="${filename}"`,
+      )
+      res.send(pdfBuffer)
+    } catch (error) {
+      console.error('Błąd generowania PDF magazynu:', error)
+      res.status(500).json({ error: 'Błąd generowania PDF magazynu' })
     }
   }
 
