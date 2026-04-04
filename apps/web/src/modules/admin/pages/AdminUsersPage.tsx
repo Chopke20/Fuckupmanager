@@ -17,6 +17,7 @@ import {
   apiUpdateRole,
 } from '../../auth/auth.api'
 import { useAuth } from '../../auth/AuthProvider'
+import { formatRoleLabel } from '../../../lib/roleLabels'
 import { financeApi } from '../../orders/api/pdf.api'
 import AdminIssuerProfilesSection from '../components/AdminIssuerProfilesSection'
 
@@ -460,9 +461,9 @@ export default function AdminUsersPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left border-b border-border">
-                <th className="py-2">Użytkownik</th>
-                <th className="py-2">Rola</th>
+                <th className="py-2">E-mail</th>
                 <th className="py-2">Status</th>
+                <th className="py-2 text-right">Nazwa i rola</th>
                 <th className="py-2 text-right">Akcje</th>
               </tr>
             </thead>
@@ -470,11 +471,14 @@ export default function AdminUsersPage() {
               {users.map((u) => (
                 <tr key={u.id} className="border-b border-border/60">
                   <td className="py-2">
-                    <div className="font-medium">{u.fullName || u.username || 'Bez nazwy'}</div>
-                    <div className="text-xs text-muted-foreground">{u.email}</div>
+                    <div className="text-muted-foreground">{u.email}</div>
+                    {u.username ? <div className="text-xs text-muted-foreground/80">{u.username}</div> : null}
                   </td>
-                  <td className="py-2">{u.role}</td>
                   <td className="py-2">{u.isActive ? 'Aktywne' : 'Nieaktywne'}</td>
+                  <td className="py-2 text-right align-top">
+                    <div className="font-medium">{u.fullName || u.username || '—'}</div>
+                    <div className="text-xs text-muted-foreground">{formatRoleLabel(u.role)}</div>
+                  </td>
                   <td className="py-2">
                     <div className="flex justify-end gap-2">
                       <button
