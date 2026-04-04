@@ -104,7 +104,8 @@ function validateOrderPayload(
     startDate?: Date;
     endDate?: Date;
   },
-  isEditing: boolean
+  isEditing: boolean,
+  formEquipmentItems?: Partial<OrderEquipmentItem>[]
 ): string | null {
   if (!payload.name?.trim()) return 'Nazwa zlecenia jest wymagana.';
   if (!payload.clientId) return 'Wybierz klienta.';
@@ -118,6 +119,17 @@ function validateOrderPayload(
     todayStart.setHours(0, 0, 0, 0);
     const start = new Date(startDate).getTime();
     if (start < todayStart.getTime()) return 'Data rozpoczęcia nie może być w przeszłości.';
+  }
+  const rawEq = formEquipmentItems ?? [];
+  for (const item of rawEq) {
+    const n = typeof item?.name === 'string' ? item.name.trim() : '';
+    if (n.length > 0) continue;
+    const hasEquipment = Boolean(item?.equipmentId);
+    const price = typeof item?.unitPrice === 'number' ? item.unitPrice : Number(item?.unitPrice);
+    const hasPrice = Number.isFinite(price) && price > 0;
+    if (hasEquipment || hasPrice) {
+      return 'Każda pozycja sprzętu z uzupełnionymi danymi musi mieć nazwę.';
+    }
   }
   return null;
 }
@@ -359,32 +371,35 @@ export default function OrderFormPage() {
       }))
 
     const normalizeEquipmentItems = (list: any[] | undefined) =>
-      (Array.isArray(list) ? list : []).map((item, idx) => {
-        let pricingRule = item?.pricingRule
-        if (typeof pricingRule === 'string') {
-          try {
-            pricingRule = JSON.parse(pricingRule)
-          } catch {
-            pricingRule = undefined
+      (Array.isArray(list) ? list : [])
+        .map((item, idx) => {
+          let pricingRule = item?.pricingRule
+          if (typeof pricingRule === 'string') {
+            try {
+              pricingRule = JSON.parse(pricingRule)
+            } catch {
+              pricingRule = undefined
+            }
           }
-        }
-        return {
-          equipmentId: item?.equipmentId || undefined,
-          name: item?.name || 'Pozycja',
-          description: item?.description || undefined,
-          category: item?.category || 'Inne',
-          quantity: Math.max(1, Math.round(toNumber(item?.quantity, 1))),
-          unitPrice: Math.max(0, toNumber(item?.unitPrice, 0)),
-          days: Math.max(1, Math.round(toNumber(item?.days, 1))),
-          discount: Math.min(100, Math.max(0, toNumber(item?.discount, 0))),
-          pricingRule: pricingRule || undefined,
-          visibleInOffer: item?.visibleInOffer !== false,
-          isRental: !!item?.isRental,
-          sortOrder: toNumber(item?.sortOrder, idx),
-          dateFrom: toIso(item?.dateFrom),
-          dateTo: toIso(item?.dateTo),
-        }
-      })
+          const name = typeof item?.name === 'string' ? item.name.trim() : ''
+          return {
+            equipmentId: item?.equipmentId || undefined,
+            name,
+            description: item?.description || undefined,
+            category: item?.category || 'Inne',
+            quantity: Math.max(1, Math.round(toNumber(item?.quantity, 1))),
+            unitPrice: Math.max(0, toNumber(item?.unitPrice, 0)),
+            days: Math.max(1, Math.round(toNumber(item?.days, 1))),
+            discount: Math.min(100, Math.max(0, toNumber(item?.discount, 0))),
+            pricingRule: pricingRule || undefined,
+            visibleInOffer: item?.visibleInOffer !== false,
+            isRental: !!item?.isRental,
+            sortOrder: toNumber(item?.sortOrder, idx),
+            dateFrom: toIso(item?.dateFrom),
+            dateTo: toIso(item?.dateTo),
+          }
+        })
+        .filter((row) => row.name.length > 0)
 
     const normalizeProductionItems = (list: any[] | undefined) =>
       (Array.isArray(list) ? list : []).map((item, idx) => ({
@@ -442,7 +457,7 @@ export default function OrderFormPage() {
         return;
       }
       const payload = buildPayload(getValues() as Partial<Order>);
-      const validationError = validateOrderPayload(payload, true);
+      const validationError = validateOrderPayload(payload, true, getValues('equipmentItems') as Partial<OrderEquipmentItem>[] | undefined);
       if (validationError) {
         setSubmitError(validationError);
         return;
@@ -481,7 +496,7 @@ export default function OrderFormPage() {
     setSubmitError(null);
     const data = getValues();
     const payload = buildPayload(data as Partial<Order>);
-    const validationError = validateOrderPayload(payload, isEditing);
+    const validationError = validateOrderPayload(payload, isEditing, data.equipmentItems as Partial<OrderEquipmentItem>[] | undefined);
     if (validationError) {
       setSubmitError(validationError);
       return;
@@ -898,6 +913,7 @@ export default function OrderFormPage() {
                   </button>
                   {sectionOpen.transport && (
                   <OrderTransportSection
+                    key={id || 'new'}
                     items={transportItems}
                     stages={stages}
                     orderDateFrom={typeof formData.dateFrom === 'string' ? formData.dateFrom : undefined}

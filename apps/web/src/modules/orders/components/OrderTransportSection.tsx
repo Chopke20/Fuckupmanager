@@ -216,8 +216,9 @@ export default function OrderTransportSection({
 
   const lastDistanceRef = useRef<number | null>(null);
   const lastQuoteBaseRef = useRef<number | null>(null);
-  const lastTargetsLengthRef = useRef<number>(1);
-  const pendingInitialBuildRef = useRef(true);
+  const lastTargetsLengthRef = useRef<number>(0);
+  /** Po pierwszym przebiegu synchronizacji nie dokładamy wierszy „dodatkowy dzień” tylko dlatego, że zlecenie jest wielodniowe — tylko przy realnej zmianie liczby celów transportu (np. harmonogram). */
+  const transportSyncInitializedRef = useRef(false);
 
   useEffect(() => {
     setLoadingSettings(true);
@@ -319,11 +320,24 @@ export default function OrderTransportSection({
       .finally(() => setLoadingQuote(false));
   }, [distanceKm, targets.length]);
 
-  // Build/sync transport rows from targets (schedule or order dates). Always show at least one row when we have targets, even without distance/quote (amount 0).
+  // Build/sync transport rows from targets (schedule or order dates). Pierwsze wejście: szanuj zapisane wiersze; drugi wiersz tylko gdy liczba celów transportu rośnie (np. z 1 do 2 po zmianie harmonogramu).
   useEffect(() => {
     if (targets.length === 0) return;
     if (!settings) return;
-    const targetsLengthChanged = lastTargetsLengthRef.current !== targets.length;
+
+    if (!transportSyncInitializedRef.current) {
+      transportSyncInitializedRef.current = true;
+      lastTargetsLengthRef.current = targets.length;
+      lastDistanceRef.current = distanceKm;
+      lastQuoteBaseRef.current = quote?.baseNetPerTrip ?? null;
+      if (items.length === 0) {
+        onChange(buildAutoRows([], targets));
+      }
+      return;
+    }
+
+    const prevTargetsLen = lastTargetsLengthRef.current;
+    const targetsLengthChanged = prevTargetsLen !== targets.length;
     lastTargetsLengthRef.current = targets.length;
 
     const distanceChanged = lastDistanceRef.current != null && lastDistanceRef.current !== distanceKm;
@@ -334,13 +348,12 @@ export default function OrderTransportSection({
       (lastQuoteBaseRef.current == null || Math.abs(lastQuoteBaseRef.current - currentQuoteBase) > 0.0001);
     if (quote != null) lastQuoteBaseRef.current = currentQuoteBase;
 
-    if (pendingInitialBuildRef.current || items.length === 0) {
-      pendingInitialBuildRef.current = false;
-      onChange(buildAutoRows(items));
+    if (items.length === 0) {
+      onChange(buildAutoRows([], targets));
       return;
     }
 
-    if (targetsLengthChanged && items.length < targets.length) {
+    if (targetsLengthChanged && targets.length > prevTargetsLen && items.length < targets.length) {
       onChange(buildAutoRows(items, targets));
       return;
     }
@@ -367,7 +380,7 @@ export default function OrderTransportSection({
         )
       : false;
     if (shouldRecalculate) {
-      onChange(buildAutoRows(items));
+      onChange(buildAutoRows(items, targets.slice(0, Math.max(1, items.length))));
     }
   }, [distanceKm, settings, quote, targets, hasManualOverride, items.length]);
 
@@ -837,7 +850,7 @@ export default function OrderTransportSection({
                       setQuote(nextQuote);
                     }
                     setSettingsOpen(false);
-                    onChange(buildAutoRows(items));
+                    onChange(buildAutoRows(items, targets.slice(0, Math.max(1, items.length))));
                   } catch (e: any) {
                     const raw = e?.response?.data?.error ?? e?.message;
                     setError(typeof raw === 'string' ? raw : 'Nie udało się zapisać ustawień transportu.');
