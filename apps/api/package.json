@@ -10,6 +10,7 @@
     "db:migrate": "prisma migrate dev --schema prisma/schema.prisma",
     "db:seed": "ts-node src/prisma/seed.ts",
     "db:normalize-codes": "ts-node scripts/normalize-internal-codes.ts",
+    "db:migrate-legacy-codes": "ts-node scripts/migrate-legacy-codes.ts",
     "db:studio": "prisma studio --schema prisma/schema.prisma"
   },
   "prisma": {

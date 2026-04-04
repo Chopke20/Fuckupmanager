@@ -1,7 +1,8 @@
 # Procedura naprawy produkcji (Lama Stage)
 
 **Cel:** uporządkowana diagnostyka i naprawa typowych awarii na VPS (Hetzner, `/var/www/lamaapp`).  
-**Kontekst:** Ubuntu 24.04, PM2 `lamaapp`, PostgreSQL lokalnie na serwerze, nginx przed API.
+**Kontekst:** Ubuntu 24.04, PM2 `lamaapp`, PostgreSQL lokalnie na serwerze, nginx przed API.  
+**Codzienny flow release:** `docs/deploy-quick.md` (krótka checklista push/deploy/weryfikacja SHA).
 
 ---
 
@@ -97,6 +98,18 @@ Status **„Database schema is up to date”** + brak pending — OK. Jeśli mig
 
 Seed nadpisuje domyślne konta testowe — uruchamiaj tylko wtedy, gdy wiesz, po co.  
 W razie potrzeby: `npm run db:seed -w apps/api` **na serwerze** z odpowiednim `.env` (patrz `apps/api/.env.example` i dokumentacja seeda).
+
+### 3.5 Migracja starych kodów (SPR/ZAS, stare numery PDF)
+
+Jednorazowo po wdrożeniu nowych formatów (`EQP-`/`RES-`, `OFR-…-v#` itd.): z katalogu `apps/api`, z poprawnym `DATABASE_URL`, najpierw **podgląd bez zapisu** (`MIGRATE_DRY_RUN=1`), potem właściwy run:
+
+```bash
+cd /var/www/lamaapp/apps/api
+MIGRATE_DRY_RUN=1 npm run db:migrate-legacy-codes
+npm run db:migrate-legacy-codes
+```
+
+Skrypt: `scripts/migrate-legacy-codes.ts` — aktualizuje `equipment.internalCode`, `order_document_exports` (+ pole `documentNumber` w JSON snapshotu oferty, jeśli występuje) oraz `orders.offerNumber` / `offerVersion`.
 
 ---
 
