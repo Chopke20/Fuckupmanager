@@ -51,6 +51,8 @@ tail -80 /root/.pm2/logs/lamaapp-error.log
 | `The table public.… does not exist` / błędy Prisma o braku tabeli | Migracje nie zastosowane na tej bazie albo **zły `DATABASE_URL`** (inna baza niż myślisz) | [§3 Baza i Prisma](#3-baza-i-prisma) |
 | `Brak konfiguracji SMTP` / `SMTP_CONFIG_MISSING` | Brak `SMTP_*` w `apps/api/.env` lub PM2 bez świeżego env | [§4 Env, integracje, SMTP](#4-env-integracje-smtp) |
 | `SMTP: brak odpowiedzi serwera` / timeout SMTP | Zły host/port, firewall, blokada egress, problem u dostawcy | [§4 Env, integracje, SMTP](#4-env-integracje-smtp) |
+| **504** na wywołaniach API (np. zaproszenia), a w logu API timeout SMTP | nginx (`proxy_read_timeout`) kończy żądanie wcześniej niż backend; ewentualnie stary build API | [§4 Env, integracje, SMTP](#4-env-integracje-smtp) + [§6 Nginx i port](#6-nginx-i-port) |
+| `550` „Pole od różni się od uwierzytelnionego użytkownika” (Hostido) | `SMTP_FROM` ≠ `SMTP_USER` (albo inny adres w `<>`) | Ustaw ten sam adres co login; opcjonalnie włącz w panelu hostingu zmianę nagłówka From |
 | `Brak konfiguracji AI (OPENROUTER_API_KEY)` / 503 na `/api/ai/*` | Brak klucza w `.env` | [§4 Env, integracje, SMTP](#4-env-integracje-smtp) |
 | Puste miejsca / brak km (Google) | Brak `GOOGLE_MAPS_API_KEY` lub wyłączone API w GCP | [§4 Env, integracje, SMTP](#4-env-integracje-smtp) |
 | `Failed to launch the browser` / `libnss3.so` / `cannot open shared object file` | Brak bibliotek systemowych dla Chromium (Puppeteer / PDF) | [§5 Eksport PDF (Puppeteer)](#5-eksport-pdf-puppeteer) |
@@ -134,6 +136,10 @@ nc -vz host820313.hostido.net.pl 587
 ```
 
 Jeśli timeout — problem sieci/firewall/u dostawcy, nie aplikacji.
+
+### SMTP a 504 z przeglądarki
+
+Jeśli w `pm2` widać błąd SMTP po ~60 s, a w przeglądarce **504**, nginx może mieć domyślny `proxy_read_timeout` (często 60 s). Dla lokalizacji proxy do API warto ustawić np. `proxy_read_timeout 120s;` (i ewentualnie `proxy_connect_timeout`), potem `nginx -t` i `systemctl reload nginx`.
 
 ---
 
