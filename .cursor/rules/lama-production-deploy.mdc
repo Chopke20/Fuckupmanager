@@ -41,6 +41,11 @@ alwaysApply: true
 - Skrypt root: `deploy.sh`
 - Deploy ręczny: `ssh root@204.168.181.239` → `cd /var/www/lamaapp` → `git fetch origin main && git reset --hard origin/main` → `chmod +x deploy.sh && ./deploy.sh`
 
+## Git + wersjonowanie release
+- Dla zmian produkcyjnych domykaj pracę jako: **commit + push do `main`** (po akceptacji użytkownika).
+- Po pushu zawsze podaj użytkownikowi krótki SHA (`git rev-parse --short HEAD`) i potwierdź, że serwer ma ten sam numer po deployu.
+- Frontend ma pokazywać wersję w stałym formacie **`main-<short_sha>`** i wyświetlać ją w **lewym dolnym rogu** aplikacji, żeby łatwo sprawdzić zgodność kodu z deployem.
+
 ## TypeScript w backendzie
 - W `apps/api` **`noImplicitAny` jest wyłączone** — nowy kod dopasowuj do istniejącego poziomu ścisłości typów
 
