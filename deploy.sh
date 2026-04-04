@@ -76,14 +76,14 @@ install_chromium_pdf_deps() {
 }
 
 echo '→ Instalacja zależności...'
-npm install
+npm install --include=dev
 install_chromium_pdf_deps
 echo '→ Build shared-types...'
-cd packages/shared-types && npm run build && cd ../..
+(cd packages/shared-types && npm run build)
 echo '→ Build frontend...'
-cd apps/web && npm run build && cd ../..
+(cd apps/web && npm run build)
 echo '→ Build backend...'
-cd apps/api && npm run build && cd ../..
+(cd apps/api && npm run build)
 echo '→ Prisma migrations...'
 cd apps/api
 if [ ! -f .env ] && [ ! -f ../../.env ]; then
