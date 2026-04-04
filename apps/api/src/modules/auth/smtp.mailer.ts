@@ -19,6 +19,37 @@ interface SmtpConfig {
   from: string
 }
 
+function stripEnvQuotes(value: string): string {
+  const s = value.trim()
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    return s.slice(1, -1).trim()
+  }
+  return s
+}
+
+/** Zwraca adres e-mail z pola From (nagłówek lub sam adres). */
+function parseFromEmail(fromRaw: string): string {
+  const s = stripEnvQuotes(fromRaw)
+  const angle = s.match(/<([^>]+)>/)
+  const inner = angle?.[1]?.trim()
+  if (inner) return inner.toLowerCase()
+  return s.toLowerCase()
+}
+
+/**
+ * Niektórzy dostawcy (np. Hostido) wymagają: nagłówek From = konto uwierzytelnione.
+ * Envelope MAIL FROM musi być spójny z AUTH — używamy zawsze SMTP_USER.
+ */
+function resolveSmtpFromIdentity(config: SmtpConfig): { envelopeFrom: string; fromHeader: string } {
+  const userMailbox = stripEnvQuotes(config.user)
+  const userEmail = userMailbox.toLowerCase()
+  const fromDeclared = stripEnvQuotes(config.from)
+  if (parseFromEmail(fromDeclared) === userEmail) {
+    return { envelopeFrom: userMailbox, fromHeader: fromDeclared }
+  }
+  return { envelopeFrom: userMailbox, fromHeader: userMailbox }
+}
+
 /**
  * RFC 5321: argument EHLO to domena klienta, nie hostname serwera SMTP.
  * Błędne EHLO smtp.gmail.com potrafi psuć sesje z niektórymi dostawcami.
@@ -41,15 +72,21 @@ function smtpEhloIdentifier(): string {
 }
 
 function readConfig(): SmtpConfig {
-  const host = process.env.SMTP_HOST
+  const host = process.env.SMTP_HOST?.trim()
   const port = Number(process.env.SMTP_PORT ?? 587)
-  const user = process.env.SMTP_USER
-  const pass = process.env.SMTP_PASS
-  const from = process.env.SMTP_FROM
+  const user = process.env.SMTP_USER?.trim()
+  const pass = process.env.SMTP_PASS?.trim()
+  const from = process.env.SMTP_FROM?.trim()
   if (!host || !port || !user || !pass || !from) {
     throw new AppError('Brak konfiguracji SMTP w env.', 500, 'SMTP_CONFIG_MISSING')
   }
-  return { host, port, user, pass, from }
+  return {
+    host: stripEnvQuotes(host),
+    port,
+    user: stripEnvQuotes(user),
+    pass: stripEnvQuotes(pass),
+    from: stripEnvQuotes(from),
+  }
 }
 
 /** Fail fast before persisting invitations / reset tokens when SMTP is not configured. */
@@ -131,11 +168,11 @@ function mimeEncodeUtf8(value: string): string {
   return `=?UTF-8?B?${Buffer.from(value, 'utf8').toString('base64')}?=`
 }
 
-function buildMessage(config: SmtpConfig, payload: MailPayload): string {
+function buildMessage(fromHeader: string, payload: MailPayload): string {
   const boundary = `----lama-${Date.now().toString(36)}`
   const subject = mimeEncodeUtf8(payload.subject)
   return [
-    `From: ${config.from}`,
+    `From: ${fromHeader}`,
     `To: ${payload.to}`,
     `Subject: ${subject}`,
     'MIME-Version: 1.0',
@@ -266,16 +303,17 @@ async function openSmtpConnection(config: SmtpConfig): Promise<SocketLike> {
 
 export async function sendSmtpMail(payload: MailPayload): Promise<void> {
   const config = readConfig()
+  const { envelopeFrom, fromHeader } = resolveSmtpFromIdentity(config)
   const socket = await openSmtpConnection(config)
   try {
     await sendCommand(socket, 'AUTH LOGIN', [334])
-    await sendCommand(socket, Buffer.from(config.user).toString('base64'), [334])
-    await sendCommand(socket, Buffer.from(config.pass).toString('base64'), [235])
-    await sendCommand(socket, `MAIL FROM:<${config.from.match(/<(.+)>/)?.[1] ?? config.from}>`, [250])
+    await sendCommand(socket, Buffer.from(config.user, 'utf8').toString('base64'), [334])
+    await sendCommand(socket, Buffer.from(config.pass, 'utf8').toString('base64'), [235])
+    await sendCommand(socket, `MAIL FROM:<${envelopeFrom}>`, [250])
     await sendCommand(socket, `RCPT TO:<${payload.to}>`, [250, 251])
     await sendCommand(socket, 'DATA', [354])
 
-    const message = `${buildMessage(config, payload)}\r\n.\r\n`
+    const message = `${buildMessage(fromHeader, payload)}\r\n.\r\n`
     socket.write(message)
     const dataResponse = await readResponse(socket)
     const dataCode = parseResponseCode(dataResponse)
