@@ -84,6 +84,7 @@ export function buildDefaultDraft(order: Pick<Order, 'name'>, documentType: Docu
     return WarehouseDocumentDraftSchema.parse({
       title: `Magazyn / załadunek - ${order.name}`,
       notes: '',
+      checked: {},
     })
   }
 

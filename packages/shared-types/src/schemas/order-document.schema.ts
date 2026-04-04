@@ -65,6 +65,8 @@ export const OfferDocumentDraftSchema = z.object({
 export const WarehouseDocumentDraftSchema = z.object({
   title: z.string().min(1),
   notes: z.string().optional(),
+  /** id pozycji sprzętu w zleceniu → zaznaczenie załadunku */
+  checked: z.record(z.boolean()).optional(),
 });
 
 export const WarehouseSnapshotSchema = z.object({
@@ -81,6 +83,7 @@ export const WarehouseSnapshotSchema = z.object({
   startDate: z.string().datetime(),
   endDate: z.string().datetime(),
   equipmentItems: z.array(OrderEquipmentItemSchema),
+  itemLoadChecked: z.record(z.boolean()).optional(),
 });
 
 export const OrderDocumentDraftSchema = z.object({

@@ -1,15 +1,33 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, FileText, Plus, Save } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useOrder } from '../hooks/useOrders';
 import { orderApi, OrderDocumentExportMeta } from '../api/order.api';
 import { formatOrderNumber } from '../utils/orderNumberFormat';
-import { groupOrderEquipmentByCategory } from '../utils/groupOrderEquipmentByCategory';
 
 type WarehouseDraft = {
   title: string;
   notes?: string;
+  checked: Record<string, boolean>;
 };
+
+function normalizeWarehouseDraft(payload: unknown, orderName: string): WarehouseDraft {
+  const p =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : {};
+  let title = typeof p.title === 'string' ? p.title.trim() : '';
+  if (!title) title = `Magazyn / załadunek - ${orderName}`.trim() || 'Magazyn / załadunek';
+  const notes = typeof p.notes === 'string' ? p.notes : '';
+  const checked: Record<string, boolean> = {};
+  const c = p.checked;
+  if (c && typeof c === 'object' && !Array.isArray(c)) {
+    for (const [k, v] of Object.entries(c)) {
+      if (typeof v === 'boolean') checked[k] = v;
+    }
+  }
+  return { title, notes: notes || undefined, checked };
+}
 
 export default function OrderWarehousePage() {
   const { id } = useParams<{ id: string }>();
@@ -24,15 +42,36 @@ export default function OrderWarehousePage() {
   const [creatingExport, setCreatingExport] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const equipmentSorted = useMemo(() => {
+    const items = order?.equipmentItems ?? [];
+    return [...items].sort((a: { sortOrder?: number }, b: { sortOrder?: number }) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+  }, [order?.equipmentItems]);
+
+  const orderNumberDisplay = useMemo(() => {
+    if (!order) return '—';
+    const o = order as { orderNumber?: number | null; orderYear?: number | null };
+    return o.orderNumber != null && o.orderYear != null ? formatOrderNumber(o.orderNumber, o.orderYear) : '—';
+  }, [order]);
+
   useEffect(() => {
-    if (!id) return;
+    if (!id || isLoading) return;
+    if (isError || !order) {
+      setLoadingDraft(false);
+      setDraft(null);
+      return;
+    }
+    const orderName = order.name || 'Zlecenie';
     setLoadingDraft(true);
+    setError(null);
     orderApi
       .getDocumentDraft<WarehouseDraft>(id, 'WAREHOUSE')
-      .then((res) => setDraft(res.payload))
-      .catch(() => setError('Nie udało się pobrać draftu magazynu.'))
+      .then((res) => setDraft(normalizeWarehouseDraft(res.payload, orderName)))
+      .catch(() => {
+        setError('Nie udało się pobrać draftu magazynu.');
+        setDraft(null);
+      })
       .finally(() => setLoadingDraft(false));
-  }, [id]);
+  }, [id, isLoading, isError, order?.id, order?.name]);
 
   useEffect(() => {
     if (!id) return;
@@ -50,7 +89,7 @@ export default function OrderWarehousePage() {
     setError(null);
     try {
       const saved = await orderApi.updateDocumentDraft<WarehouseDraft>(id, 'WAREHOUSE', draft);
-      setDraft(saved.payload);
+      setDraft(normalizeWarehouseDraft(saved.payload, order?.name || 'Zlecenie'));
     } catch (e: any) {
       const raw = e?.response?.data?.error ?? e?.message;
       setError(typeof raw === 'string' ? raw : 'Nie udało się zapisać draftu magazynu.');
@@ -77,6 +116,16 @@ export default function OrderWarehousePage() {
     }
   };
 
+  const setItemChecked = useCallback((itemId: string, value: boolean) => {
+    setDraft((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        checked: { ...prev.checked, [itemId]: value },
+      };
+    });
+  }, []);
+
   if (!id) return null;
 
   if (isLoading || loadingDraft) {
@@ -101,17 +150,6 @@ export default function OrderWarehousePage() {
       </div>
     );
   }
-
-  const orderNumberDisplay =
-    (order as any)?.orderNumber != null && (order as any)?.orderYear != null
-      ? formatOrderNumber((order as any).orderNumber, (order as any).orderYear)
-      : '—';
-
-  const equipmentRows = (order.equipmentItems || []).filter((item: any) => item.visibleInOffer !== false);
-  const equipmentGrouped = useMemo(
-    () => groupOrderEquipmentByCategory(equipmentRows as { category?: string | null }[]),
-    [equipmentRows]
-  );
 
   return (
     <div className="p-4 space-y-4">
@@ -177,38 +215,43 @@ export default function OrderWarehousePage() {
             placeholder="Notatki do dokumentu (opcjonalnie)"
           />
 
+          <p className="text-xs text-muted-foreground">Lista sprzętu z zlecenia — zaznacz pozycje po załadunku. Stan zapisuje się w drafcie (przycisk „Zapisz draft”).</p>
+
           <div className="overflow-x-auto border border-border rounded">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-surface-2 border-b border-border">
+                  <th className="text-center py-2 px-2 w-12" title="Załadowane">
+                    ✓
+                  </th>
                   <th className="text-left py-2 px-3">Nazwa</th>
                   <th className="text-left py-2 px-3">Ilość</th>
                   <th className="text-left py-2 px-3">Jednostka</th>
                 </tr>
               </thead>
               <tbody>
-                {equipmentRows.length === 0 ? (
+                {equipmentSorted.length === 0 ? (
                   <tr>
-                    <td colSpan={3} className="py-2 px-3 text-muted-foreground">
-                      Brak pozycji
+                    <td colSpan={4} className="py-2 px-3 text-muted-foreground">
+                      Brak pozycji sprzętu w zleceniu
                     </td>
                   </tr>
                 ) : (
-                  equipmentGrouped.map(({ category, items }) => (
-                    <Fragment key={category}>
-                      <tr className="bg-surface-2 border-b border-border">
-                        <td colSpan={3} className="py-2 px-3 text-sm font-semibold">
-                          {category}
-                        </td>
-                      </tr>
-                      {items.map((item: any) => (
-                        <tr key={item.id} className="border-b border-border/60 last:border-0">
-                          <td className="py-2 px-3">{item.name}</td>
-                          <td className="py-2 px-3">{item.quantity}</td>
-                          <td className="py-2 px-3">{item.equipment?.unit || 'szt.'}</td>
-                        </tr>
-                      ))}
-                    </Fragment>
+                  equipmentSorted.map((item: { id: string; name?: string; quantity?: number; equipment?: { unit?: string } | null }) => (
+                    <tr key={item.id} className="border-b border-border/60 last:border-0">
+                      <td className="py-2 px-2 text-center align-middle">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-border"
+                          checked={!!draft.checked[item.id]}
+                          onChange={(e) => setItemChecked(item.id, e.target.checked)}
+                          aria-label={`Załadowano: ${item.name || 'pozycja'}`}
+                        />
+                      </td>
+                      <td className="py-2 px-3">{item.name}</td>
+                      <td className="py-2 px-3">{item.quantity ?? 1}</td>
+                      <td className="py-2 px-3">{item.equipment?.unit || 'szt.'}</td>
+                    </tr>
                   ))
                 )}
               </tbody>
@@ -247,4 +290,3 @@ export default function OrderWarehousePage() {
     </div>
   );
 }
-

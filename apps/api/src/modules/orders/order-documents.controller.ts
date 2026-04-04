@@ -178,14 +178,20 @@ export const getOrderDocumentDraft = async (req: Request, res: Response, next: N
     })
 
     const parsed = parseJsonSafely(draft?.payload ?? null)
-    const payload =
-      documentType === 'OFFER'
-        ? parsed != null
-          ? OfferDocumentDraftSchema.parse(parsed)
-          : await buildOfferDefaultDraft(prisma, order)
-        : parsed != null
-          ? parsed
-          : buildDefaultDraft(order, documentType)
+    let payload: unknown
+    if (documentType === 'OFFER') {
+      payload =
+        parsed != null ? OfferDocumentDraftSchema.parse(parsed) : await buildOfferDefaultDraft(prisma, order)
+    } else if (documentType === 'WAREHOUSE') {
+      if (parsed != null) {
+        const w = WarehouseDocumentDraftSchema.safeParse(parsed)
+        payload = w.success ? w.data : buildDefaultDraft(order, documentType)
+      } else {
+        payload = buildDefaultDraft(order, documentType)
+      }
+    } else {
+      payload = parsed != null ? parsed : buildDefaultDraft(order, documentType)
+    }
     res.json({
       data: {
         id: draft?.id ?? null,
@@ -371,6 +377,7 @@ export const createOrderDocumentExport = async (req: Request, res: Response, nex
         startDate: order.startDate.toISOString(),
         endDate: order.endDate.toISOString(),
         equipmentItems: normalizedEquipmentItems,
+        itemLoadChecked: parsedDraft.checked,
       })
     } else {
       snapshot = {
