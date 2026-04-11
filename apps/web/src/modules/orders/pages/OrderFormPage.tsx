@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useLocation, useSearchParams, useBlocker } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Save, FileText, Calendar, DollarSign, Repeat, ChevronDown, ChevronRight, X, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Save, FileText, Calendar, DollarSign, Repeat, X, AlertCircle } from 'lucide-react';
 import { FormProvider, useForm } from 'react-hook-form';
 import { useOrder, useCreateOrder, useUpdateOrder } from '../hooks/useOrders';
 import { api } from '../../../shared/api/client';
@@ -147,16 +147,6 @@ export default function OrderFormPage() {
   const updateOrderMutation = useUpdateOrder();
   const [activeSection, setActiveSection] = useState('header');
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [sectionOpen, setSectionOpen] = useState<Record<string, boolean>>({
-    header: true,
-    schedule: true,
-    equipment: true,
-    production: true,
-    transport: true,
-    financial: true,
-    recurring: true,
-    documents: true,
-  });
   const [dismissedHints, setDismissedHints] = useState<Set<string>>(new Set());
 
   const methods = useForm<Partial<Order>>({
@@ -550,15 +540,10 @@ export default function OrderFormPage() {
 
   const scrollToSection = (sectionId: string) => {
     setActiveSection(sectionId);
-    setSectionOpen((prev) => ({ ...prev, [sectionId]: true }));
     const element = document.getElementById(sectionId);
     if (element) {
       element.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-  };
-
-  const toggleSection = (sectionId: string) => {
-    setSectionOpen((prev) => ({ ...prev, [sectionId]: !prev[sectionId] }));
   };
 
   const financialSummary = useMemo(
@@ -731,18 +716,10 @@ export default function OrderFormPage() {
               <div className="max-w-6xl mx-auto">
                 {/* Sekcja nagłówka - 2 kolumny */}
                 <section id="header" className="scroll-mt-24 mb-6">
-                  <button
-                    type="button"
-                    onClick={() => toggleSection('header')}
-                    className="w-full flex items-center justify-between text-left mb-3"
-                  >
-                    <h2 className="text-lg font-bold flex items-center gap-2">
-                      <FileText size={24} />
-                      Nagłówek zlecenia
-                    </h2>
-                    <ChevronDown size={20} className={`transition-transform ${sectionOpen.header ? '' : '-rotate-90'}`} />
-                  </button>
-                  {sectionOpen.header && (
+                  <h2 className="text-lg font-bold flex items-center gap-2 mb-3">
+                    <FileText size={24} />
+                    Nagłówek zlecenia
+                  </h2>
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <div className="lg:col-span-2" />
                     <div>
@@ -825,44 +802,26 @@ export default function OrderFormPage() {
                       </div>
                     </div>
                   </div>
-                  )}
                 </section>
 
                 {/* Sekcja harmonogramu */}
                 <section id="schedule" className="scroll-mt-24 mb-6">
-                  <button
-                    type="button"
-                    onClick={() => toggleSection('schedule')}
-                    className="w-full flex items-center justify-between text-left mb-3"
-                  >
-                    <h2 className="text-lg font-bold flex items-center gap-2">
-                      <Calendar size={24} />
-                      Harmonogram
-                    </h2>
-                    <ChevronDown size={20} className={`transition-transform ${sectionOpen.schedule ? '' : '-rotate-90'}`} />
-                  </button>
-                  {sectionOpen.schedule && (
+                  <h2 className="text-lg font-bold flex items-center gap-2 mb-3">
+                    <Calendar size={24} />
+                    Harmonogram
+                  </h2>
                   <OrderScheduleSection
                     orderDateFrom={typeof formData.dateFrom === 'string' ? formData.dateFrom : undefined}
                     onChange={handleStagesChange}
                   />
-                  )}
                 </section>
 
                 {/* Sekcja sprzętu - 2 kolumny */}
                 <section id="equipment" className="scroll-mt-24 mb-6">
-                  <button
-                    type="button"
-                    onClick={() => toggleSection('equipment')}
-                    className="w-full flex items-center justify-between text-left mb-3"
-                  >
-                    <h2 className="text-lg font-bold flex items-center gap-2">
-                      <FileText size={24} />
-                      Wykaz sprzętu
-                    </h2>
-                    <ChevronDown size={20} className={`transition-transform ${sectionOpen.equipment ? '' : '-rotate-90'}`} />
-                  </button>
-                  {sectionOpen.equipment && (
+                  <h2 className="text-lg font-bold flex items-center gap-2 mb-3">
+                    <FileText size={24} />
+                    Wykaz sprzętu
+                  </h2>
                   <div className="lg:col-span-2">
                     <OrderEquipmentSection
                       items={equipmentItems}
@@ -870,48 +829,30 @@ export default function OrderFormPage() {
                       excludeOrderId={id}
                       orderDateFrom={typeof formData.dateFrom === 'string' ? formData.dateFrom : undefined}
                       orderDateTo={typeof formData.dateTo === 'string' ? formData.dateTo : undefined}
-                      defaultDays={orderDays}
+                      orderSpanDays={orderDays}
                     />
                   </div>
-                  )}
                 </section>
 
                 {/* Sekcja produkcji i logistyki */}
                 <section id="production" className="scroll-mt-24 mb-6">
-                  <button
-                    type="button"
-                    onClick={() => toggleSection('production')}
-                    className="w-full flex items-center justify-between text-left mb-3"
-                  >
-                    <h2 className="text-lg font-bold flex items-center gap-2">
-                      <FileText size={24} />
-                      Produkcja i logistyka
-                    </h2>
-                    <ChevronDown size={20} className={`transition-transform ${sectionOpen.production ? '' : '-rotate-90'}`} />
-                  </button>
-                  {sectionOpen.production && (
+                  <h2 className="text-lg font-bold flex items-center gap-2 mb-3">
+                    <FileText size={24} />
+                    Produkcja i logistyka
+                  </h2>
                   <OrderProductionSection
                     items={productionItems}
                     stages={stages}
                     onChange={handleProductionChange}
                   />
-                  )}
                 </section>
 
                 {/* Sekcja transportu */}
                 <section id="transport" className="scroll-mt-24 mb-6">
-                  <button
-                    type="button"
-                    onClick={() => toggleSection('transport')}
-                    className="w-full flex items-center justify-between text-left mb-3"
-                  >
-                    <h2 className="text-lg font-bold flex items-center gap-2">
-                      <FileText size={24} />
-                      Transport
-                    </h2>
-                    <ChevronDown size={20} className={`transition-transform ${sectionOpen.transport ? '' : '-rotate-90'}`} />
-                  </button>
-                  {sectionOpen.transport && (
+                  <h2 className="text-lg font-bold flex items-center gap-2 mb-3">
+                    <FileText size={24} />
+                    Transport
+                  </h2>
                   <OrderTransportSection
                     key={id || 'new'}
                     items={transportItems}
@@ -921,98 +862,70 @@ export default function OrderFormPage() {
                     distanceKm={distanceKm}
                     onChange={handleTransportChange}
                   />
-                  )}
                 </section>
 
                 {/* Sekcja zleceń cyklicznych */}
                 <section id="recurring" className="scroll-mt-24 mb-6">
-                  <button
-                    type="button"
-                    onClick={() => toggleSection('recurring')}
-                    className="w-full flex items-center justify-between text-left mb-3"
-                  >
-                    <h2 className="text-lg font-bold flex items-center gap-2">
-                      <Repeat size={24} />
-                      Zlecenia cykliczne
-                    </h2>
-                    <ChevronDown size={20} className={`transition-transform ${sectionOpen.recurring ? '' : '-rotate-90'}`} />
-                  </button>
-                  {sectionOpen.recurring && (
+                  <h2 className="text-lg font-bold flex items-center gap-2 mb-3">
+                    <Repeat size={24} />
+                    Zlecenia cykliczne
+                  </h2>
                   <OrderRecurringSection
                     valueForOneEvent={financialSummary.grossTotal}
                     marginForOneEvent={financialSummary.ownMarginNet}
                   />
-                  )}
                 </section>
 
                 {/* Sekcja finansowa */}
                 <section id="financial" className="scroll-mt-24 mb-6">
-                  <button
-                    type="button"
-                    onClick={() => toggleSection('financial')}
-                    className="w-full flex items-center justify-between text-left mb-3"
-                  >
-                    <h2 className="text-lg font-bold flex items-center gap-2">
-                      <DollarSign size={24} />
-                      Podsumowanie finansowe
-                    </h2>
-                    <ChevronDown size={20} className={`transition-transform ${sectionOpen.financial ? '' : '-rotate-90'}`} />
-                  </button>
-                  {sectionOpen.financial && (
+                  <h2 className="text-lg font-bold flex items-center gap-2 mb-3">
+                    <DollarSign size={24} />
+                    Podsumowanie finansowe
+                  </h2>
                   <OrderFinancialSection
                     order={formData}
                     equipmentItems={equipmentItems}
                     productionItems={allProductionItems}
                     onChange={handleOrderChange}
                   />
-                  )}
                 </section>
 
                 {/* Sekcja Dokumenty */}
                 <section id="documents" className="scroll-mt-24 mb-6">
-                  <button
-                    type="button"
-                    onClick={() => toggleSection('documents')}
-                    className="w-full flex items-center justify-between text-left mb-3"
-                  >
-                    <h2 className="text-lg font-bold flex items-center gap-2">
-                      <FileText size={24} />
-                      Dokumenty
-                    </h2>
-                    <ChevronDown size={20} className={`transition-transform ${sectionOpen.documents ? '' : '-rotate-90'}`} />
-                  </button>
-                  {sectionOpen.documents && (
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        disabled={!isEditing || !id || updateOrderMutation.isPending}
-                        onClick={() => id && void saveAndNavigateToDocument(`/orders/${id}/offer`)}
-                        className="px-3 py-2 text-sm border-2 border-primary text-primary rounded font-medium hover:bg-primary/10 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <FileText size={18} />
-                        Oferta
-                      </button>
-                      <button type="button" disabled className="px-3 py-2 text-sm border border-border rounded opacity-60 cursor-not-allowed flex items-center gap-2" title="W przygotowaniu">
-                        <FileText size={18} />
-                        Proposal
-                        <span className="text-xs text-muted-foreground">(w przygotowaniu)</span>
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!isEditing || !id || updateOrderMutation.isPending}
-                        onClick={() => id && void saveAndNavigateToDocument(`/orders/${id}/warehouse`)}
-                        className="px-3 py-2 text-sm border-2 border-primary text-primary rounded font-medium hover:bg-primary/10 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <FileText size={18} />
-                        Magazyn załadunek
-                      </button>
-                      <button type="button" disabled className="px-3 py-2 text-sm border border-border rounded opacity-60 cursor-not-allowed flex items-center gap-2" title="W przygotowaniu">
-                        <FileText size={18} />
-                        Brief techniczny
-                        <span className="text-xs text-muted-foreground">(w przygotowaniu)</span>
-                      </button>
-                    </div>
-                  )}
+                  <h2 className="text-lg font-bold flex items-center gap-2 mb-3">
+                    <FileText size={24} />
+                    Dokumenty
+                  </h2>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={!isEditing || !id || updateOrderMutation.isPending}
+                      onClick={() => id && void saveAndNavigateToDocument(`/orders/${id}/offer`)}
+                      className="px-3 py-2 text-sm border-2 border-primary text-primary rounded font-medium hover:bg-primary/10 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <FileText size={18} />
+                      Oferta
+                    </button>
+                    <button type="button" disabled className="px-3 py-2 text-sm border border-border rounded opacity-60 cursor-not-allowed flex items-center gap-2" title="W przygotowaniu">
+                      <FileText size={18} />
+                      Proposal
+                      <span className="text-xs text-muted-foreground">(w przygotowaniu)</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!isEditing || !id || updateOrderMutation.isPending}
+                      onClick={() => id && void saveAndNavigateToDocument(`/orders/${id}/warehouse`)}
+                      className="px-3 py-2 text-sm border-2 border-primary text-primary rounded font-medium hover:bg-primary/10 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <FileText size={18} />
+                      Magazyn załadunek
+                    </button>
+                    <button type="button" disabled className="px-3 py-2 text-sm border border-border rounded opacity-60 cursor-not-allowed flex items-center gap-2" title="W przygotowaniu">
+                      <FileText size={18} />
+                      Brief techniczny
+                      <span className="text-xs text-muted-foreground">(w przygotowaniu)</span>
+                    </button>
+                  </div>
                 </section>
 
                 {/* Przyciski akcji */}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Trash2, Eye, EyeOff, Copy, AlertCircle, CheckCircle2, XCircle, X, Plus, Info } from 'lucide-react'
 import { OrderEquipmentItem, Equipment } from '@lama-stage/shared-types'
 import { useEquipment } from '../../equipment/hooks/useEquipment'
@@ -10,8 +10,11 @@ interface OrderEquipmentSectionProps {
   excludeOrderId?: string
   orderDateFrom?: string
   orderDateTo?: string
-  /** Domyślna liczba dni z zakresu dat zlecenia (obliczana z dateFrom/dateTo); używana przy nowych pozycjach */
-  defaultDays?: number
+  /**
+   * Liczba dni zlecenia (inclusive) z zakresu dateFrom–dateTo.
+   * Używana: podpowiedź w nagłówku, nowe wiersze z katalogu/pusty wiersz — bez automatycznego nadpisywania istniejących pozycji.
+   */
+  orderSpanDays?: number
 }
 
 export default function OrderEquipmentSection({
@@ -20,7 +23,7 @@ export default function OrderEquipmentSection({
   excludeOrderId,
   orderDateFrom,
   orderDateTo,
-  defaultDays = 1,
+  orderSpanDays = 1,
 }: OrderEquipmentSectionProps) {
   const normalizeCategoryName = (value: string): string => {
     const normalized = value.trim()
@@ -44,6 +47,41 @@ export default function OrderEquipmentSection({
   const [isCheckingAvailability, setIsCheckingAvailability] = useState(false)
   const [conflictBannerDismissed, setConflictBannerDismissed] = useState(false)
   const [availabilityModalItem, setAvailabilityModalItem] = useState<{ item: Partial<OrderEquipmentItem>; index: number } | null>(null)
+
+  /** Wpis w nagłówku „Dni (…)”: odświeżany przy zmianie długości zlecenia; blur = jednorazowo ustawia dni we wszystkich wierszach */
+  const [bulkDaysDraft, setBulkDaysDraft] = useState(() => String(Math.max(1, orderSpanDays)))
+  const prevOrderSpanRef = useRef(orderSpanDays)
+  const bulkHeaderFocused = useRef(false)
+  const bulkDaysDraftAtFocusRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (bulkHeaderFocused.current) return
+    if (prevOrderSpanRef.current !== orderSpanDays) {
+      prevOrderSpanRef.current = orderSpanDays
+      setBulkDaysDraft(String(Math.max(1, orderSpanDays)))
+    }
+  }, [orderSpanDays])
+
+  const applyBulkDaysToAllRows = useCallback(() => {
+    const parsed = parseInt(bulkDaysDraft, 10)
+    const n = Number.isFinite(parsed) && parsed >= 1 ? Math.round(parsed) : Math.max(1, orderSpanDays)
+    setBulkDaysDraft(String(n))
+    onChange(items.map((item) => ({ ...item, days: n })))
+  }, [bulkDaysDraft, items, onChange, orderSpanDays])
+
+  const handleBulkDaysFocus = () => {
+    bulkHeaderFocused.current = true
+    bulkDaysDraftAtFocusRef.current = bulkDaysDraft
+  }
+
+  const handleBulkDaysBlur = () => {
+    bulkHeaderFocused.current = false
+    const before = bulkDaysDraftAtFocusRef.current
+    bulkDaysDraftAtFocusRef.current = null
+    if (before !== bulkDaysDraft) {
+      applyBulkDaysToAllRows()
+    }
+  }
 
   const categories = Array.from(
     new Set(equipmentList.map((eq) => normalizeCategoryName(eq.category)).filter(Boolean))
@@ -115,7 +153,7 @@ export default function OrderEquipmentSection({
       category: 'Inne',
       quantity: 1,
       unitPrice: 0,
-      days: defaultDays,
+      days: Math.max(1, orderSpanDays),
       discount: 0,
       pricingRule: { day1: 1.0, nextDays: 0.5 },
       visibleInOffer: true,
@@ -138,7 +176,7 @@ export default function OrderEquipmentSection({
       category: normalizeCategoryName(eq.category),
       quantity: 1,
       unitPrice: eq.dailyPrice,
-      days: 1,
+      days: Math.max(1, orderSpanDays),
       discount: 0,
       pricingRule: eq.pricingRule || { day1: 1.0, nextDays: 0.5 },
       visibleInOffer: eq.visibleInOffer,
@@ -210,7 +248,34 @@ export default function OrderEquipmentSection({
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground">Kategoria</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground">Ilość</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground">Cena jdn.</th>
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground">Dni</th>
+                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground align-top min-w-[5.5rem]">
+                  <div className="flex flex-col gap-1">
+                    <span>Dni</span>
+                    <div className="flex items-center gap-0.5 font-normal">
+                      <span className="text-muted-foreground">(</span>
+                      <input
+                        type="number"
+                        min={1}
+                        className="w-11 px-1 py-0.5 text-xs bg-background border border-border rounded text-right"
+                        value={bulkDaysDraft}
+                        onFocus={handleBulkDaysFocus}
+                        onBlur={handleBulkDaysBlur}
+                        onChange={(e) => setBulkDaysDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            ;(e.target as HTMLInputElement).blur()
+                          }
+                        }}
+                        title="Wpisz liczbę dni i zdejmij fokus (Enter) — ustawia dni dla wszystkich pozycji naraz. Pojedyncze wiersze możesz potem zmienić ręcznie."
+                      />
+                      <span className="text-muted-foreground">)</span>
+                    </div>
+                    <span className="text-[10px] font-normal text-muted-foreground leading-tight">
+                      zlecenie: {Math.max(1, orderSpanDays)}
+                    </span>
+                  </div>
+                </th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground">Rabat %</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground">Wartość netto</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground" title="Wynajem – bez marży">Rental</th>

@@ -1,0 +1,22 @@
+---
+description: API and database technical guardrails
+alwaysApply: true
+---
+
+# Lama API + DB Guardrails
+
+- Prisma provider in `apps/api/prisma/schema.prisma` must remain **`postgresql`**.
+- Never switch schema or runtime to `sqlite` for this project.
+- After Prisma schema changes:
+  - run `npx prisma generate`
+  - apply schema changes via `npm run db:migrate` (preferred) or `npm run db:push` when explicitly intended
+  - run smoke checks after migration flow
+- Keep migrations in repository: `apps/api/prisma/migrations/`.
+- Keep request tracing and error diagnostics stable:
+  - preserve `x-request-id` middleware
+  - include `requestId` in error responses
+  - log structured API errors (method/path/context)
+- For `apps/api` endpoints, validate and sanitize query params (`page`, `limit`, `search`, etc.) and return explicit `4xx` for invalid input.
+- Do not break CORS for local development dynamic ports.
+- Detailed production recovery steps are documented in:
+  - `docs/production-repair-runbook.md`

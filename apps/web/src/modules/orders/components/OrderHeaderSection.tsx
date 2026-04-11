@@ -1,13 +1,22 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useFormContext } from 'react-hook-form'
 import { useQueryClient } from '@tanstack/react-query'
-import { Order } from '@lama-stage/shared-types'
-import { useClients } from '../../clients/hooks/useClients'
+import { Client, Order } from '@lama-stage/shared-types'
+import { useClients, useClient } from '../../clients/hooks/useClients'
 import { dateInputToISO, isoToDateInput, isValidDateInput } from '../../../shared/utils/dateHelpers'
 import { api } from '../../../shared/api/client'
 import { orderApi } from '../api/order.api'
 import ClientFormModal from '../../clients/components/ClientFormModal'
 import { formatOrderNumber } from '../utils/orderNumberFormat'
+
+function formatClientLabel(c: Pick<Client, 'companyName' | 'contactName'>): string {
+  const contact = c.contactName?.trim()
+  return contact ? `${c.companyName} (${contact})` : c.companyName
+}
+
+function normalizeSearch(s: string): string {
+  return s.toLowerCase().replace(/\s+/g, ' ').trim()
+}
 
 interface OrderHeaderSectionProps {
   /** Przy tworzeniu nowego zlecenia blokujemy daty w przeszłości */
@@ -18,7 +27,7 @@ interface OrderHeaderSectionProps {
 export default function OrderHeaderSection({ isNewOrder, onChange }: OrderHeaderSectionProps) {
   const { watch } = useFormContext<Partial<Order>>()
   const queryClient = useQueryClient()
-  const { data: paginatedClients } = useClients()
+  const { data: paginatedClients } = useClients({ limit: 500 })
   const clients = paginatedClients?.data || []
   const [showNewClient, setShowNewClient] = useState(false)
   const [isAiLoading, setIsAiLoading] = useState(false)
@@ -28,10 +37,41 @@ export default function OrderHeaderSection({ isNewOrder, onChange }: OrderHeader
   const [showVenueSuggestions, setShowVenueSuggestions] = useState(false)
   const [localDateFrom, setLocalDateFrom] = useState('')
   const [localDateTo, setLocalDateTo] = useState('')
+  const [clientInput, setClientInput] = useState('')
+  const [showClientSuggestions, setShowClientSuggestions] = useState(false)
   const dateFromFocused = useRef(false)
   const dateToFocused = useRef(false)
+  const clientInputFocused = useRef(false)
 
   const order = watch()
+  const clientId = order?.clientId || ''
+  const clientInList = useMemo(() => clients.find((c) => c.id === clientId), [clients, clientId])
+  const { data: clientOrphan } = useClient(clientId, { enabled: !!clientId && !clientInList })
+  const resolvedClient = clientInList ?? clientOrphan ?? null
+
+  const filteredClients = useMemo(() => {
+    const q = normalizeSearch(clientInput)
+    if (!q) return clients
+    return clients.filter((c) => {
+      const label = formatClientLabel(c)
+      return (
+        normalizeSearch(label).includes(q) ||
+        normalizeSearch(c.companyName).includes(q) ||
+        (c.contactName && normalizeSearch(c.contactName).includes(q))
+      )
+    })
+  }, [clients, clientInput])
+
+  useEffect(() => {
+    if (clientInputFocused.current) return
+    if (!clientId) {
+      setClientInput('')
+      return
+    }
+    if (resolvedClient) {
+      setClientInput(formatClientLabel(resolvedClient))
+    }
+  }, [clientId, resolvedClient])
 
   const todayYMD = (() => {
     const d = new Date()
@@ -86,6 +126,29 @@ export default function OrderHeaderSection({ isNewOrder, onChange }: OrderHeader
 
   const handleUpdates = (updates: Partial<Order>) => {
     onChange?.(updates)
+  }
+
+  const handleClientInputChange = (value: string) => {
+    setClientInput(value)
+    setShowClientSuggestions(true)
+    if (!clientId) return
+    const c = clientInList ?? clientOrphan
+    if (!c) return
+    if (normalizeSearch(value) !== normalizeSearch(formatClientLabel(c))) {
+      handleChange('clientId', '')
+    }
+  }
+
+  const pickClient = (c: Client) => {
+    handleChange('clientId', c.id)
+    setClientInput(formatClientLabel(c))
+    setShowClientSuggestions(false)
+  }
+
+  const clearClientSelection = () => {
+    handleChange('clientId', '')
+    setClientInput('')
+    setShowClientSuggestions(false)
   }
 
   const rewriteDescriptionWithAi = async (retry = false) => {
@@ -197,18 +260,64 @@ export default function OrderHeaderSection({ isNewOrder, onChange }: OrderHeader
           <div className="md:col-span-2">
             <label className="block text-sm font-medium mb-1">Klient *</label>
             <div className="flex gap-2">
-              <select
-                className="min-w-0 flex-1 px-3 py-2 text-sm bg-background border border-border rounded"
-                value={order?.clientId || ''}
-                onChange={(e) => handleChange('clientId', e.target.value)}
-              >
-                <option value="">Wybierz klienta...</option>
-                {clients.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {client.companyName} {client.contactName ? ` (${client.contactName})` : ''}
-                  </option>
-                ))}
-              </select>
+              <div className="relative min-w-0 flex-1">
+                <div className="flex gap-1 items-stretch">
+                  <input
+                    type="text"
+                    className="min-w-0 flex-1 px-3 py-2 text-sm bg-background border border-border rounded"
+                    value={clientInput}
+                    onFocus={() => {
+                      clientInputFocused.current = true
+                      setShowClientSuggestions(true)
+                    }}
+                    onBlur={() => {
+                      setTimeout(() => {
+                        clientInputFocused.current = false
+                        setShowClientSuggestions(false)
+                      }, 120)
+                    }}
+                    onChange={(e) => handleClientInputChange(e.target.value)}
+                    placeholder="Szukaj po nazwie firmy lub osobie kontaktowej…"
+                    autoComplete="off"
+                  />
+                  {clientId ? (
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={clearClientSelection}
+                      className="shrink-0 px-2.5 text-sm border border-border rounded hover:bg-surface-2 text-muted-foreground"
+                      aria-label="Wyczyść wybór klienta"
+                      title="Wyczyść"
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </div>
+                {showClientSuggestions && (
+                  <div className="absolute z-20 mt-1 w-full rounded border border-border bg-surface shadow-lg max-h-56 overflow-auto">
+                    {filteredClients.length > 0 ? (
+                      filteredClients.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => pickClient(c)}
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-surface-2 ${
+                            c.id === clientId ? 'bg-surface-2/80' : ''
+                          }`}
+                          title={formatClientLabel(c)}
+                        >
+                          {formatClientLabel(c)}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">
+                        Brak pasujących klientów. Użyj „+ Nowy” lub zmień wyszukiwanie.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => setShowNewClient(true)}

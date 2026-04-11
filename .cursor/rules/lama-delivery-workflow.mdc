@@ -1,0 +1,22 @@
+---
+description: Delivery workflow for commit, push, deploy, and release verification
+alwaysApply: true
+---
+
+# Lama Delivery Workflow
+
+- This project ships through **Git `main` -> deploy pipeline -> VPS**. Local-only fixes are not treated as complete.
+- For every substantial change, finish with this sequence:
+  1. `npm run build`
+  2. commit changes
+  3. push to `main`
+  4. verify deploy result against the pushed SHA
+- A task is **not done** until code is pushed and deploy status is known (success or explicit blocker).
+- After push, always provide:
+  - short SHA (`git rev-parse --short HEAD`)
+  - deployment status (CI/CD or manual)
+  - verification that frontend version is `main-<short_sha>` and matches the deployed code
+- If deploy is blocked, report clearly: what failed, what was already pushed, and the next exact recovery step.
+- Keep production-oriented instructions short in rules; detailed troubleshooting and server commands live in:
+  - `docs/production-repair-runbook.md`
+  - `docs/deploy-quick.md`

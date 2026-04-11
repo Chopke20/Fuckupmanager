@@ -9,11 +9,11 @@ export const useClients = (params?: { page?: number, limit?: number, search?: st
   })
 }
 
-export const useClient = (id: string) => {
+export const useClient = (id: string, options?: { enabled?: boolean }) => {
   return useQuery({
     queryKey: ['clients', id],
     queryFn: () => clientApi.getById(id),
-    enabled: !!id,
+    enabled: !!id && (options?.enabled ?? true),
   })
 }
 
