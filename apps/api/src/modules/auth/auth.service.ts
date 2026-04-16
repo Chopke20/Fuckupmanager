@@ -17,7 +17,7 @@ import { resolvePermissionsForRoleFromDb } from './permissions.service'
 const INVITE_TTL_HOURS = Number(process.env.INVITE_TTL_HOURS ?? 48)
 const RESET_TTL_MINUTES = Number(process.env.RESET_TTL_MINUTES ?? 60)
 const SESSION_TTL_DAYS = Number(process.env.SESSION_TTL_DAYS ?? 14)
-const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME?.trim() || 'lama_session'
+const SESSION_COOKIE_NAME = 'lama_session'
 
 export type SafeUser = {
   id: string

@@ -19,14 +19,6 @@ const PROJECT_CONTACTS: Record<string, { name: string; phone: string }> = {
   MICHAL: { name: 'Michał Rokicki', phone: '793 435 302' },
 }
 
-type AppBranding = {
-  brandName?: string | null
-  supportEmail?: string | null
-  supportPhone?: string | null
-  documentLogoUrl?: string | null
-  documentFooterText?: string | null
-}
-
 function getTemplatesDir(): string {
   const nextToSrc = path.join(__dirname, 'templates')
   if (fs.existsSync(path.join(nextToSrc, 'warehouse-v1.html'))) return nextToSrc
@@ -87,22 +79,19 @@ export type BuildWarehousePdfHtmlParams = {
   } | null
   equipmentItems: WarehousePdfEquipmentRow[]
   projectContactKey?: string | null
-  appBranding?: AppBranding | null
 }
 
 export function buildWarehousePdfHtml(params: BuildWarehousePdfHtmlParams): string {
   const templatePath = path.join(getTemplatesDir(), 'warehouse-v1.html')
   let html = fs.readFileSync(templatePath, 'utf-8')
 
-  const hdrLogo = params.appBranding?.documentLogoUrl?.trim()
-    ? `<img class="hdr__logo" src="${escapeHtml(params.appBranding.documentLogoUrl.trim())}" alt="${escapeHtml(params.appBranding.brandName?.trim() || 'Logo')}">`
-    : extractHdrLogoFromOfferHtml()
+  const hdrLogo = extractHdrLogoFromOfferHtml()
   const issuer = params.issuer
   const companyName = issuer.companyName || COMPANY.name
   const companyNip = issuer.nip || COMPANY.nip
   const companyAddress = issuer.address || COMPANY.address
-  const companyEmail = issuer.email || params.appBranding?.supportEmail || COMPANY.email
-  const companyPhone = issuer.phone || params.appBranding?.supportPhone || COMPANY.phone
+  const companyEmail = issuer.email || COMPANY.email
+  const companyPhone = issuer.phone || COMPANY.phone
 
   const companyDetails = [
     `NIP: ${escapeHtml(companyNip)}`,
@@ -173,9 +162,7 @@ export function buildWarehousePdfHtml(params: BuildWarehousePdfHtmlParams): stri
 
   const opiekun = params.projectContactKey ? PROJECT_CONTACTS[params.projectContactKey] : null
   const footerLeft = `<span class="footer__label">Kontakt</span>
-      ${opiekun
-        ? `${escapeHtml(opiekun.name)}<br>\n      tel. ${escapeHtml(opiekun.phone)}<br>\n      ${escapeHtml(companyEmail)}`
-        : `${params.appBranding?.supportPhone ? `tel. ${escapeHtml(params.appBranding.supportPhone)}<br>\n      ` : ''}${escapeHtml(companyEmail)}`}`
+      ${opiekun ? `${escapeHtml(opiekun.name)}<br>\n      tel. ${escapeHtml(opiekun.phone)}<br>\n      ${escapeHtml(companyEmail)}` : escapeHtml(companyEmail)}`
 
   const footerRight = `<span class="footer__label">Dane rejestrowe</span>
       ${escapeHtml(companyName)}<br>
@@ -199,13 +186,6 @@ export function buildWarehousePdfHtml(params: BuildWarehousePdfHtmlParams): stri
 
   for (const [key, value] of replacements) {
     html = html.split(key).join(value)
-  }
-
-  if (params.appBranding?.documentFooterText?.trim()) {
-    html = html.replace(
-      '<span class="footer__label">Dane rejestrowe</span>',
-      `<span class="footer__label">Dane rejestrowe</span><div style="margin-bottom:6px;color:#666;">${escapeHtml(params.appBranding.documentFooterText.trim())}</div>`
-    )
   }
 
   return html

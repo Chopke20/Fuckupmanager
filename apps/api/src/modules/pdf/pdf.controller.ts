@@ -16,21 +16,8 @@ import {
   loadOfferDraftPayload,
   orderOfferSnapshotToPdfOrderLike,
 } from '../orders/offer-snapshot-merge'
-import { getOrCreateAppSettings } from '../app-settings/app-settings.service'
 
 type OrderWithRelations = Awaited<ReturnType<typeof loadOrderForPdf>>
-
-async function getPdfBranding() {
-  const settings = await getOrCreateAppSettings()
-  return {
-    brandName: settings.brandName,
-    websiteUrl: settings.websiteUrl,
-    supportEmail: settings.supportEmail,
-    supportPhone: settings.supportPhone,
-    documentLogoUrl: settings.documentLogoUrl ?? settings.logoLightBgUrl,
-    documentFooterText: settings.documentFooterText,
-  }
-}
 
 async function loadOrderForPdf(orderId: string) {
   return prisma.order.findUnique({
@@ -83,7 +70,7 @@ export class PdfController {
         generatedAt,
         documentNumber: offerNumberDisplay,
       })
-      const html = buildOfferHtmlV5({ ...orderOfferSnapshotToPdfOrderLike(snapshot), appBranding: await getPdfBranding() }, offerNumberDisplay, {
+      const html = buildOfferHtmlV5(orderOfferSnapshotToPdfOrderLike(snapshot), offerNumberDisplay, {
         issuedAt: generatedAt,
       })
       const pdfBuffer = await this.renderPdf(html)
@@ -216,7 +203,7 @@ export class PdfController {
       res.setHeader('X-Offer-Export-Created', exportCreated ? '1' : '0')
       res.setHeader('X-Offer-Number-Reused', reuseSameNumber ? '1' : '0')
 
-      const html = buildOfferHtmlV5({ ...orderOfferSnapshotToPdfOrderLike(snapshot), appBranding: await getPdfBranding() }, finalOfferNumber, {
+      const html = buildOfferHtmlV5(orderOfferSnapshotToPdfOrderLike(snapshot), finalOfferNumber, {
         issuedAt: generatedAt,
       })
       const pdfBuffer = await this.renderPdf(html)
@@ -281,12 +268,11 @@ export class PdfController {
       const issuedAt: string | undefined =
         parsed.success && parsed.data.generatedAt ? parsed.data.generatedAt : issuedAtFallback
 
-      const pdfBranding = await getPdfBranding()
       const html = parsed.success
-        ? buildOfferHtmlV5({ ...orderOfferSnapshotToPdfOrderLike(parsed.data), appBranding: pdfBranding }, exportRecord.documentNumber, {
+        ? buildOfferHtmlV5(orderOfferSnapshotToPdfOrderLike(parsed.data), exportRecord.documentNumber, {
             issuedAt,
           })
-        : buildOfferHtmlV5({ ...(raw as OrderLike), appBranding: pdfBranding }, exportRecord.documentNumber, { issuedAt })
+        : buildOfferHtmlV5(raw as OrderLike, exportRecord.documentNumber, { issuedAt })
       const pdfBuffer = await this.renderPdf(html)
 
       const filename = `Oferta-${exportRecord.documentNumber}.pdf`
@@ -365,7 +351,6 @@ export class PdfController {
 
       const issuer = await resolveDefaultIssuerForDraft(prisma)
       const generatedAt = new Date().toISOString()
-      const pdfBranding = await getPdfBranding()
       const html = buildWarehousePdfHtml({
         documentNumberDisplay,
         issuedAt: generatedAt,
@@ -395,7 +380,6 @@ export class PdfController {
           sortOrder: e.sortOrder,
         })),
         projectContactKey: order.projectContactKey,
-        appBranding: pdfBranding,
       })
 
       const pdfBuffer = await this.renderPdf(html)

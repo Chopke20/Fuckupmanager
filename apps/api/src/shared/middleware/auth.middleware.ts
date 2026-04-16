@@ -15,13 +15,9 @@ function parseCookieValue(cookieHeader: string | undefined, key: string): string
   return null
 }
 
-function getSessionCookieName() {
-  return process.env.SESSION_COOKIE_NAME?.trim() || 'lama_session'
-}
-
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   try {
-    const token = parseCookieValue(req.headers.cookie, getSessionCookieName())
+    const token = parseCookieValue(req.headers.cookie, 'lama_session')
     if (!token) {
       throw new AppError('Brak sesji. Zaloguj się ponownie.', 401, 'UNAUTHORIZED')
     }

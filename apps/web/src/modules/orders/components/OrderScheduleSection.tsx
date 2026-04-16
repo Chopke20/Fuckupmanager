@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useFormContext } from 'react-hook-form'
 import { GripVertical, Plus, Trash2 } from 'lucide-react'
 import { Order, OrderStage } from '@lama-stage/shared-types'
-import { dateInputToISO, isoToDateInput } from '../../../shared/utils/dateHelpers'
+import { dateInputToISO, isoToDateInput, daysBetween } from '../../../shared/utils/dateHelpers'
 
 interface OrderScheduleSectionProps {
   /** Data rozpoczęcia zlecenia – pierwsza proponowana data przy dodawaniu etapu */
@@ -71,13 +71,30 @@ export default function OrderScheduleSection({ orderDateFrom, onChange }: OrderS
     setDraggingIndex(null)
   }
 
-  const uniqueDays = new Set(stages.map((s: any) => (s.date ? new Date(s.date).toDateString() : ''))).size
+  /** Zakres kalendarzowy od najwcześniejszego do najpóźniejszego etapu (te same zasady co „dni zlecenia” w sprzęcie) */
+  const scheduleSpanDays = useMemo(() => {
+    const dates = stages
+      .map((s: any) => (s?.date ? new Date(s.date as string | Date) : null))
+      .filter((d: Date | null): d is Date => Boolean(d && !Number.isNaN(d.getTime())))
+    if (dates.length === 0) return null
+    const tMin = Math.min(...dates.map((d: Date) => d.getTime()))
+    const tMax = Math.max(...dates.map((d: Date) => d.getTime()))
+    return daysBetween(new Date(tMin), new Date(tMax))
+  }, [stages])
 
   return (
     <div className="space-y-3">
       <div className="flex justify-between items-center">
         <h3 className="text-base font-semibold">Harmonogram</h3>
-        <span className="text-sm text-muted-foreground">Dni: <strong>{uniqueDays}</strong></span>
+        <span className="text-sm text-muted-foreground" title="Liczba dni kalendarzowych od pierwszej do ostatniej daty etapu (włącznie)">
+          {scheduleSpanDays != null ? (
+            <>
+              Zakres: <strong>{scheduleSpanDays}</strong> {scheduleSpanDays === 1 ? 'dzień' : 'dni'}
+            </>
+          ) : (
+            <>Zakres: —</>
+          )}
+        </span>
       </div>
 
       <div className="border border-border rounded overflow-hidden">

@@ -100,7 +100,7 @@ export async function apiDownloadDatabaseBackup(): Promise<string> {
   const res = await axiosInstance.get<Blob>('/auth/admin/backup', { responseType: 'blob' })
   const disposition = res.headers['content-disposition']
   const match = disposition?.match(/filename="?([^";\n]+)"?/)
-  const filename = match?.[1]?.trim() ?? `lama-stage-backup-${new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-')}.dump`
+  const filename = match?.[1]?.trim() ?? `lama-stage-backup-${new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-')}.db`
   const url = URL.createObjectURL(res.data)
   const a = document.createElement('a')
   a.href = url

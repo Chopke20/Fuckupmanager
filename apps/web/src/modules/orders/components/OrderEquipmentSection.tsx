@@ -12,7 +12,7 @@ interface OrderEquipmentSectionProps {
   orderDateTo?: string
   /**
    * Liczba dni zlecenia (inclusive) z zakresu dateFrom–dateTo.
-   * Używana: podpowiedź w nagłówku, nowe wiersze z katalogu/pusty wiersz — bez automatycznego nadpisywania istniejących pozycji.
+   * Używana: podpowiedź „zlecenie:” w nagłówku; nowe wiersze biorą dni z pola w nawiasach, jeśli jest tam poprawna liczba.
    */
   orderSpanDays?: number
 }
@@ -82,6 +82,13 @@ export default function OrderEquipmentSection({
       applyBulkDaysToAllRows()
     }
   }
+
+  /** Nowe wiersze biorą dni z nagłówka (jeśli jest sensowna liczba), inaczej ze zlecenia */
+  const daysForNewRows = useMemo(() => {
+    const parsed = parseInt(bulkDaysDraft, 10)
+    if (Number.isFinite(parsed) && parsed >= 1) return Math.round(parsed)
+    return Math.max(1, orderSpanDays)
+  }, [bulkDaysDraft, orderSpanDays])
 
   const categories = Array.from(
     new Set(equipmentList.map((eq) => normalizeCategoryName(eq.category)).filter(Boolean))
@@ -153,7 +160,7 @@ export default function OrderEquipmentSection({
       category: 'Inne',
       quantity: 1,
       unitPrice: 0,
-      days: Math.max(1, orderSpanDays),
+      days: daysForNewRows,
       discount: 0,
       pricingRule: { day1: 1.0, nextDays: 0.5 },
       visibleInOffer: true,
@@ -176,7 +183,7 @@ export default function OrderEquipmentSection({
       category: normalizeCategoryName(eq.category),
       quantity: 1,
       unitPrice: eq.dailyPrice,
-      days: Math.max(1, orderSpanDays),
+      days: daysForNewRows,
       discount: 0,
       pricingRule: eq.pricingRule || { day1: 1.0, nextDays: 0.5 },
       visibleInOffer: eq.visibleInOffer,
@@ -248,10 +255,10 @@ export default function OrderEquipmentSection({
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground">Kategoria</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground">Ilość</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground">Cena jdn.</th>
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground align-top min-w-[5.5rem]">
+                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground align-top min-w-[6.5rem]">
                   <div className="flex flex-col gap-1">
-                    <span>Dni</span>
-                    <div className="flex items-center gap-0.5 font-normal">
+                    <div className="flex flex-wrap items-center gap-x-0.5 gap-y-0.5 font-normal">
+                      <span className="font-medium text-muted-foreground">Dni</span>
                       <span className="text-muted-foreground">(</span>
                       <input
                         type="number"

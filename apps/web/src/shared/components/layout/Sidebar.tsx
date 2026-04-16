@@ -1,11 +1,9 @@
 import { NavLink } from 'react-router-dom'
 import { LayoutDashboard, ClipboardList, Users, Package, Boxes, Trash2, Shield } from 'lucide-react'
 import { useAuth } from '../../../modules/auth/AuthProvider'
-import { useBranding } from '../../../modules/branding/BrandingProvider'
 
 export default function Sidebar() {
   const { hasPermission } = useAuth()
-  const { settings } = useBranding()
   const navItems = [
     { to: '/', label: 'Overview', icon: LayoutDashboard },
     { to: '/orders', label: 'Zlecenia', icon: ClipboardList },
@@ -19,17 +17,13 @@ export default function Sidebar() {
   return (
     <aside className="w-44 shrink-0 bg-black border-r border-border flex flex-col">
       <div className="p-3 border-b border-border flex items-center gap-2">
-        {settings?.logoDarkBgUrl ? (
-          <img src={settings.logoDarkBgUrl} alt={settings.brandName || 'Logo'} className="h-8 w-16 object-contain object-left" />
-        ) : (
-          <div className="h-8 w-8 rounded bg-primary/20 flex items-center justify-center text-primary font-semibold text-xs">
-            {(settings?.brandName || 'APP').slice(0, 2).toUpperCase()}
-          </div>
-        )}
+        <img src="/logo.png" alt="" className="h-8 w-8 object-contain" />
         <div className="min-w-0">
-          <h1 className="text-base font-bold text-primary font-heading truncate">{settings?.brandName || 'Lama Stage'}</h1>
+          <h1 className="text-base font-bold text-primary font-heading truncate">
+            LAMA STAGE
+          </h1>
           <p className="text-[10px] text-muted-foreground uppercase tracking-wider truncate">
-            {settings?.brandTagline || 'Panel operacyjny'}
+            Fuckup Manager
           </p>
         </div>
       </div>
@@ -58,7 +52,7 @@ export default function Sidebar() {
       </nav>
       <div className="p-3 border-t border-border space-y-1.5">
         <div className="text-xs text-muted-foreground leading-snug">
-          {settings?.legalFooter || `${settings?.brandName || 'Lama Stage'} © 2026`}
+          v.0.5.0 • Lama Stage © 2026
         </div>
         <div className="text-[10px] font-mono text-muted-foreground/90 bg-surface/80 border border-border rounded px-2 py-1 leading-tight break-all">
           {typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'main-unknown'}

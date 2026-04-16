@@ -15,8 +15,9 @@ import financeRouter from './modules/finance/finance.router'
 import authRouter from './modules/auth/auth.router'
 import issuerProfilesRouter from './modules/issuer-profiles/issuer-profiles.router'
 import dataportRouter from './modules/dataport/dataport.router'
-import appSettingsRouter from './modules/app-settings/app-settings.router'
 import { requireAuth, requireModuleAccess, requirePermission } from './shared/middleware/auth.middleware'
+
+const PRODUCTION_FRONTEND_ORIGINS = ['https://fuckupmanager.lamastage.pl'] as const
 
 function splitOrigins(raw: string | undefined, fallback: string): string[] {
   const s = (raw ?? fallback).trim()
@@ -32,7 +33,7 @@ export function createApp() {
     process.env.FRONTEND_ORIGIN ?? process.env.CORS_ORIGIN,
     'http://localhost:5173'
   )
-  const allowedOrigins = new Set<string>(configuredOrigins)
+  const allowedOrigins = new Set<string>([...configuredOrigins, ...PRODUCTION_FRONTEND_ORIGINS])
   const isDev = process.env.NODE_ENV !== 'production'
   app.use(cors({
     origin: (origin, callback) => {
@@ -61,7 +62,6 @@ export function createApp() {
   })
 
   // API routes
-  app.use('/api/app-settings', appSettingsRouter)
   app.use('/api/auth', authRouter)
   app.use('/api', requireAuth)
   app.use('/api/clients', requireModuleAccess('clients'), clientsRouter)

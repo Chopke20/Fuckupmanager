@@ -8,16 +8,11 @@ import dotenv from 'dotenv'
  * - Kilka ścieżek: `__dirname` (src lub dist), potem `cwd` (np. start z roota monorepo).
  */
 const envRoot = path.resolve(__dirname, '../../..', '.env')
-const instanceCode = process.env.INSTANCE_CODE?.trim()
-const instanceEnvName = instanceCode ? `.env.${instanceCode}` : null
 
 /** Kolejność: plik obok `src`/`dist`, potem `.env` z cwd (np. `apps/api`), potem monorepo root → `apps/api/.env`. */
 const apiEnvCandidates = [
-  ...(instanceEnvName ? [path.resolve(__dirname, `../${instanceEnvName}`)] : []),
   path.resolve(__dirname, '../.env'),
-  ...(instanceEnvName ? [path.resolve(process.cwd(), instanceEnvName)] : []),
   path.resolve(process.cwd(), '.env'),
-  ...(instanceEnvName ? [path.resolve(process.cwd(), 'apps', 'api', instanceEnvName)] : []),
   path.resolve(process.cwd(), 'apps', 'api', '.env'),
 ]
 

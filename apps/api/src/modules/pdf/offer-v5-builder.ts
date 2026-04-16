@@ -38,15 +38,6 @@ const PROJECT_CONTACTS: Record<string, { name: string; phone: string }> = {
   MICHAL: { name: 'Michał Rokicki', phone: '793 435 302' },
 }
 
-type AppBranding = {
-  brandName?: string | null
-  websiteUrl?: string | null
-  supportEmail?: string | null
-  supportPhone?: string | null
-  documentLogoUrl?: string | null
-  documentFooterText?: string | null
-}
-
 function getTemplatePath(): string {
   const dir = __dirname
   const nextToSrc = path.join(dir, 'templates', 'offer-v5.html')
@@ -70,13 +61,6 @@ function fmtNum(n: number): string {
 
 function fmtMoney(n: number, symbol: string = 'zł'): string {
   return `${fmtNum(n)} ${symbol}`
-}
-
-function buildHeaderLogo(branding?: AppBranding | null): string {
-  if (branding?.documentLogoUrl?.trim()) {
-    return `<img class="hdr__logo" src="${escapeHtml(branding.documentLogoUrl.trim())}" alt="${escapeHtml(branding.brandName?.trim() || 'Logo')}">`
-  }
-  return '<div class="hdr__offer-num" style="font-size:18px;text-transform:uppercase;">{{COMPANY_NAME}}</div>'
 }
 
 /** Dane wejściowe do HTML oferty — z live zlecenia lub ze snapshotu (po scaleniu z draftem). */
@@ -128,7 +112,6 @@ export type OrderLike = {
     isTransport?: boolean | null
     visibleInOffer?: boolean | null
   }>
-  appBranding?: AppBranding | null
 }
 
 export type BuildOfferHtmlV5Options = {
@@ -152,12 +135,11 @@ export function buildOfferHtmlV5(
   const fmt = (n: number) => fmtMoney(n * rate, symbol)
 
   const issuer = order.offerIssuer
-  const branding = order.appBranding
   const companyName = issuer?.companyName ?? COMPANY.name
   const companyNip = issuer?.nip ?? COMPANY.nip
   const companyAddress = issuer?.address ?? COMPANY.address
-  const companyEmail = issuer?.email ?? branding?.supportEmail ?? COMPANY.email
-  const companyPhone = issuer?.phone ?? branding?.supportPhone ?? COMPANY.phone
+  const companyEmail = issuer?.email ?? COMPANY.email
+  const companyPhone = issuer?.phone ?? COMPANY.phone
 
   const issuedDate = options?.issuedAt != null ? new Date(options.issuedAt) : new Date()
   const headerMeta = `Warszawa, ${issuedDate.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' })} &nbsp;·&nbsp; Ważna ${validityDays} dni od daty wystawienia`
@@ -174,8 +156,8 @@ export function buildOfferHtmlV5(
     : [
         `NIP: ${COMPANY.nip}`,
         COMPANY.address,
-        `${escapeHtml(branding?.websiteUrl?.trim() || COMPANY.www)} &nbsp;·&nbsp; ${escapeHtml(branding?.supportEmail?.trim() || COMPANY.email)}`,
-        `+48 ${escapeHtml((branding?.supportPhone?.trim() || COMPANY.phone).replace(/\s/g, ' '))}`,
+        `${COMPANY.www} &nbsp;·&nbsp; ${COMPANY.email}`,
+        `+48 ${COMPANY.phone.replace(/\s/g, ' ')}`,
       ].join('<br>\n          ')
 
   const client = order.client
@@ -473,12 +455,8 @@ export function buildOfferHtmlV5(
   }
 
   const opiekun = order.projectContactKey ? PROJECT_CONTACTS[order.projectContactKey] : null
-  const fallbackContactLine = [
-    branding?.supportPhone?.trim() ? `tel. ${escapeHtml(branding.supportPhone.trim())}<br>\n      ` : '',
-    escapeHtml(companyEmail),
-  ].join('')
   const footerLeft = `<span class="footer__label">Opiekun projektu</span>
-      ${opiekun ? `${escapeHtml(opiekun.name)}<br>\n      tel. ${escapeHtml(opiekun.phone)}<br>\n      ${escapeHtml(companyEmail)}` : fallbackContactLine}`
+      ${opiekun ? `${escapeHtml(opiekun.name)}<br>\n      tel. ${escapeHtml(opiekun.phone)}<br>\n      ${escapeHtml(companyEmail)}` : escapeHtml(companyEmail)}`
 
   const footerRight = issuer
     ? `<span class="footer__label">Dane rejestrowe</span>
@@ -514,14 +492,6 @@ export function buildOfferHtmlV5(
 
   for (const [key, value] of replacements) {
     html = html.split(key).join(value)
-  }
-
-  html = html.replace(/<img class="hdr__logo"[^>]*>/, buildHeaderLogo(branding))
-  if (branding?.documentFooterText?.trim()) {
-    html = html.replace(
-      '<span class="footer__label">Dane rejestrowe</span>',
-      `<span class="footer__label">Dane rejestrowe</span><div style="margin-bottom:6px;color:#666;">${escapeHtml(branding.documentFooterText.trim())}</div>`
-    )
   }
 
   return html

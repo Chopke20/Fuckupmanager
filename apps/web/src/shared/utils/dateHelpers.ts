@@ -59,16 +59,19 @@ export function isEndDateBeforeStartDate(start: string | Date, end: string | Dat
 }
 
 /**
- * Liczba dni między datą początku a końca (włącznie z obiema).
- * dateFrom i dateTo jako ISO string lub Date. Zwraca co najmniej 1.
+ * Liczba dni kalendarzowych między początkiem a końcem (włącznie z oboma dniami).
+ * Liczy wg **dnia kalendarzowego** (północ–północ lokalnie), nie po surowej różnicy ISO z godzinami —
+ * tak samo jak zakres dat zlecenia i transportu.
  */
 export function daysBetween(dateFrom: string | Date, dateTo: string | Date): number {
   const from = typeof dateFrom === 'string' ? new Date(dateFrom) : dateFrom;
   const to = typeof dateTo === 'string' ? new Date(dateTo) : dateTo;
   if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return 1;
-  const ms = to.getTime() - from.getTime();
-  const days = Math.ceil(ms / (24 * 60 * 60 * 1000)) + 1;
-  return Math.max(1, days);
+  const startDay = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  const endDay = new Date(to.getFullYear(), to.getMonth(), to.getDate());
+  if (endDay < startDay) return 1;
+  const diffDays = Math.floor((endDay.getTime() - startDay.getTime()) / (24 * 60 * 60 * 1000));
+  return Math.max(1, diffDays + 1);
 }
 
 /**
