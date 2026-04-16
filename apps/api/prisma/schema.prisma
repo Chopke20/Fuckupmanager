@@ -404,3 +404,25 @@ model IssuerProfile {
   @@index([sortOrder])
   @@map("issuer_profiles")
 }
+
+model AppSettings {
+  id                 Int      @id @default(1)
+  brandName          String   @default("Lama Stage")
+  brandTagline       String?
+  loginHeadline      String?
+  supportEmail       String?
+  supportPhone       String?
+  websiteUrl         String?
+  legalFooter        String?
+  logoDarkBgUrl      String?
+  logoLightBgUrl     String?
+  primaryColorHex    String?
+  documentFooterText String?
+  emailSenderName    String?
+  emailFooterText    String?
+  replyToEmail       String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("app_settings")
+}

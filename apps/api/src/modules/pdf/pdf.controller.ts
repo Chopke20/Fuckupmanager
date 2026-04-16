@@ -66,12 +66,14 @@ export class PdfController {
       const nextVer = (order.offerVersion ?? 0) + 1
       const offerNumberDisplay = getOfferNumberDisplay(order, nextVer)
       const generatedAt = new Date().toISOString()
+      const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
       const snapshot = buildOrderOfferSnapshotFromOrder(order, draftPayload, {
         generatedAt,
         documentNumber: offerNumberDisplay,
       })
       const html = buildOfferHtmlV5(orderOfferSnapshotToPdfOrderLike(snapshot), offerNumberDisplay, {
         issuedAt: generatedAt,
+        documentFooterText: appSettings?.documentFooterText ?? null,
       })
       const pdfBuffer = await this.renderPdf(html)
       res.setHeader('Content-Type', 'application/pdf')
@@ -116,6 +118,7 @@ export class PdfController {
 
       const draftPayload = await loadOfferDraftPayload(prisma, orderId, order)
       const generatedAt = new Date().toISOString()
+      const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
       const newVersion = (order.offerVersion ?? 0) + 1
       const candidateOfferNumber = buildDocumentNumber({
         documentType: 'OFFER',
@@ -205,6 +208,7 @@ export class PdfController {
 
       const html = buildOfferHtmlV5(orderOfferSnapshotToPdfOrderLike(snapshot), finalOfferNumber, {
         issuedAt: generatedAt,
+        documentFooterText: appSettings?.documentFooterText ?? null,
       })
       const pdfBuffer = await this.renderPdf(html)
 
@@ -267,12 +271,17 @@ export class PdfController {
       }
       const issuedAt: string | undefined =
         parsed.success && parsed.data.generatedAt ? parsed.data.generatedAt : issuedAtFallback
+      const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
 
       const html = parsed.success
         ? buildOfferHtmlV5(orderOfferSnapshotToPdfOrderLike(parsed.data), exportRecord.documentNumber, {
             issuedAt,
+            documentFooterText: appSettings?.documentFooterText ?? null,
           })
-        : buildOfferHtmlV5(raw as OrderLike, exportRecord.documentNumber, { issuedAt })
+        : buildOfferHtmlV5(raw as OrderLike, exportRecord.documentNumber, {
+            issuedAt,
+            documentFooterText: appSettings?.documentFooterText ?? null,
+          })
       const pdfBuffer = await this.renderPdf(html)
 
       const filename = `Oferta-${exportRecord.documentNumber}.pdf`
@@ -350,6 +359,7 @@ export class PdfController {
       }
 
       const issuer = await resolveDefaultIssuerForDraft(prisma)
+      const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
       const generatedAt = new Date().toISOString()
       const html = buildWarehousePdfHtml({
         documentNumberDisplay,
@@ -380,6 +390,7 @@ export class PdfController {
           sortOrder: e.sortOrder,
         })),
         projectContactKey: order.projectContactKey,
+        documentFooterText: appSettings?.documentFooterText ?? null,
       })
 
       const pdfBuffer = await this.renderPdf(html)

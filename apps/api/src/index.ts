@@ -1,6 +1,6 @@
 import './load-env'
 import { createApp } from './app'
-import { prisma } from './prisma/client'
+import { connectDefaultCompanyPrisma, disconnectAllPrismaClients } from './prisma/company-prisma'
 
 const PORT = process.env.PORT || 3000
 
@@ -8,7 +8,7 @@ async function main() {
   const app = createApp()
 
   try {
-    await prisma.$connect()
+    await connectDefaultCompanyPrisma()
     console.log('✅ Połączono z bazą danych')
   } catch (error) {
     console.error('❌ Błąd połączenia z bazą danych:', error)
@@ -22,7 +22,7 @@ async function main() {
 
   process.on('SIGTERM', async () => {
     console.log('🛑 Otrzymano SIGTERM, zamykanie serwera...')
-    await prisma.$disconnect()
+    await disconnectAllPrismaClients()
     server.close(() => {
       console.log('✅ Serwer zamknięty')
       process.exit(0)

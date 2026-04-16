@@ -1,8 +1,10 @@
 import { FormEvent, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { apiForgotPassword } from '../auth.api'
 
 export default function ForgotPasswordPage() {
+  const [searchParams] = useSearchParams()
+  const companyCode = (searchParams.get('company') || '').trim().toLowerCase()
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -10,10 +12,14 @@ export default function ForgotPasswordPage() {
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault()
+    if (!companyCode) {
+      setError('Brak wybranej firmy. Wróć do logowania i wybierz firmę.')
+      return
+    }
     setLoading(true)
     setError(null)
     try {
-      await apiForgotPassword(email)
+      await apiForgotPassword(companyCode, email)
       setSent(true)
     } catch (err: any) {
       setError(err?.response?.data?.error?.message || 'Nie udało się wysłać linku resetu.')
@@ -28,6 +34,7 @@ export default function ForgotPasswordPage() {
         <div>
           <h1 className="text-xl">Reset hasła</h1>
           <p className="text-sm text-muted-foreground">Wyślemy link do ustawienia nowego hasła.</p>
+          {!companyCode ? <p className="text-xs text-destructive mt-1">Brak parametru firmy.</p> : null}
         </div>
         {error && <div className="text-sm text-red-400">{error}</div>}
         {sent && <div className="text-sm text-primary">Jeśli konto istnieje, e-mail został wysłany.</div>}

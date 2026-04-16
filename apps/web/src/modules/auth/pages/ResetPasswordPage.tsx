@@ -5,6 +5,7 @@ import { apiResetPassword } from '../auth.api'
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams()
   const token = useMemo(() => searchParams.get('token') || '', [searchParams])
+  const companyCode = useMemo(() => (searchParams.get('company') || '').trim().toLowerCase(), [searchParams])
   const [password, setPassword] = useState('')
   const [passwordConfirm, setPasswordConfirm] = useState('')
   const [success, setSuccess] = useState(false)
@@ -16,7 +17,8 @@ export default function ResetPasswordPage() {
     setLoading(true)
     setError(null)
     try {
-      await apiResetPassword(token, password, passwordConfirm)
+      if (!companyCode) throw new Error('Brak wybranej firmy. Użyj pełnego linku resetu.')
+      await apiResetPassword(companyCode, token, password, passwordConfirm)
       setSuccess(true)
     } catch (err: any) {
       setError(err?.response?.data?.error?.message || 'Nie udało się ustawić hasła.')
@@ -25,8 +27,8 @@ export default function ResetPasswordPage() {
     }
   }
 
-  if (!token) {
-    return <div className="min-h-screen flex items-center justify-center text-sm text-red-400">Brak tokenu resetu.</div>
+  if (!token || !companyCode) {
+    return <div className="min-h-screen flex items-center justify-center text-sm text-red-400">Brak tokenu resetu lub firmy.</div>
   }
 
   return (

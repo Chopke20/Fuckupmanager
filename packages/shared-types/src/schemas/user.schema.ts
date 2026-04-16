@@ -4,6 +4,10 @@ import { PaginatedResponseSchema } from './common.schema';
 
 export const UserPublicSchema = z.object({
   id: z.string().uuid(),
+  companyCode: z.string().trim().toLowerCase().regex(/^[a-z0-9_-]{2,32}$/),
+  brandName: z.string().trim().min(1),
+  logoDarkBgUrl: z.string().trim().url().nullable().optional(),
+  logoLightBgUrl: z.string().trim().url().nullable().optional(),
   username: z.string().nullable().optional(),
   email: z.string().email(),
   fullName: z.string().nullable().optional(),

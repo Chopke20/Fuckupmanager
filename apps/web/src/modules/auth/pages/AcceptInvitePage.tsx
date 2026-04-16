@@ -5,6 +5,7 @@ import { apiAcceptInvite } from '../auth.api'
 export default function AcceptInvitePage() {
   const [searchParams] = useSearchParams()
   const token = useMemo(() => searchParams.get('token') || '', [searchParams])
+  const companyCode = useMemo(() => (searchParams.get('company') || '').trim().toLowerCase(), [searchParams])
   const [password, setPassword] = useState('')
   const [passwordConfirm, setPasswordConfirm] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -16,7 +17,8 @@ export default function AcceptInvitePage() {
     setLoading(true)
     setError(null)
     try {
-      await apiAcceptInvite(token, password, passwordConfirm)
+      if (!companyCode) throw new Error('Brak firmy w linku zaproszenia.')
+      await apiAcceptInvite(companyCode, token, password, passwordConfirm)
       navigate('/', { replace: true })
     } catch (err: any) {
       setError(err?.response?.data?.error?.message || 'Nie udało się aktywować konta.')
@@ -25,8 +27,8 @@ export default function AcceptInvitePage() {
     }
   }
 
-  if (!token) {
-    return <div className="min-h-screen flex items-center justify-center text-sm text-red-400">Brak tokenu zaproszenia.</div>
+  if (!token || !companyCode) {
+    return <div className="min-h-screen flex items-center justify-center text-sm text-red-400">Brak tokenu zaproszenia lub firmy.</div>
   }
 
   return (

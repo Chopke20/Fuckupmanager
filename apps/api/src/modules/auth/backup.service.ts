@@ -1,41 +1,18 @@
 import fs from 'fs'
 import path from 'path'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import { getCompanyByCode } from '../companies/company-registry'
 
-const BACKUP_FILENAME_PREFIX = 'lama-stage-backup'
+const execFileAsync = promisify(execFile)
+const BACKUP_FILENAME_PREFIX = 'lama-stage-pg-backup'
 
-/**
- * Resolves absolute path to SQLite database file from DATABASE_URL.
- * Supports file:./dev.db (relative to schema dir) and file:/absolute/path.
- */
-function resolveDatabasePath(): string {
-  const explicitPath = process.env.BACKUP_DATABASE_PATH
-  if (explicitPath && fs.existsSync(explicitPath)) {
-    return path.resolve(explicitPath)
+function sanitizeCompanyCode(input: string): string {
+  const normalized = input.trim().toLowerCase()
+  if (!/^[a-z0-9_-]{2,32}$/.test(normalized)) {
+    throw new Error('Nieprawidłowy kod firmy dla backupu.')
   }
-
-  const url = process.env.DATABASE_URL
-  if (!url || !url.startsWith('file:')) {
-    throw new Error('DATABASE_URL must be a file: URL (SQLite) for backup.')
-  }
-
-  const relativePath = url.replace(/^file:\/?/, '').trim()
-  const fileName = path.basename(relativePath)
-
-  const candidates = [
-    path.join(process.cwd(), 'prisma', fileName),
-    path.join(process.cwd(), 'apps/api/prisma', fileName),
-    path.resolve(process.cwd(), relativePath),
-  ]
-
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
-      return candidate
-    }
-  }
-
-  throw new Error(
-    `Nie znaleziono pliku bazy danych. Sprawdź DATABASE_URL lub ustaw BACKUP_DATABASE_PATH. Próbowano: ${candidates.join(', ')}`
-  )
+  return normalized
 }
 
 export type BackupResult = {
@@ -44,16 +21,31 @@ export type BackupResult = {
   copiedToDir?: string
 }
 
-/**
- * Creates a full backup of the SQLite database:
- * - Reads the DB file and returns it as buffer
- * - If BACKUP_DIR is set, also copies the file there (external backup location)
- */
-export async function createDatabaseBackup(): Promise<BackupResult> {
-  const dbPath = resolveDatabasePath()
-  const buffer = fs.readFileSync(dbPath)
+export async function createDatabaseBackup(companyCodeRaw: string): Promise<BackupResult> {
+  const companyCode = sanitizeCompanyCode(companyCodeRaw)
+  const company = getCompanyByCode(companyCode)
+  if (!company) {
+    throw new Error(`Nieznana firma '${companyCode}'.`)
+  }
+
+  const pgDumpPath = process.env.PG_DUMP_PATH?.trim() || 'pg_dump'
+  const dumpArgs = [
+    '--format=custom',
+    '--no-owner',
+    '--no-privileges',
+    '--dbname',
+    company.databaseUrl,
+    '--file',
+    '-',
+  ]
+
+  const { stdout } = await execFileAsync(pgDumpPath, dumpArgs, {
+    encoding: 'buffer',
+    maxBuffer: 512 * 1024 * 1024,
+  })
+  const buffer = Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout)
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-  const filename = `${BACKUP_FILENAME_PREFIX}-${timestamp}.db`
+  const filename = `${BACKUP_FILENAME_PREFIX}-${companyCode}-${timestamp}.dump`
 
   let copiedToDir: string | undefined
   const backupDir = process.env.BACKUP_DIR

@@ -4,6 +4,8 @@ import { AppError } from '../errors/AppError'
 import { sha256 } from '../../modules/auth/auth.crypto'
 import { Permission } from '@lama-stage/shared-types'
 import { hasPermissionForRole } from '../../modules/auth/permissions.service'
+import { getSessionCookieName, parseSessionCookieValue } from '../../modules/auth/auth.session'
+import { runWithCompanyContext } from '../context/company-context'
 
 function parseCookieValue(cookieHeader: string | undefined, key: string): string | null {
   if (!cookieHeader) return null
@@ -17,37 +19,51 @@ function parseCookieValue(cookieHeader: string | undefined, key: string): string
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   try {
-    const token = parseCookieValue(req.headers.cookie, 'lama_session')
-    if (!token) {
+    const rawCookieValue = parseCookieValue(req.headers.cookie, getSessionCookieName())
+    const parsedCookie = parseSessionCookieValue(rawCookieValue)
+    if (!parsedCookie) {
       throw new AppError('Brak sesji. Zaloguj się ponownie.', 401, 'UNAUTHORIZED')
     }
-
-    const session = await prisma.session.findFirst({
-      where: {
-        sessionTokenHash: sha256(token),
-        revokedAt: null,
-        expiresAt: { gt: new Date() },
-      },
-      include: {
-        user: true,
-      },
-    })
+    const { companyCode, token } = parsedCookie
+    const session = await runWithCompanyContext(companyCode, async () =>
+      prisma.session.findFirst({
+        where: {
+          sessionTokenHash: sha256(token),
+          revokedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        include: {
+          user: true,
+        },
+      })
+    )
 
     if (!session || !session.user.isActive) {
       throw new AppError('Sesja wygasła. Zaloguj się ponownie.', 401, 'SESSION_EXPIRED')
     }
 
-    await prisma.session.update({
-      where: { id: session.id },
-      data: { lastUsedAt: new Date() },
-    })
+    await runWithCompanyContext(companyCode, async () =>
+      prisma.session.update({
+        where: { id: session.id },
+        data: { lastUsedAt: new Date() },
+      })
+    )
 
     res.locals.user = session.user
     res.locals.session = session
+    res.locals.companyCode = companyCode
     next()
   } catch (error) {
     next(error)
   }
+}
+
+export function bindCompanyContext(req: Request, res: Response, next: NextFunction) {
+  const companyCode = typeof res.locals.companyCode === 'string' ? res.locals.companyCode : null
+  if (!companyCode) return next(new AppError('Brak kontekstu firmy.', 401, 'UNAUTHORIZED'))
+  runWithCompanyContext(companyCode, async () => {
+    next()
+  }).catch(next)
 }
 
 export function requireRole(role: 'ADMIN') {

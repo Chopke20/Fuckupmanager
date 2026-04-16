@@ -20,6 +20,7 @@ import { useAuth } from '../../auth/AuthProvider'
 import { formatRoleLabel } from '../../../lib/roleLabels'
 import { financeApi } from '../../orders/api/pdf.api'
 import AdminIssuerProfilesSection from '../components/AdminIssuerProfilesSection'
+import AdminAppSettingsSection from '../components/AdminAppSettingsSection'
 
 type TransportRangeDraft = {
   fromKm: number
@@ -86,6 +87,7 @@ export default function AdminUsersPage() {
   const [transportDraft, setTransportDraft] = useState<TransportSettingsDraft>(DEFAULT_TRANSPORT_DRAFT)
   const [transportError, setTransportError] = useState<string | null>(null)
   const [backupError, setBackupError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'users' | 'branding' | 'documents' | 'backup'>('users')
 
   const canReadUsers = hasPermission('admin.users.read')
   const canReadAudit = hasPermission('admin.audit.read')
@@ -247,17 +249,24 @@ export default function AdminUsersPage() {
   return (
     <div className="space-y-5">
       <section className="bg-card border border-border rounded-lg p-4">
-        <h1 className="text-lg font-semibold mb-1">Admin - użytkownicy</h1>
-        <p className="text-sm text-muted-foreground">Zapraszanie i zarządzanie kontami użytkowników.</p>
+        <h1 className="text-lg font-semibold mb-1">Ustawienia administratora</h1>
+        <p className="text-sm text-muted-foreground">Zarządzaj dostępami, danymi firmy, dokumentami i backupami tej instancji.</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button type="button" onClick={() => setActiveTab('users')} className={`px-3 py-1.5 text-xs rounded border ${activeTab === 'users' ? 'bg-surface border-primary text-primary' : 'border-border text-muted-foreground'}`}>Użytkownicy i role</button>
+          <button type="button" onClick={() => setActiveTab('branding')} className={`px-3 py-1.5 text-xs rounded border ${activeTab === 'branding' ? 'bg-surface border-primary text-primary' : 'border-border text-muted-foreground'}`}>Firma i branding</button>
+          <button type="button" onClick={() => setActiveTab('documents')} className={`px-3 py-1.5 text-xs rounded border ${activeTab === 'documents' ? 'bg-surface border-primary text-primary' : 'border-border text-muted-foreground'}`}>Dokumenty i komunikacja</button>
+          <button type="button" onClick={() => setActiveTab('backup')} className={`px-3 py-1.5 text-xs rounded border ${activeTab === 'backup' ? 'bg-surface border-primary text-primary' : 'border-border text-muted-foreground'}`}>Backup i odtwarzanie</button>
+        </div>
       </section>
 
-      <AdminIssuerProfilesSection />
+      {activeTab === 'branding' && <AdminAppSettingsSection />}
+      {activeTab === 'documents' && <AdminIssuerProfilesSection />}
 
-      {canBackup && (
+      {canBackup && activeTab === 'backup' && (
       <section className="bg-card border border-border rounded-lg p-4">
         <h2 className="text-sm font-semibold mb-3">Backup bazy danych</h2>
         <p className="text-xs text-muted-foreground mb-3">
-          Pobierz pełną kopię bazy SQLite (klienci, zlecenia, sprzęt, użytkownicy itd.) do pliku. Zachowaj kopię w bezpiecznym miejscu przed wdrożeniem i testami.
+          Pobierz pełną kopię bazy PostgreSQL dla tej firmy. Zachowaj kopię w bezpiecznym miejscu przed wdrożeniem i testami.
         </p>
         <div className="flex items-center gap-2">
           <button
@@ -272,13 +281,14 @@ export default function AdminUsersPage() {
             }}
             className="bg-primary text-black rounded px-3 py-2 text-sm disabled:opacity-50"
           >
-            Pobierz backup bazy (.db)
+            Pobierz backup bazy (.dump)
           </button>
         </div>
         {backupError && <p className="text-xs text-destructive mt-2">{backupError}</p>}
       </section>
       )}
 
+      {activeTab === 'documents' && (
       <section className="bg-card border border-border rounded-lg p-4">
         <h2 className="text-sm font-semibold mb-3">Ustawienia transportu (globalne)</h2>
         <p className="text-xs text-muted-foreground mb-3">
@@ -413,7 +423,9 @@ export default function AdminUsersPage() {
           )}
         </div>
       </section>
+      )}
 
+      {activeTab === 'users' && (
       <section className="bg-card border border-border rounded-lg p-4">
         <h2 className="text-sm font-semibold mb-3">Zaproś użytkownika</h2>
         <p className="text-xs text-muted-foreground mb-3">
@@ -452,7 +464,9 @@ export default function AdminUsersPage() {
           <p className="text-xs text-destructive mt-2">{inviteErrorMessage}</p>
         ) : null}
       </section>
+      )}
 
+      {activeTab === 'users' && (
       <section className="bg-card border border-border rounded-lg p-4 overflow-x-auto">
         <h2 className="text-sm font-semibold mb-3">Lista użytkowników</h2>
         {usersQuery.isLoading ? (
@@ -513,8 +527,9 @@ export default function AdminUsersPage() {
           </table>
         )}
       </section>
+      )}
 
-      {canReadRoles && (
+      {canReadRoles && activeTab === 'users' && (
       <section className="bg-card border border-border rounded-lg p-4 overflow-x-auto space-y-4">
         <h2 className="text-sm font-semibold">Role i uprawnienia (edytowalne)</h2>
         <div className="grid md:grid-cols-3 gap-2">
@@ -640,7 +655,7 @@ export default function AdminUsersPage() {
       </section>
       )}
 
-      {canReadAudit && (
+      {canReadAudit && activeTab === 'users' && (
       <section className="bg-card border border-border rounded-lg p-4 overflow-x-auto">
         <h2 className="text-sm font-semibold mb-3">Audit logi (akcje Admin)</h2>
         {auditQuery.isLoading ? (

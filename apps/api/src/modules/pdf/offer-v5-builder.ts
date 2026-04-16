@@ -25,12 +25,12 @@ import fs from 'fs'
 import path from 'path'
 
 const COMPANY = {
-  name: 'Lama Stage s.c. Michał Rokicki, Rafał Szydłowski',
-  nip: '7011187626',
-  address: '02-013 Warszawa, Lindleya 16',
-  www: 'www.lamastage.pl',
-  email: 'biuro@lamastage.pl',
-  phone: '793435302, 504361781',
+  name: process.env.DEFAULT_PDF_COMPANY_NAME ?? 'Twoja firma',
+  nip: process.env.DEFAULT_PDF_COMPANY_NIP ?? '0000000000',
+  address: process.env.DEFAULT_PDF_COMPANY_ADDRESS ?? 'Adres firmy',
+  www: process.env.DEFAULT_PDF_COMPANY_WWW ?? 'www.twojadomena.pl',
+  email: process.env.DEFAULT_PDF_COMPANY_EMAIL ?? 'kontakt@twojadomena.pl',
+  phone: process.env.DEFAULT_PDF_COMPANY_PHONE ?? '',
 }
 
 const PROJECT_CONTACTS: Record<string, { name: string; phone: string }> = {
@@ -117,6 +117,7 @@ export type OrderLike = {
 export type BuildOfferHtmlV5Options = {
   /** Data w nagłówku („Warszawa, …”) — domyślnie bieżąca. Ze snapshotu: `generatedAt`. */
   issuedAt?: string | Date
+  documentFooterText?: string | null
 }
 
 export function buildOfferHtmlV5(
@@ -458,7 +459,7 @@ export function buildOfferHtmlV5(
   const footerLeft = `<span class="footer__label">Opiekun projektu</span>
       ${opiekun ? `${escapeHtml(opiekun.name)}<br>\n      tel. ${escapeHtml(opiekun.phone)}<br>\n      ${escapeHtml(companyEmail)}` : escapeHtml(companyEmail)}`
 
-  const footerRight = issuer
+  const footerRightCore = issuer
     ? `<span class="footer__label">Dane rejestrowe</span>
       ${escapeHtml(companyName)}<br>
       ${escapeHtml(companyAddress)}<br>
@@ -467,6 +468,9 @@ export function buildOfferHtmlV5(
       ${COMPANY.name}<br>
       ${COMPANY.address}<br>
       NIP: ${COMPANY.nip}`
+  const footerRight = options?.documentFooterText?.trim()
+    ? `${footerRightCore}<br>${escapeHtml(options.documentFooterText.trim())}`
+    : footerRightCore
 
   const replacements: [string, string][] = [
     ['{{OFFER_NUMBER}}', offerNumberDisplay],

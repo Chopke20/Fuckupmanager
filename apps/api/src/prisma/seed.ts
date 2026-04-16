@@ -88,15 +88,15 @@ async function seedUsers() {
     },
   })
 
-  const adminEmail = (process.env.SEED_ADMIN_EMAIL || 'biuro@lamastage.pl').trim().toLowerCase()
+  const adminEmail = (process.env.SEED_ADMIN_EMAIL || 'admin@twojadomena.pl').trim().toLowerCase()
   const adminUsername = (process.env.SEED_ADMIN_USERNAME || 'admin').trim() || 'admin'
   const adminPassword = process.env.SEED_ADMIN_PASSWORD || 'admin1234'
-  const adminFullName = process.env.SEED_ADMIN_FULL_NAME || 'Rafał Szydłowski'
+  const adminFullName = process.env.SEED_ADMIN_FULL_NAME || 'Administrator'
 
-  const operatorEmail = (process.env.SEED_OPERATOR_EMAIL || 'operator@lamastage.pl').trim().toLowerCase()
+  const operatorEmail = (process.env.SEED_OPERATOR_EMAIL || 'operator@twojadomena.pl').trim().toLowerCase()
   const operatorUsername = (process.env.SEED_OPERATOR_USERNAME || 'operator').trim() || 'operator'
   const operatorPassword = process.env.SEED_OPERATOR_PASSWORD || 'operator123'
-  const operatorFullName = process.env.SEED_OPERATOR_FULL_NAME || 'Operator Lama'
+  const operatorFullName = process.env.SEED_OPERATOR_FULL_NAME || 'Operator'
 
   const adminExisting = await prisma.user.findFirst({
     where: {
@@ -446,6 +446,11 @@ async function normalizeResourceSubcategoriesFromDescription() {
 }
 
 async function seedIssuerProfiles() {
+  const issuerCompanyName = process.env.DEFAULT_ISSUER_COMPANY_NAME || 'Twoja firma'
+  const issuerAddress = process.env.DEFAULT_ISSUER_ADDRESS || 'Adres firmy'
+  const issuerNip = process.env.DEFAULT_ISSUER_NIP || '0000000000'
+  const issuerEmail = process.env.DEFAULT_ISSUER_EMAIL || 'kontakt@twojadomena.pl'
+  const issuerPhone = process.env.DEFAULT_ISSUER_PHONE || null
   const defaults: Array<{
     profileKey: string
     companyName: string
@@ -457,24 +462,14 @@ async function seedIssuerProfiles() {
     isDefault: boolean
   }> = [
     {
-      profileKey: 'LAMA_STAGE',
-      companyName: 'Lama Stage S. C.',
-      address: 'W. Pytlasińskiego 16/13, 00-777 Warszawa',
-      nip: '7011187626',
-      email: 'biuro@lamastage.pl',
-      phone: '793 435 302, 504 361 781',
+      profileKey: 'DEFAULT_COMPANY',
+      companyName: issuerCompanyName,
+      address: issuerAddress,
+      nip: issuerNip,
+      email: issuerEmail,
+      phone: issuerPhone,
       sortOrder: 0,
       isDefault: true,
-    },
-    {
-      profileKey: 'LAMA_STAGE_OLD',
-      companyName: 'Lama Stage s.c. Michał Rokicki, Rafał Szydłowski',
-      address: 'Lindleya 16, 02-013 Warszawa',
-      nip: '7011187626',
-      email: 'biuro@lamastage.pl',
-      phone: '793 435 302, 504 361 781',
-      sortOrder: 1,
-      isDefault: false,
     },
   ]
 
@@ -505,9 +500,35 @@ async function seedIssuerProfiles() {
   console.log('✅ Profile firmy (issuer) zaseedowane')
 }
 
+async function seedAppSettings() {
+  const brandName = process.env.APP_BRAND_NAME || process.env.DEFAULT_ISSUER_COMPANY_NAME || 'Lama Stage'
+  await prisma.appSettings.upsert({
+    where: { id: 1 },
+    create: {
+      id: 1,
+      brandName,
+      brandTagline: process.env.APP_BRAND_TAGLINE || null,
+      loginHeadline: process.env.APP_LOGIN_HEADLINE || null,
+      supportEmail: process.env.APP_SUPPORT_EMAIL || null,
+      supportPhone: process.env.APP_SUPPORT_PHONE || null,
+      websiteUrl: process.env.APP_WEBSITE_URL || null,
+      logoDarkBgUrl: process.env.APP_LOGO_DARK_BG_URL || null,
+      logoLightBgUrl: process.env.APP_LOGO_LIGHT_BG_URL || null,
+      emailSenderName: process.env.APP_EMAIL_SENDER_NAME || null,
+      emailFooterText: process.env.APP_EMAIL_FOOTER_TEXT || null,
+      replyToEmail: process.env.APP_REPLY_TO_EMAIL || null,
+    },
+    update: {
+      brandName,
+    },
+  })
+  console.log('✅ Ustawienia aplikacji zaseedowane')
+}
+
 async function main() {
   console.log('Rozpoczynam seeding bazy danych...')
   await seedUsers()
+  await seedAppSettings()
   await seedIssuerProfiles()
   await seedClients()
   await seedEquipment()

@@ -3,7 +3,9 @@ import { LayoutDashboard, ClipboardList, Users, Package, Boxes, Trash2, Shield }
 import { useAuth } from '../../../modules/auth/AuthProvider'
 
 export default function Sidebar() {
-  const { hasPermission } = useAuth()
+  const { hasPermission, user } = useAuth()
+  const brandName = user?.brandName || 'Lama Stage'
+  const logoSrc = user?.logoDarkBgUrl || '/logo.png'
   const navItems = [
     { to: '/', label: 'Overview', icon: LayoutDashboard },
     { to: '/orders', label: 'Zlecenia', icon: ClipboardList },
@@ -17,13 +19,13 @@ export default function Sidebar() {
   return (
     <aside className="w-44 shrink-0 bg-black border-r border-border flex flex-col">
       <div className="p-3 border-b border-border flex items-center gap-2">
-        <img src="/logo.png" alt="" className="h-8 w-8 object-contain" />
+        <img src={logoSrc} alt={brandName} className="h-8 w-8 object-contain" />
         <div className="min-w-0">
           <h1 className="text-base font-bold text-primary font-heading truncate">
-            LAMA STAGE
+            {brandName.toUpperCase()}
           </h1>
           <p className="text-[10px] text-muted-foreground uppercase tracking-wider truncate">
-            Fuckup Manager
+            Panel operacyjny
           </p>
         </div>
       </div>
@@ -52,7 +54,7 @@ export default function Sidebar() {
       </nav>
       <div className="p-3 border-t border-border space-y-1.5">
         <div className="text-xs text-muted-foreground leading-snug">
-          v.0.5.0 • Lama Stage © 2026
+          v.0.5.0 • {brandName} © 2026
         </div>
         <div className="text-[10px] font-mono text-muted-foreground/90 bg-surface/80 border border-border rounded px-2 py-1 leading-tight break-all">
           {typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'main-unknown'}

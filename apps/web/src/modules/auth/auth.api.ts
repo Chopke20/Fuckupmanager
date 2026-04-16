@@ -1,11 +1,34 @@
-import { AuditLog, CreateRoleDefinitionSchema, Permission, RoleDefinitionSchema, UpdateRoleDefinitionSchema, UserPublic } from '@lama-stage/shared-types'
+import {
+  AppSettings,
+  AppSettingsSchema,
+  AuditLog,
+  CreateRoleDefinitionSchema,
+  Permission,
+  PublicCompanySchema,
+  RoleDefinitionSchema,
+  UpdateRoleDefinitionSchema,
+  UserPublic,
+} from '@lama-stage/shared-types'
 import axiosInstance, { api } from '../../shared/api/client'
 
 type Envelope<T> = { data: T }
 type Paginated<T> = { data: T[]; meta: { total: number; page: number; lastPage: number } }
 
-export async function apiLogin(email: string, password: string): Promise<UserPublic> {
-  const res = await api.post<Envelope<UserPublic>>('/auth/login', { email, password })
+export type PublicCompany = {
+  code: string
+  displayName: string
+  logoDarkBgUrl?: string | null
+  logoLightBgUrl?: string | null
+  loginHelpText?: string | null
+}
+
+export async function apiListPublicCompanies(): Promise<PublicCompany[]> {
+  const res = await api.get<Envelope<unknown[]>>('/auth/public-companies')
+  return (res.data ?? []).map((row) => PublicCompanySchema.parse(row))
+}
+
+export async function apiLogin(companyCode: string, email: string, password: string): Promise<UserPublic> {
+  const res = await api.post<Envelope<UserPublic>>('/auth/login', { companyCode, email, password })
   return res.data
 }
 
@@ -18,16 +41,16 @@ export async function apiMe(): Promise<UserPublic> {
   return res.data
 }
 
-export async function apiForgotPassword(email: string): Promise<void> {
-  await api.post<Envelope<{ success: boolean }>>('/auth/forgot-password', { email })
+export async function apiForgotPassword(companyCode: string, email: string): Promise<void> {
+  await api.post<Envelope<{ success: boolean }>>('/auth/forgot-password', { companyCode, email })
 }
 
-export async function apiResetPassword(token: string, password: string, passwordConfirm: string): Promise<void> {
-  await api.post<Envelope<{ success: boolean }>>('/auth/reset-password', { token, password, passwordConfirm })
+export async function apiResetPassword(companyCode: string, token: string, password: string, passwordConfirm: string): Promise<void> {
+  await api.post<Envelope<{ success: boolean }>>('/auth/reset-password', { companyCode, token, password, passwordConfirm })
 }
 
-export async function apiAcceptInvite(token: string, password: string, passwordConfirm: string): Promise<UserPublic> {
-  const res = await api.post<Envelope<UserPublic>>('/auth/accept-invite', { token, password, passwordConfirm })
+export async function apiAcceptInvite(companyCode: string, token: string, password: string, passwordConfirm: string): Promise<UserPublic> {
+  const res = await api.post<Envelope<UserPublic>>('/auth/accept-invite', { companyCode, token, password, passwordConfirm })
   return res.data
 }
 
@@ -95,12 +118,22 @@ export async function apiAssignUserRole(userId: string, role: string): Promise<v
   await api.patch<Envelope<{ success: boolean }>>(`/auth/admin/users/${userId}/role`, { role })
 }
 
+export async function apiGetAppSettings(): Promise<AppSettings> {
+  const res = await api.get<Envelope<unknown>>('/auth/admin/app-settings')
+  return AppSettingsSchema.parse(res.data)
+}
+
+export async function apiUpdateAppSettings(payload: Partial<AppSettings>): Promise<AppSettings> {
+  const res = await api.put<Envelope<unknown>>('/auth/admin/app-settings', payload)
+  return AppSettingsSchema.parse(res.data)
+}
+
 /** Pobiera kopię bazy danych jako plik (backup). Zwraca nazwę pliku po pomyślnym zapisie. */
 export async function apiDownloadDatabaseBackup(): Promise<string> {
   const res = await axiosInstance.get<Blob>('/auth/admin/backup', { responseType: 'blob' })
   const disposition = res.headers['content-disposition']
   const match = disposition?.match(/filename="?([^";\n]+)"?/)
-  const filename = match?.[1]?.trim() ?? `lama-stage-backup-${new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-')}.db`
+  const filename = match?.[1]?.trim() ?? `lama-stage-pg-backup-${new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-')}.dump`
   const url = URL.createObjectURL(res.data)
   const a = document.createElement('a')
   a.href = url

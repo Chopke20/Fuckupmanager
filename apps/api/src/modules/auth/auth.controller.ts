@@ -10,6 +10,12 @@ import { AppError } from '../../shared/errors/AppError'
 import { createDatabaseBackup } from './backup.service'
 import { authService } from './auth.service'
 import { writeAuditLog } from './audit.service'
+import { createSessionCookieValue, getSessionCookieName, parseSessionCookieValue } from './auth.session'
+import {
+  getCurrentCompanyAppSettings,
+  listPublicCompaniesWithBranding,
+  updateCurrentCompanyAppSettings,
+} from '../app-settings/app-settings.service'
 
 function getCookie(req: Request, name: string): string | null {
   const cookieHeader = req.headers.cookie
@@ -75,13 +81,15 @@ export async function login(req: Request, res: Response, next: NextFunction) {
       throw new AppError('Nieprawidłowe dane logowania.', 400, 'VALIDATION_ERROR', parsed.error.flatten())
     }
     const { sessionToken, user } = await authService.login(
+      parsed.data.companyCode,
       parsed.data.email,
       parsed.data.password,
       req.headers['user-agent'],
       getClientIp(req)
     )
 
-    res.cookie(authService.getSessionCookieName(), sessionToken, authService.getSessionCookieOptions())
+    const cookieValue = createSessionCookieValue(parsed.data.companyCode, sessionToken)
+    res.cookie(authService.getSessionCookieName(), cookieValue, authService.getSessionCookieOptions())
     res.json({ data: user })
   } catch (error) {
     next(error)
@@ -90,9 +98,11 @@ export async function login(req: Request, res: Response, next: NextFunction) {
 
 export async function logout(req: Request, res: Response, next: NextFunction) {
   try {
-    const cookieName = authService.getSessionCookieName()
-    const token = getCookie(req, cookieName)
-    await authService.logoutByToken(token)
+    const cookieName = getSessionCookieName()
+    const parsed = parseSessionCookieValue(getCookie(req, cookieName))
+    if (parsed) {
+      await authService.logoutByToken(parsed.token, parsed.companyCode)
+    }
     res.clearCookie(cookieName, {
       path: '/',
       httpOnly: true,
@@ -124,7 +134,7 @@ export async function forgotPassword(req: Request, res: Response, next: NextFunc
     if (!parsed.success) {
       throw new AppError('Nieprawidłowy e-mail.', 400, 'VALIDATION_ERROR', parsed.error.flatten())
     }
-    await authService.forgotPassword(parsed.data.email)
+    await authService.forgotPassword(parsed.data.companyCode, parsed.data.email)
     res.json({ data: { success: true } })
   } catch (error) {
     next(error)
@@ -137,7 +147,7 @@ export async function resetPassword(req: Request, res: Response, next: NextFunct
     if (!parsed.success) {
       throw new AppError('Nieprawidłowe dane resetu hasła.', 400, 'VALIDATION_ERROR', parsed.error.flatten())
     }
-    await authService.resetPassword(parsed.data.token, parsed.data.password)
+    await authService.resetPassword(parsed.data.companyCode, parsed.data.token, parsed.data.password)
     res.json({ data: { success: true } })
   } catch (error) {
     next(error)
@@ -151,13 +161,41 @@ export async function acceptInvite(req: Request, res: Response, next: NextFuncti
       throw new AppError('Nieprawidłowe dane aktywacji konta.', 400, 'VALIDATION_ERROR', parsed.error.flatten())
     }
     const { sessionToken, user } = await authService.acceptInvitation(
+      parsed.data.companyCode,
       parsed.data.token,
       parsed.data.password,
       req.headers['user-agent'],
       getClientIp(req)
     )
-    res.cookie(authService.getSessionCookieName(), sessionToken, authService.getSessionCookieOptions())
+    const cookieValue = createSessionCookieValue(parsed.data.companyCode, sessionToken)
+    res.cookie(authService.getSessionCookieName(), cookieValue, authService.getSessionCookieOptions())
     res.json({ data: user })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export async function listPublicCompaniesHandler(_req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json({ data: await listPublicCompaniesWithBranding() })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export async function getAdminAppSettings(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await getCurrentCompanyAppSettings()
+    res.json({ data })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export async function updateAdminAppSettings(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await updateCurrentCompanyAppSettings(req.body)
+    res.json({ data })
   } catch (error) {
     next(error)
   }
@@ -425,13 +463,19 @@ export async function assignUserRole(req: Request, res: Response, next: NextFunc
 
 export async function createBackup(req: Request, res: Response, next: NextFunction) {
   try {
-    const { buffer, filename, copiedToDir } = await createDatabaseBackup()
+    const companyCode = typeof res.locals.companyCode === 'string' ? res.locals.companyCode : null
+    if (!companyCode) {
+      throw new AppError('Brak kontekstu firmy.', 401, 'UNAUTHORIZED')
+    }
+    const { buffer, filename, copiedToDir } = await createDatabaseBackup(companyCode)
     await auditAdminAction(req, res, {
       module: 'admin.backup',
       action: 'backup.create',
       targetType: 'Database',
       result: 'SUCCESS',
-      details: copiedToDir ? `Pobrano i zapisano do ${copiedToDir}` : 'Pobrano kopię',
+      details: copiedToDir
+        ? `Firma=${companyCode}; pobrano i zapisano do ${copiedToDir}`
+        : `Firma=${companyCode}; pobrano kopię`,
     })
     res.setHeader('Content-Type', 'application/octet-stream')
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)

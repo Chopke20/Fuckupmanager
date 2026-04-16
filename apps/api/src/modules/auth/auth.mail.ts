@@ -1,9 +1,17 @@
 import { sendSmtpMail } from './smtp.mailer'
+import { getCompanyByCode, getDefaultCompany } from '../companies/company-registry'
 
 function getAppBaseUrl(): string {
   const isProd = process.env.NODE_ENV === 'production'
   if (isProd && process.env.APP_BASE_URL_PROD) return process.env.APP_BASE_URL_PROD
   return process.env.APP_BASE_URL || 'http://localhost:5173'
+}
+
+function getBranding(companyCode: string) {
+  const company = getCompanyByCode(companyCode) ?? getDefaultCompany()
+  const brandName = company.displayName || 'Lama Stage'
+  const websiteUrl = process.env.APP_WEBSITE_URL?.trim() || 'https://www.lamastage.pl'
+  return { companyCode: company.code, brandName, websiteUrl }
 }
 
 function inviteTtlHours(): number {
@@ -49,8 +57,10 @@ function transactionalEmailHtml(opts: {
   ctaUrl: string
   ctaLabel: string
   expiresLine: string
+  brandName: string
+  websiteUrl: string
 }): string {
-  const { preheader, title, introHtml, ctaUrl, ctaLabel, expiresLine } = opts
+  const { preheader, title, introHtml, ctaUrl, ctaLabel, expiresLine, brandName, websiteUrl } = opts
   const esc = (s: string) =>
     s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
@@ -63,7 +73,7 @@ function transactionalEmailHtml(opts: {
         <tr>
           <td style="padding:24px 28px 8px 28px;background-color:#111111;">
             <p style="margin:0;font-family:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:13px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#00e676;">
-              Lama Stage
+              ${esc(brandName)}
             </p>
             <p style="margin:8px 0 0 0;font-family:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:20px;font-weight:600;line-height:1.3;color:#ffffff;">
               ${esc(title)}
@@ -98,7 +108,7 @@ function transactionalEmailHtml(opts: {
               Jeśli nie oczekiwałeś tej wiadomości, możesz ją zignorować; Twoje konto pozostanie bez zmian.
             </p>
             <p style="margin:12px 0 0 0;">
-              <strong>Lama Stage</strong> · <a href="https://www.lamastage.pl" style="color:#0d7a4d;text-decoration:none;">lamastage.pl</a>
+              <strong>${esc(brandName)}</strong> · <a href="${esc(websiteUrl)}" style="color:#0d7a4d;text-decoration:none;">${esc(websiteUrl.replace(/^https?:\/\//, ''))}</a>
             </p>
           </td>
         </tr>
@@ -108,19 +118,20 @@ function transactionalEmailHtml(opts: {
 </table>`.trim()
 }
 
-export async function sendInviteEmail(email: string, token: string): Promise<void> {
+export async function sendInviteEmail(email: string, token: string, companyCode: string): Promise<void> {
+  const branding = getBranding(companyCode)
   const base = getAppBaseUrl().replace(/\/$/, '')
-  const url = `${base}/accept-invite?token=${encodeURIComponent(token)}`
+  const url = `${base}/accept-invite?company=${encodeURIComponent(branding.companyCode)}&token=${encodeURIComponent(token)}`
   const hours = inviteTtlHours()
   const hoursLabel = polishHoursPhrase(hours)
 
   await sendSmtpMail({
     to: email,
-    subject: 'Zaproszenie do systemu Lama Stage',
+    subject: `Zaproszenie do systemu ${branding.brandName}`,
     text: [
       'Dzień dobry,',
       '',
-      'Otrzymałeś zaproszenie do konta w systemie Lama Stage (wewnętrzna aplikacja operacyjna firmy).',
+      `Otrzymałeś zaproszenie do konta w systemie ${branding.brandName}.`,
       'Aby aktywować konto i ustawić hasło, otwórz link:',
       url,
       '',
@@ -129,33 +140,36 @@ export async function sendInviteEmail(email: string, token: string): Promise<voi
       'Jeśli nie spodziewałeś się tej wiadomości, zignoruj ją.',
       '',
       '—',
-      'Lama Stage · https://www.lamastage.pl',
+      `${branding.brandName} · ${branding.websiteUrl}`,
     ].join('\n'),
     html: transactionalEmailHtml({
-      preheader: 'Aktywuj konto w systemie Lama Stage — link ważny ograniczony czas.',
+      preheader: `Aktywuj konto w systemie ${branding.brandName} — link ważny ograniczony czas.`,
       title: 'Zaproszenie do systemu',
       introHtml:
-        'Administrator nadał Ci dostęp do <strong>Lama Stage</strong>. Kliknij przycisk poniżej, aby dokończyć rejestrację i ustawić bezpieczne hasło.',
+        `Administrator nadał Ci dostęp do <strong>${branding.brandName}</strong>. Kliknij przycisk poniżej, aby dokończyć rejestrację i ustawić bezpieczne hasło.`,
       ctaUrl: url,
       ctaLabel: 'Aktywuj konto',
       expiresLine: `Link aktywacyjny jest ważny przez ok. ${hoursLabel}. Po upływie tego czasu poproś administratora o ponowne wysłanie zaproszenia.`,
+      brandName: branding.brandName,
+      websiteUrl: branding.websiteUrl,
     }),
   })
 }
 
-export async function sendPasswordResetEmail(email: string, token: string): Promise<void> {
+export async function sendPasswordResetEmail(email: string, token: string, companyCode: string): Promise<void> {
+  const branding = getBranding(companyCode)
   const base = getAppBaseUrl().replace(/\/$/, '')
-  const url = `${base}/reset-password?token=${encodeURIComponent(token)}`
+  const url = `${base}/reset-password?company=${encodeURIComponent(branding.companyCode)}&token=${encodeURIComponent(token)}`
   const minutes = resetTtlMinutes()
   const minutesLabel = polishMinutesPhrase(minutes)
 
   await sendSmtpMail({
     to: email,
-    subject: 'Reset hasła — Lama Stage',
+    subject: `Reset hasła — ${branding.brandName}`,
     text: [
       'Dzień dobry,',
       '',
-      'Otrzymaliśmy prośbę o zresetowanie hasła do konta Lama Stage.',
+      `Otrzymaliśmy prośbę o zresetowanie hasła do konta ${branding.brandName}.`,
       'Aby ustawić nowe hasło, otwórz link (tylko jeśli to Ty złożyłeś wniosek):',
       url,
       '',
@@ -164,16 +178,18 @@ export async function sendPasswordResetEmail(email: string, token: string): Prom
       'Jeśli nie prosiłeś o reset, zignoruj tę wiadomość — hasło pozostanie bez zmian.',
       '',
       '—',
-      'Lama Stage · https://www.lamastage.pl',
+      `${branding.brandName} · ${branding.websiteUrl}`,
     ].join('\n'),
     html: transactionalEmailHtml({
-      preheader: 'Ustaw nowe hasło do Lama Stage — link ważny krótko.',
+      preheader: `Ustaw nowe hasło do ${branding.brandName} — link ważny krótko.`,
       title: 'Reset hasła',
       introHtml:
-        'Użyto opcji odzyskiwania dostępu do <strong>Lama Stage</strong>. Jeśli to Ty inicjowałeś tę operację, kliknij przycisk i ustaw nowe hasło.',
+        `Użyto opcji odzyskiwania dostępu do <strong>${branding.brandName}</strong>. Jeśli to Ty inicjowałeś tę operację, kliknij przycisk i ustaw nowe hasło.`,
       ctaUrl: url,
       ctaLabel: 'Ustaw nowe hasło',
       expiresLine: `Ze względów bezpieczeństwa link jest ważny przez ok. ${minutesLabel}.`,
+      brandName: branding.brandName,
+      websiteUrl: branding.websiteUrl,
     }),
   })
 }

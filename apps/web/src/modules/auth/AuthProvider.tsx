@@ -8,8 +8,10 @@ interface AuthContextValue {
   isLoading: boolean
   isAuthenticated: boolean
   isAdmin: boolean
+  selectedCompanyCode: string | null
+  setSelectedCompanyCode: (companyCode: string | null) => void
   hasPermission: (permission: Permission) => boolean
-  login: (email: string, password: string) => Promise<void>
+  login: (companyCode: string, email: string, password: string) => Promise<void>
   logout: () => Promise<void>
   refreshMe: () => Promise<void>
 }
@@ -19,11 +21,19 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserPublic | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [selectedCompanyCode, setSelectedCompanyCode] = useState<string | null>(() => {
+    const saved = window.localStorage.getItem('selected_company_code')
+    return saved && saved.trim().length > 0 ? saved : null
+  })
 
   const refreshMe = async () => {
     try {
       const me = await apiMe()
       setUser(me)
+      if (me.companyCode) {
+        setSelectedCompanyCode(me.companyCode)
+        window.localStorage.setItem('selected_company_code', me.companyCode)
+      }
     } catch {
       setUser(null)
     } finally {
@@ -35,9 +45,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshMe()
   }, [])
 
-  const login = async (email: string, password: string) => {
-    const me = await apiLogin(email, password)
+  const login = async (companyCode: string, email: string, password: string) => {
+    const me = await apiLogin(companyCode, email, password)
     setUser(me)
+    setSelectedCompanyCode(companyCode)
+    window.localStorage.setItem('selected_company_code', companyCode)
   }
 
   const logout = async () => {
@@ -51,6 +63,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading,
     isAuthenticated: !!user,
     isAdmin: user?.role === 'ADMIN',
+    selectedCompanyCode,
+    setSelectedCompanyCode: (companyCode: string | null) => {
+      setSelectedCompanyCode(companyCode)
+      if (companyCode) window.localStorage.setItem('selected_company_code', companyCode)
+      else window.localStorage.removeItem('selected_company_code')
+    },
     hasPermission: (permission: Permission) => {
       const permissions = user?.permissions ?? (user?.role ? resolvePermissionsForRole(user.role) : [])
       return permissions.includes(permission)
@@ -58,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login,
     logout,
     refreshMe,
-  }), [user, isLoading])
+  }), [user, isLoading, selectedCompanyCode])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

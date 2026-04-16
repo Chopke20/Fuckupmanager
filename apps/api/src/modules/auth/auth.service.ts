@@ -13,12 +13,13 @@ import {
   UpdateRoleDefinitionSchema,
 } from '@lama-stage/shared-types'
 import { resolvePermissionsForRoleFromDb } from './permissions.service'
+import { getCurrentCompanyCode, runWithCompanyContext } from '../../shared/context/company-context'
+import { getSessionCookieName } from './auth.session'
+import { getCompanyByCode, getDefaultCompany } from '../companies/company-registry'
 
 const INVITE_TTL_HOURS = Number(process.env.INVITE_TTL_HOURS ?? 48)
 const RESET_TTL_MINUTES = Number(process.env.RESET_TTL_MINUTES ?? 60)
 const SESSION_TTL_DAYS = Number(process.env.SESSION_TTL_DAYS ?? 14)
-const SESSION_COOKIE_NAME = 'lama_session'
-
 export type SafeUser = {
   id: string
   username: string | null
@@ -54,6 +55,36 @@ function toSafeUser(user: User): SafeUser {
   }
 }
 
+function toSafeUserWithCompany(user: User, companyCode: string): SafeUser & {
+  companyCode: string
+  brandName: string
+  logoDarkBgUrl: string | null
+  logoLightBgUrl: string | null
+} {
+  const company = getCompanyByCode(companyCode) ?? getDefaultCompany()
+  return {
+    ...toSafeUser(user),
+    companyCode: company.code,
+    brandName: company.displayName,
+    logoDarkBgUrl: company.logoDarkBgUrl ?? null,
+    logoLightBgUrl: company.logoLightBgUrl ?? null,
+  }
+}
+
+async function withDbBranding<T extends { brandName: string; logoDarkBgUrl: string | null; logoLightBgUrl: string | null }>(
+  companyCode: string,
+  base: T,
+): Promise<T> {
+  const row = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
+  if (!row) return base
+  return {
+    ...base,
+    brandName: row.brandName || base.brandName,
+    logoDarkBgUrl: row.logoDarkBgUrl ?? base.logoDarkBgUrl,
+    logoLightBgUrl: row.logoLightBgUrl ?? base.logoLightBgUrl,
+  }
+}
+
 function normalizePermissionList(input: unknown): Permission[] {
   if (!Array.isArray(input)) return []
   const allowed = new Set<string>(PERMISSIONS as readonly string[])
@@ -77,7 +108,7 @@ function futureDate(hoursOrDays: number, unit: 'hours' | 'minutes' | 'days'): Da
 
 export class AuthService {
   getSessionCookieName() {
-    return SESSION_COOKIE_NAME
+    return getSessionCookieName()
   }
 
   getSessionCookieOptions() {
@@ -91,53 +122,58 @@ export class AuthService {
     }
   }
 
-  async login(email: string, password: string, userAgent?: string, ipAddress?: string) {
-    const normalizedEmail = normalizeEmail(email)
-    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } })
-    if (!user || !user.isActive) {
-      throw new AppError('Nieprawidłowy e-mail lub hasło.', 401, 'INVALID_CREDENTIALS')
-    }
-    if (!user.emailVerifiedAt) {
-      throw new AppError('Konto nie zostało jeszcze aktywowane.', 403, 'EMAIL_NOT_VERIFIED')
-    }
-    if (!verifyPassword(password, user.passwordHash)) {
-      throw new AppError('Nieprawidłowy e-mail lub hasło.', 401, 'INVALID_CREDENTIALS')
-    }
+  async login(companyCode: string, email: string, password: string, userAgent?: string, ipAddress?: string) {
+    return runWithCompanyContext(companyCode, async () => {
+      const normalizedEmail = normalizeEmail(email)
+      const user = await prisma.user.findUnique({ where: { email: normalizedEmail } })
+      if (!user || !user.isActive) {
+        throw new AppError('Nieprawidłowy e-mail lub hasło.', 401, 'INVALID_CREDENTIALS')
+      }
+      if (!user.emailVerifiedAt) {
+        throw new AppError('Konto nie zostało jeszcze aktywowane.', 403, 'EMAIL_NOT_VERIFIED')
+      }
+      if (!verifyPassword(password, user.passwordHash)) {
+        throw new AppError('Nieprawidłowy e-mail lub hasło.', 401, 'INVALID_CREDENTIALS')
+      }
 
-    const sessionToken = randomToken()
-    await prisma.session.create({
-      data: {
-        sessionTokenHash: sha256(sessionToken),
-        userId: user.id,
-        userAgent: userAgent ?? null,
-        ipAddress: ipAddress ?? null,
-        expiresAt: futureDate(SESSION_TTL_DAYS, 'days'),
-      },
+      const sessionToken = randomToken()
+      await prisma.session.create({
+        data: {
+          sessionTokenHash: sha256(sessionToken),
+          userId: user.id,
+          userAgent: userAgent ?? null,
+          ipAddress: ipAddress ?? null,
+          expiresAt: futureDate(SESSION_TTL_DAYS, 'days'),
+        },
+      })
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date() },
+      })
+
+      const permissions = await resolvePermissionsForRoleFromDb(user.role)
+      const withCompany = toSafeUserWithCompany(user, companyCode)
+      return {
+        sessionToken,
+        user: {
+          ...(await withDbBranding(companyCode, withCompany)),
+          permissions,
+        },
+      }
     })
-
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() },
-    })
-
-    const permissions = await resolvePermissionsForRoleFromDb(user.role)
-    return {
-      sessionToken,
-      user: {
-        ...toSafeUser(user),
-        permissions,
-      },
-    }
   }
 
-  async logoutByToken(rawToken: string | null) {
+  async logoutByToken(rawToken: string | null, companyCode: string) {
     if (!rawToken) return
-    await prisma.session.updateMany({
-      where: {
-        sessionTokenHash: sha256(rawToken),
-        revokedAt: null,
-      },
-      data: { revokedAt: new Date() },
+    await runWithCompanyContext(companyCode, async () => {
+      await prisma.session.updateMany({
+        where: {
+          sessionTokenHash: sha256(rawToken),
+          revokedAt: null,
+        },
+        data: { revokedAt: new Date() },
+      })
     })
   }
 
@@ -147,63 +183,69 @@ export class AuthService {
       throw new AppError('Nie znaleziono użytkownika.', 404, 'USER_NOT_FOUND')
     }
     const permissions = await resolvePermissionsForRoleFromDb(user.role)
-    return { ...toSafeUser(user), permissions }
+    const companyCode = getCurrentCompanyCode()
+    const withCompany = toSafeUserWithCompany(user, companyCode)
+    return { ...(await withDbBranding(companyCode, withCompany)), permissions }
   }
 
-  async forgotPassword(email: string) {
-    const normalizedEmail = normalizeEmail(email)
-    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } })
-    if (!user || !user.isActive) {
-      return
-    }
+  async forgotPassword(companyCode: string, email: string) {
+    await runWithCompanyContext(companyCode, async () => {
+      const normalizedEmail = normalizeEmail(email)
+      const user = await prisma.user.findUnique({ where: { email: normalizedEmail } })
+      if (!user || !user.isActive) {
+        return
+      }
 
-    assertSmtpMailConfigured()
-    const rawToken = randomToken()
-    const resetRow = await prisma.passwordResetToken.create({
-      data: {
-        tokenHash: sha256(rawToken),
-        userId: user.id,
-        expiresAt: futureDate(RESET_TTL_MINUTES, 'minutes'),
-      },
-    })
-    try {
-      await sendPasswordResetEmail(user.email, rawToken)
-    } catch (err) {
-      await prisma.passwordResetToken.delete({ where: { id: resetRow.id } }).catch(() => {})
-      throw err
-    }
-  }
-
-  async resetPassword(token: string, password: string) {
-    const tokenHash = sha256(token)
-    const resetToken = await prisma.passwordResetToken.findFirst({
-      where: {
-        tokenHash,
-        usedAt: null,
-        expiresAt: { gt: new Date() },
-      },
-    })
-    if (!resetToken) {
-      throw new AppError('Link resetu jest nieprawidłowy lub wygasł.', 400, 'RESET_TOKEN_INVALID')
-    }
-
-    await prisma.$transaction([
-      prisma.user.update({
-        where: { id: resetToken.userId },
+      assertSmtpMailConfigured()
+      const rawToken = randomToken()
+      const resetRow = await prisma.passwordResetToken.create({
         data: {
-          passwordHash: hashPassword(password),
-          mustChangePassword: false,
+          tokenHash: sha256(rawToken),
+          userId: user.id,
+          expiresAt: futureDate(RESET_TTL_MINUTES, 'minutes'),
         },
-      }),
-      prisma.passwordResetToken.update({
-        where: { id: resetToken.id },
-        data: { usedAt: new Date() },
-      }),
-      prisma.session.updateMany({
-        where: { userId: resetToken.userId, revokedAt: null },
-        data: { revokedAt: new Date() },
-      }),
-    ])
+      })
+      try {
+        await sendPasswordResetEmail(user.email, rawToken, companyCode)
+      } catch (err) {
+        await prisma.passwordResetToken.delete({ where: { id: resetRow.id } }).catch(() => {})
+        throw err
+      }
+    })
+  }
+
+  async resetPassword(companyCode: string, token: string, password: string) {
+    await runWithCompanyContext(companyCode, async () => {
+      const tokenHash = sha256(token)
+      const resetToken = await prisma.passwordResetToken.findFirst({
+        where: {
+          tokenHash,
+          usedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+      })
+      if (!resetToken) {
+        throw new AppError('Link resetu jest nieprawidłowy lub wygasł.', 400, 'RESET_TOKEN_INVALID')
+      }
+
+      await prisma.$transaction([
+        prisma.user.update({
+          where: { id: resetToken.userId },
+          data: {
+            passwordHash: hashPassword(password),
+            mustChangePassword: false,
+          },
+        }),
+        prisma.passwordResetToken.update({
+          where: { id: resetToken.id },
+          data: { usedAt: new Date() },
+        }),
+        prisma.session.updateMany({
+          where: { userId: resetToken.userId, revokedAt: null },
+          data: { revokedAt: new Date() },
+        }),
+      ])
+    })
   }
 
   async createInvitation(
@@ -234,71 +276,73 @@ export class AuthService {
     })
 
     try {
-      await sendInviteEmail(normalizedEmail, rawToken)
+      await sendInviteEmail(normalizedEmail, rawToken, getCurrentCompanyCode())
     } catch (err) {
       await prisma.invitationToken.delete({ where: { id: invitation.id } }).catch(() => {})
       throw err
     }
   }
 
-  async acceptInvitation(token: string, password: string, userAgent?: string, ipAddress?: string) {
-    const invite = await prisma.invitationToken.findFirst({
-      where: {
-        tokenHash: sha256(token),
-        usedAt: null,
-        expiresAt: { gt: new Date() },
-      },
-    })
-    if (!invite) {
-      throw new AppError('Zaproszenie jest nieprawidłowe lub wygasło.', 400, 'INVITE_INVALID')
-    }
-
-    const existing = await prisma.user.findUnique({ where: { email: invite.email } })
-    let userId = existing?.id
-
-    await prisma.$transaction(async (tx) => {
-      if (existing) {
-        await tx.user.update({
-          where: { id: existing.id },
-          data: {
-            passwordHash: hashPassword(password),
-            role: invite.role,
-            fullName: invite.fullName ?? existing.fullName,
-            isActive: true,
-            emailVerifiedAt: new Date(),
-            mustChangePassword: false,
-          },
-        })
-        userId = existing.id
-      } else {
-        const created = await tx.user.create({
-          data: {
-            email: invite.email,
-            username: invite.email.split('@')[0] ?? null,
-            fullName: invite.fullName ?? null,
-            role: invite.role,
-            isActive: true,
-            emailVerifiedAt: new Date(),
-            mustChangePassword: false,
-            passwordHash: hashPassword(password),
-            createdById: invite.invitedById,
-          },
-        })
-        userId = created.id
+  async acceptInvitation(companyCode: string, token: string, password: string, userAgent?: string, ipAddress?: string) {
+    return runWithCompanyContext(companyCode, async () => {
+      const invite = await prisma.invitationToken.findFirst({
+        where: {
+          tokenHash: sha256(token),
+          usedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+      })
+      if (!invite) {
+        throw new AppError('Zaproszenie jest nieprawidłowe lub wygasło.', 400, 'INVITE_INVALID')
       }
 
-      await tx.invitationToken.update({
-        where: { id: invite.id },
-        data: { usedAt: new Date() },
+      const existing = await prisma.user.findUnique({ where: { email: invite.email } })
+      let userId = existing?.id
+
+      await prisma.$transaction(async (tx) => {
+        if (existing) {
+          await tx.user.update({
+            where: { id: existing.id },
+            data: {
+              passwordHash: hashPassword(password),
+              role: invite.role,
+              fullName: invite.fullName ?? existing.fullName,
+              isActive: true,
+              emailVerifiedAt: new Date(),
+              mustChangePassword: false,
+            },
+          })
+          userId = existing.id
+        } else {
+          const created = await tx.user.create({
+            data: {
+              email: invite.email,
+              username: invite.email.split('@')[0] ?? null,
+              fullName: invite.fullName ?? null,
+              role: invite.role,
+              isActive: true,
+              emailVerifiedAt: new Date(),
+              mustChangePassword: false,
+              passwordHash: hashPassword(password),
+              createdById: invite.invitedById,
+            },
+          })
+          userId = created.id
+        }
+
+        await tx.invitationToken.update({
+          where: { id: invite.id },
+          data: { usedAt: new Date() },
+        })
       })
+
+      if (!userId) {
+        throw new AppError('Nie udało się aktywować konta.', 500, 'INVITE_ACCEPT_FAILED')
+      }
+
+      const { sessionToken, user } = await this.login(companyCode, invite.email, password, userAgent, ipAddress)
+      return { sessionToken, user }
     })
-
-    if (!userId) {
-      throw new AppError('Nie udało się aktywować konta.', 500, 'INVITE_ACCEPT_FAILED')
-    }
-
-    const { sessionToken, user } = await this.login(invite.email, password, userAgent, ipAddress)
-    return { sessionToken, user }
   }
 
   async listInvitations(page = 1, limit = 20) {
@@ -333,7 +377,7 @@ export class AuthService {
     ])
     const data = await Promise.all(
       items.map(async (item) => ({
-        ...toSafeUser(item),
+        ...(await withDbBranding(getCurrentCompanyCode(), toSafeUserWithCompany(item, getCurrentCompanyCode()))),
         permissions: await resolvePermissionsForRoleFromDb(item.role),
       }))
     )
@@ -390,7 +434,7 @@ export class AuthService {
       },
     })
     try {
-      await sendPasswordResetEmail(user.email, rawToken)
+      await sendPasswordResetEmail(user.email, rawToken, getCurrentCompanyCode())
     } catch (err) {
       await prisma.passwordResetToken.delete({ where: { id: resetRow.id } }).catch(() => {})
       throw err

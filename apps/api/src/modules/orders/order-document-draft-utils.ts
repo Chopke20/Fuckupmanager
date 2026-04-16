@@ -9,21 +9,13 @@ import {
 export { buildDocumentNumber } from '@lama-stage/shared-types'
 
 export const DEFAULT_ISSUER_PROFILES = {
-  LAMA_STAGE: {
-    profileKey: 'LAMA_STAGE',
-    companyName: 'Lama Stage S. C.',
-    address: 'W. Pytlasińskiego 16/13, 00-777 Warszawa',
-    nip: '7011187626',
-    email: 'biuro@lamastage.pl',
-    phone: '793 435 302, 504 361 781',
-  },
-  LAMA_STAGE_OLD: {
-    profileKey: 'LAMA_STAGE_OLD',
-    companyName: 'Lama Stage s.c. Michał Rokicki, Rafał Szydłowski',
-    address: 'Lindleya 16, 02-013 Warszawa',
-    nip: '7011187626',
-    email: 'biuro@lamastage.pl',
-    phone: '793 435 302, 504 361 781',
+  DEFAULT_COMPANY: {
+    profileKey: 'DEFAULT_COMPANY',
+    companyName: process.env.DEFAULT_ISSUER_COMPANY_NAME ?? 'Twoja firma',
+    address: process.env.DEFAULT_ISSUER_ADDRESS ?? 'Adres firmy',
+    nip: process.env.DEFAULT_ISSUER_NIP ?? '0000000000',
+    email: process.env.DEFAULT_ISSUER_EMAIL ?? 'kontakt@twojadomena.pl',
+    phone: process.env.DEFAULT_ISSUER_PHONE ?? '',
   },
 } as const
 
@@ -53,7 +45,7 @@ export async function resolveDefaultIssuerForDraft(
       phone: row.phone ?? undefined,
     }
   }
-  return { ...DEFAULT_ISSUER_PROFILES.LAMA_STAGE }
+  return { ...DEFAULT_ISSUER_PROFILES.DEFAULT_COMPANY }
 }
 
 type OrderOfferDraftFields = Pick<
