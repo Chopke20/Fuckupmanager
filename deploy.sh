@@ -21,6 +21,24 @@ warn_if_missing_env() {
   fi
 }
 
+run_prisma_migrations() {
+  local target_migration="20260416143000_add_app_settings"
+  local migrate_output=""
+
+  if ! migrate_output=$(npx prisma migrate deploy 2>&1); then
+    echo "$migrate_output"
+    if echo "$migrate_output" | grep -q "P3009" && echo "$migrate_output" | grep -q "$target_migration"; then
+      echo "⚠ Wykryto failed migration '$target_migration' (P3009). Oznaczam jako rolled-back i ponawiam deploy migracji..."
+      npx prisma migrate resolve --rolled-back "$target_migration"
+      npx prisma migrate deploy
+      return 0
+    fi
+    return 1
+  fi
+
+  echo "$migrate_output"
+}
+
 # Chromium z Puppeteera na minimalnym Ubuntu nie startuje bez libnss3 itd. (błąd w pm2: libnss3.so).
 install_chromium_pdf_deps() {
   if [ "${SKIP_APT_PDF_DEPS:-}" = "1" ]; then
@@ -106,7 +124,7 @@ warn_if_missing_env SMTP_PORT
 warn_if_missing_env SMTP_USER
 warn_if_missing_env SMTP_PASS
 warn_if_missing_env SMTP_FROM
-npx prisma migrate deploy
+run_prisma_migrations
 cd ../..
 echo '→ Restart PM2...'
 pm2 restart lamaapp --update-env || pm2 start /var/www/lamaapp/apps/api/dist/index.js --name lamaapp
