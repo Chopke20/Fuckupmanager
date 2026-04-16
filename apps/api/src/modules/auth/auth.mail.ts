@@ -1,4 +1,5 @@
 import { sendSmtpMail } from './smtp.mailer'
+import { getOrCreateAppSettings } from '../app-settings/app-settings.service'
 
 function getAppBaseUrl(): string {
   const isProd = process.env.NODE_ENV === 'production'
@@ -42,6 +43,9 @@ function polishMinutesPhrase(n: number): string {
 
 /** Szablon transakcyjny — tabele + inline CSS dla typowych klientów pocztowych. */
 function transactionalEmailHtml(opts: {
+  brandName: string
+  brandUrl?: string
+  footerText?: string
   preheader: string
   title: string
   /** Krótki akapit w HTML — tylko treści z kodu (bez danych użytkownika). */
@@ -50,9 +54,15 @@ function transactionalEmailHtml(opts: {
   ctaLabel: string
   expiresLine: string
 }): string {
-  const { preheader, title, introHtml, ctaUrl, ctaLabel, expiresLine } = opts
+  const { brandName, brandUrl, footerText, preheader, title, introHtml, ctaUrl, ctaLabel, expiresLine } = opts
   const esc = (s: string) =>
     s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  const footerLine = footerText?.trim()
+    ? esc(footerText.trim())
+    : 'Wiadomość wysłana automatycznie — nie odpowiadaj na ten e-mail.<br/>Jeśli nie oczekiwałeś tej wiadomości, możesz ją zignorować; Twoje konto pozostanie bez zmian.'
+  const brandLine = brandUrl
+    ? `<strong>${esc(brandName)}</strong> · <a href="${esc(brandUrl)}" style="color:#0d7a4d;text-decoration:none;">${esc(brandUrl.replace(/^https?:\/\//, ''))}</a>`
+    : `<strong>${esc(brandName)}</strong>`
 
   return `
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0;padding:0;background-color:#ecece8;">
@@ -63,7 +73,7 @@ function transactionalEmailHtml(opts: {
         <tr>
           <td style="padding:24px 28px 8px 28px;background-color:#111111;">
             <p style="margin:0;font-family:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:13px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#00e676;">
-              Lama Stage
+              ${esc(brandName)}
             </p>
             <p style="margin:8px 0 0 0;font-family:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:20px;font-weight:600;line-height:1.3;color:#ffffff;">
               ${esc(title)}
@@ -94,11 +104,10 @@ function transactionalEmailHtml(opts: {
         <tr>
           <td style="padding:0 28px 24px 28px;font-family:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:12px;line-height:1.5;color:#888888;">
             <p style="margin:0;padding-top:20px;border-top:1px solid #e8e8e6;">
-              Wiadomość wysłana automatycznie — nie odpowiadaj na ten e-mail.<br/>
-              Jeśli nie oczekiwałeś tej wiadomości, możesz ją zignorować; Twoje konto pozostanie bez zmian.
+              ${footerLine}
             </p>
             <p style="margin:12px 0 0 0;">
-              <strong>Lama Stage</strong> · <a href="https://www.lamastage.pl" style="color:#0d7a4d;text-decoration:none;">lamastage.pl</a>
+              ${brandLine}
             </p>
           </td>
         </tr>
@@ -108,19 +117,30 @@ function transactionalEmailHtml(opts: {
 </table>`.trim()
 }
 
+async function getMailBranding() {
+  const settings = await getOrCreateAppSettings()
+  return {
+    brandName: settings.emailSenderName?.trim() || settings.brandName || 'Lama Stage',
+    introBrandName: settings.brandName || 'Lama Stage',
+    brandUrl: settings.websiteUrl?.trim() || undefined,
+    footerText: settings.emailFooterText?.trim() || undefined,
+  }
+}
+
 export async function sendInviteEmail(email: string, token: string): Promise<void> {
   const base = getAppBaseUrl().replace(/\/$/, '')
   const url = `${base}/accept-invite?token=${encodeURIComponent(token)}`
   const hours = inviteTtlHours()
   const hoursLabel = polishHoursPhrase(hours)
+  const branding = await getMailBranding()
 
   await sendSmtpMail({
     to: email,
-    subject: 'Zaproszenie do systemu Lama Stage',
+    subject: `Zaproszenie do systemu ${branding.introBrandName}`,
     text: [
       'Dzień dobry,',
       '',
-      'Otrzymałeś zaproszenie do konta w systemie Lama Stage (wewnętrzna aplikacja operacyjna firmy).',
+      `Otrzymałeś zaproszenie do konta w systemie ${branding.introBrandName}.`,
       'Aby aktywować konto i ustawić hasło, otwórz link:',
       url,
       '',
@@ -129,13 +149,16 @@ export async function sendInviteEmail(email: string, token: string): Promise<voi
       'Jeśli nie spodziewałeś się tej wiadomości, zignoruj ją.',
       '',
       '—',
-      'Lama Stage · https://www.lamastage.pl',
+      branding.brandUrl ? `${branding.brandName} · ${branding.brandUrl}` : branding.brandName,
     ].join('\n'),
     html: transactionalEmailHtml({
-      preheader: 'Aktywuj konto w systemie Lama Stage — link ważny ograniczony czas.',
+      brandName: branding.brandName,
+      brandUrl: branding.brandUrl,
+      footerText: branding.footerText,
+      preheader: `Aktywuj konto w systemie ${branding.introBrandName} — link ważny ograniczony czas.`,
       title: 'Zaproszenie do systemu',
       introHtml:
-        'Administrator nadał Ci dostęp do <strong>Lama Stage</strong>. Kliknij przycisk poniżej, aby dokończyć rejestrację i ustawić bezpieczne hasło.',
+        `Administrator nadał Ci dostęp do <strong>${branding.introBrandName}</strong>. Kliknij przycisk poniżej, aby dokończyć rejestrację i ustawić bezpieczne hasło.`,
       ctaUrl: url,
       ctaLabel: 'Aktywuj konto',
       expiresLine: `Link aktywacyjny jest ważny przez ok. ${hoursLabel}. Po upływie tego czasu poproś administratora o ponowne wysłanie zaproszenia.`,
@@ -148,14 +171,15 @@ export async function sendPasswordResetEmail(email: string, token: string): Prom
   const url = `${base}/reset-password?token=${encodeURIComponent(token)}`
   const minutes = resetTtlMinutes()
   const minutesLabel = polishMinutesPhrase(minutes)
+  const branding = await getMailBranding()
 
   await sendSmtpMail({
     to: email,
-    subject: 'Reset hasła — Lama Stage',
+    subject: `Reset hasła — ${branding.introBrandName}`,
     text: [
       'Dzień dobry,',
       '',
-      'Otrzymaliśmy prośbę o zresetowanie hasła do konta Lama Stage.',
+      `Otrzymaliśmy prośbę o zresetowanie hasła do konta ${branding.introBrandName}.`,
       'Aby ustawić nowe hasło, otwórz link (tylko jeśli to Ty złożyłeś wniosek):',
       url,
       '',
@@ -164,13 +188,16 @@ export async function sendPasswordResetEmail(email: string, token: string): Prom
       'Jeśli nie prosiłeś o reset, zignoruj tę wiadomość — hasło pozostanie bez zmian.',
       '',
       '—',
-      'Lama Stage · https://www.lamastage.pl',
+      branding.brandUrl ? `${branding.brandName} · ${branding.brandUrl}` : branding.brandName,
     ].join('\n'),
     html: transactionalEmailHtml({
-      preheader: 'Ustaw nowe hasło do Lama Stage — link ważny krótko.',
+      brandName: branding.brandName,
+      brandUrl: branding.brandUrl,
+      footerText: branding.footerText,
+      preheader: `Ustaw nowe hasło do ${branding.introBrandName} — link ważny krótko.`,
       title: 'Reset hasła',
       introHtml:
-        'Użyto opcji odzyskiwania dostępu do <strong>Lama Stage</strong>. Jeśli to Ty inicjowałeś tę operację, kliknij przycisk i ustaw nowe hasło.',
+        `Użyto opcji odzyskiwania dostępu do <strong>${branding.introBrandName}</strong>. Jeśli to Ty inicjowałeś tę operację, kliknij przycisk i ustaw nowe hasło.`,
       ctaUrl: url,
       ctaLabel: 'Ustaw nowe hasło',
       expiresLine: `Ze względów bezpieczeństwa link jest ważny przez ok. ${minutesLabel}.`,

@@ -20,6 +20,7 @@ import { useAuth } from '../../auth/AuthProvider'
 import { formatRoleLabel } from '../../../lib/roleLabels'
 import { financeApi } from '../../orders/api/pdf.api'
 import AdminIssuerProfilesSection from '../components/AdminIssuerProfilesSection'
+import AdminAppSettingsSection from '../components/AdminAppSettingsSection'
 
 type TransportRangeDraft = {
   fromKm: number
@@ -31,6 +32,8 @@ type TransportSettingsDraft = {
   ranges: TransportRangeDraft[]
   longDistancePerKm: number
 }
+
+type AdminTab = 'users' | 'branding' | 'documents' | 'backup'
 
 const DEFAULT_TRANSPORT_DRAFT: TransportSettingsDraft = {
   ranges: [
@@ -86,6 +89,7 @@ export default function AdminUsersPage() {
   const [transportDraft, setTransportDraft] = useState<TransportSettingsDraft>(DEFAULT_TRANSPORT_DRAFT)
   const [transportError, setTransportError] = useState<string | null>(null)
   const [backupError, setBackupError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<AdminTab>('users')
 
   const canReadUsers = hasPermission('admin.users.read')
   const canReadAudit = hasPermission('admin.audit.read')
@@ -247,17 +251,43 @@ export default function AdminUsersPage() {
   return (
     <div className="space-y-5">
       <section className="bg-card border border-border rounded-lg p-4">
-        <h1 className="text-lg font-semibold mb-1">Admin - użytkownicy</h1>
-        <p className="text-sm text-muted-foreground">Zapraszanie i zarządzanie kontami użytkowników.</p>
+        <h1 className="text-lg font-semibold mb-1">Ustawienia administratora</h1>
+        <p className="text-sm text-muted-foreground">
+          Zarządzaj dostępami, danymi firmy, komunikacją i bezpieczeństwem danych tej instancji.
+        </p>
       </section>
 
-      <AdminIssuerProfilesSection />
+      <section className="bg-card border border-border rounded-lg p-2">
+        <div className="grid md:grid-cols-4 gap-2">
+          {[
+            ['users', 'Użytkownicy i role'],
+            ['branding', 'Firma i branding'],
+            ['documents', 'Dokumenty i komunikacja'],
+            ['backup', 'Backup i odtwarzanie'],
+          ].map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveTab(id as AdminTab)}
+              className={`rounded px-3 py-2 text-sm text-left ${
+                activeTab === id ? 'bg-primary text-black font-medium' : 'hover:bg-surface text-muted-foreground'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </section>
 
-      {canBackup && (
+      {activeTab === 'branding' && <AdminAppSettingsSection />}
+
+      {activeTab === 'documents' && <AdminIssuerProfilesSection />}
+
+      {activeTab === 'backup' && canBackup && (
       <section className="bg-card border border-border rounded-lg p-4">
         <h2 className="text-sm font-semibold mb-3">Backup bazy danych</h2>
         <p className="text-xs text-muted-foreground mb-3">
-          Pobierz pełną kopię bazy SQLite (klienci, zlecenia, sprzęt, użytkownicy itd.) do pliku. Zachowaj kopię w bezpiecznym miejscu przed wdrożeniem i testami.
+          Pobierz pełną kopię bazy PostgreSQL tej instancji do pliku. Zachowaj kopię w bezpiecznym miejscu przed wdrożeniem i testami.
         </p>
         <div className="flex items-center gap-2">
           <button
@@ -272,13 +302,14 @@ export default function AdminUsersPage() {
             }}
             className="bg-primary text-black rounded px-3 py-2 text-sm disabled:opacity-50"
           >
-            Pobierz backup bazy (.db)
+            Utwórz i pobierz backup
           </button>
         </div>
         {backupError && <p className="text-xs text-destructive mt-2">{backupError}</p>}
       </section>
       )}
 
+      {activeTab === 'documents' && (
       <section className="bg-card border border-border rounded-lg p-4">
         <h2 className="text-sm font-semibold mb-3">Ustawienia transportu (globalne)</h2>
         <p className="text-xs text-muted-foreground mb-3">
@@ -413,7 +444,9 @@ export default function AdminUsersPage() {
           )}
         </div>
       </section>
+      )}
 
+      {activeTab === 'users' && (
       <section className="bg-card border border-border rounded-lg p-4">
         <h2 className="text-sm font-semibold mb-3">Zaproś użytkownika</h2>
         <p className="text-xs text-muted-foreground mb-3">
@@ -452,7 +485,9 @@ export default function AdminUsersPage() {
           <p className="text-xs text-destructive mt-2">{inviteErrorMessage}</p>
         ) : null}
       </section>
+      )}
 
+      {activeTab === 'users' && (
       <section className="bg-card border border-border rounded-lg p-4 overflow-x-auto">
         <h2 className="text-sm font-semibold mb-3">Lista użytkowników</h2>
         {usersQuery.isLoading ? (
@@ -513,8 +548,9 @@ export default function AdminUsersPage() {
           </table>
         )}
       </section>
+      )}
 
-      {canReadRoles && (
+      {activeTab === 'users' && canReadRoles && (
       <section className="bg-card border border-border rounded-lg p-4 overflow-x-auto space-y-4">
         <h2 className="text-sm font-semibold">Role i uprawnienia (edytowalne)</h2>
         <div className="grid md:grid-cols-3 gap-2">
@@ -640,7 +676,7 @@ export default function AdminUsersPage() {
       </section>
       )}
 
-      {canReadAudit && (
+      {activeTab === 'users' && canReadAudit && (
       <section className="bg-card border border-border rounded-lg p-4 overflow-x-auto">
         <h2 className="text-sm font-semibold mb-3">Audit logi (akcje Admin)</h2>
         {auditQuery.isLoading ? (

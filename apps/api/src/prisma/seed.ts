@@ -505,9 +505,35 @@ async function seedIssuerProfiles() {
   console.log('✅ Profile firmy (issuer) zaseedowane')
 }
 
+async function seedAppSettings() {
+  await prisma.appSettings.upsert({
+    where: { id: 1 },
+    create: {
+      id: 1,
+      instanceCode: process.env.INSTANCE_CODE?.trim() || 'main',
+      brandName: 'Lama Stage',
+      brandTagline: 'Fuckup Manager',
+      loginHeadline: 'Zaloguj się do panelu operacyjnego.',
+      supportEmail: 'biuro@lamastage.pl',
+      supportPhone: '793 435 302, 504 361 781',
+      websiteUrl: 'https://www.lamastage.pl',
+      legalFooter: 'Lama Stage © 2026',
+      emailSenderName: 'Lama Stage',
+      emailFooterText: 'Wiadomość wysłana automatycznie. Jeśli nie oczekiwałeś tej wiadomości, możesz ją zignorować.',
+      documentFooterText: 'Dokument wygenerowany automatycznie z systemu Lama Stage.',
+    },
+    update: {
+      instanceCode: process.env.INSTANCE_CODE?.trim() || 'main',
+    },
+  })
+
+  console.log('✅ Ustawienia aplikacji zaseedowane')
+}
+
 async function main() {
   console.log('Rozpoczynam seeding bazy danych...')
   await seedUsers()
+  await seedAppSettings()
   await seedIssuerProfiles()
   await seedClients()
   await seedEquipment()

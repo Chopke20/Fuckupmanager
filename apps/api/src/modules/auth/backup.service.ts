@@ -1,41 +1,24 @@
 import fs from 'fs'
+import os from 'os'
 import path from 'path'
+import { execFile } from 'child_process'
+import { promisify } from 'util'
 
+const execFileAsync = promisify(execFile)
 const BACKUP_FILENAME_PREFIX = 'lama-stage-backup'
 
-/**
- * Resolves absolute path to SQLite database file from DATABASE_URL.
- * Supports file:./dev.db (relative to schema dir) and file:/absolute/path.
- */
-function resolveDatabasePath(): string {
-  const explicitPath = process.env.BACKUP_DATABASE_PATH
-  if (explicitPath && fs.existsSync(explicitPath)) {
-    return path.resolve(explicitPath)
+function getDatabaseUrl() {
+  const url = process.env.DATABASE_URL?.trim()
+  if (!url || !url.startsWith('postgres')) {
+    throw new Error('DATABASE_URL musi wskazywać na PostgreSQL, aby utworzyć backup.')
   }
+  return new URL(url)
+}
 
-  const url = process.env.DATABASE_URL
-  if (!url || !url.startsWith('file:')) {
-    throw new Error('DATABASE_URL must be a file: URL (SQLite) for backup.')
-  }
-
-  const relativePath = url.replace(/^file:\/?/, '').trim()
-  const fileName = path.basename(relativePath)
-
-  const candidates = [
-    path.join(process.cwd(), 'prisma', fileName),
-    path.join(process.cwd(), 'apps/api/prisma', fileName),
-    path.resolve(process.cwd(), relativePath),
-  ]
-
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
-      return candidate
-    }
-  }
-
-  throw new Error(
-    `Nie znaleziono pliku bazy danych. Sprawdź DATABASE_URL lub ustaw BACKUP_DATABASE_PATH. Próbowano: ${candidates.join(', ')}`
-  )
+function buildBackupFilename(databaseName: string) {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+  const instanceCode = process.env.INSTANCE_CODE?.trim() || 'main'
+  return `${BACKUP_FILENAME_PREFIX}-${instanceCode}-${databaseName}-${timestamp}.dump`
 }
 
 export type BackupResult = {
@@ -44,16 +27,49 @@ export type BackupResult = {
   copiedToDir?: string
 }
 
-/**
- * Creates a full backup of the SQLite database:
- * - Reads the DB file and returns it as buffer
- * - If BACKUP_DIR is set, also copies the file there (external backup location)
- */
 export async function createDatabaseBackup(): Promise<BackupResult> {
-  const dbPath = resolveDatabasePath()
-  const buffer = fs.readFileSync(dbPath)
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-  const filename = `${BACKUP_FILENAME_PREFIX}-${timestamp}.db`
+  const dbUrl = getDatabaseUrl()
+  const databaseName = dbUrl.pathname.replace(/^\//, '').trim()
+  if (!databaseName) {
+    throw new Error('Nie udało się odczytać nazwy bazy z DATABASE_URL.')
+  }
+
+  const username = decodeURIComponent(dbUrl.username)
+  const password = decodeURIComponent(dbUrl.password)
+  const host = dbUrl.hostname
+  const port = dbUrl.port || '5432'
+  const filename = buildBackupFilename(databaseName)
+  const tempPath = path.join(os.tmpdir(), filename)
+
+  try {
+    await execFileAsync(
+      process.env.PG_DUMP_PATH?.trim() || 'pg_dump',
+      [
+        '--format=custom',
+        '--no-owner',
+        '--no-privileges',
+        '--host',
+        host,
+        '--port',
+        port,
+        '--username',
+        username,
+        '--file',
+        tempPath,
+        databaseName,
+      ],
+      {
+        env: {
+          ...process.env,
+          PGPASSWORD: password,
+        },
+      }
+    )
+  } catch (error) {
+    throw new Error(`Nie udało się wykonać pg_dump. ${(error as Error).message}`)
+  }
+
+  const buffer = fs.readFileSync(tempPath)
 
   let copiedToDir: string | undefined
   const backupDir = process.env.BACKUP_DIR
@@ -65,6 +81,12 @@ export async function createDatabaseBackup(): Promise<BackupResult> {
     const destPath = path.join(dir, filename)
     fs.writeFileSync(destPath, buffer)
     copiedToDir = dir
+  }
+
+  try {
+    fs.unlinkSync(tempPath)
+  } catch {
+    // ignore cleanup failure
   }
 
   return { buffer, filename, copiedToDir }

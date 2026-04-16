@@ -1,6 +1,16 @@
 #!/bin/bash
 set -e
 
+APP_INSTANCE="${APP_INSTANCE:-main}"
+APP_ROOT="${APP_ROOT:-$(pwd)}"
+PM2_APP_NAME="${PM2_APP_NAME:-$([ "$APP_INSTANCE" = "main" ] && echo "lamaapp" || echo "lamaapp-$APP_INSTANCE")}"
+API_ENV_PATH="${API_ENV_PATH:-$APP_ROOT/apps/api/.env.$APP_INSTANCE}"
+ROOT_ENV_PATH="${ROOT_ENV_PATH:-$APP_ROOT/.env.$APP_INSTANCE}"
+
+echo "→ Deploy instancji: ${APP_INSTANCE}"
+echo "→ Katalog aplikacji: ${APP_ROOT}"
+echo "→ PM2 app: ${PM2_APP_NAME}"
+
 load_env_file() {
   local env_path="$1"
   if [ -f "$env_path" ]; then
@@ -86,17 +96,17 @@ echo '→ Build backend...'
 (cd apps/api && npm run build)
 echo '→ Prisma migrations...'
 cd apps/api
-if [ ! -f .env ] && [ ! -f ../../.env ]; then
+if [ ! -f "$API_ENV_PATH" ] && [ ! -f .env ] && [ ! -f "$ROOT_ENV_PATH" ] && [ ! -f ../../.env ]; then
   echo ''
   echo 'BŁĄD: Brak pliku ze zmiennymi środowiskowymi.'
-  echo 'Utwórz /var/www/lamaapp/apps/api/.env (albo /var/www/lamaapp/.env) z poprawnym'
+  echo 'Utwórz plik env dla instancji, np. /var/www/lamaapp/apps/api/.env.main lub .env.partner'
   echo 'DATABASE_URL=postgresql://użytkownik:hasło@localhost:5432/nazwa_bazy'
   echo 'Bez znaku … (wielokropka) — tylko prawdziwy host, np. localhost.'
   echo 'Wzorzec: apps/api/.env.example w repozytorium.'
   echo ''
   exit 1
 fi
-load_env_file .env || load_env_file ../../.env || true
+load_env_file "$API_ENV_PATH" || load_env_file .env || load_env_file "$ROOT_ENV_PATH" || load_env_file ../../.env || true
 echo '→ Weryfikacja kluczowych zmiennych środowiskowych...'
 warn_if_missing_env DATABASE_URL
 warn_if_missing_env OPENROUTER_API_KEY
@@ -106,8 +116,10 @@ warn_if_missing_env SMTP_PORT
 warn_if_missing_env SMTP_USER
 warn_if_missing_env SMTP_PASS
 warn_if_missing_env SMTP_FROM
+export INSTANCE_CODE="${INSTANCE_CODE:-$APP_INSTANCE}"
+export SESSION_COOKIE_NAME="${SESSION_COOKIE_NAME:-lama_session_${APP_INSTANCE}}"
 npx prisma migrate deploy
 cd ../..
 echo '→ Restart PM2...'
-pm2 restart lamaapp --update-env || pm2 start /var/www/lamaapp/apps/api/dist/index.js --name lamaapp
+pm2 restart "$PM2_APP_NAME" --update-env || pm2 start "$APP_ROOT/apps/api/dist/index.js" --name "$PM2_APP_NAME"
 echo '→ Gotowe!'

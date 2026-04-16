@@ -11,6 +11,7 @@ export * from './schemas/audit.schema';
 export * from './schemas/transport.schema';
 export * from './schemas/issuer-profile.schema';
 export * from './schemas/nip-lookup.schema';
+export * from './schemas/app-settings.schema';
 
 // Explicitly re-export commonly used schemas
 export { CreateClientSchema, UpdateClientSchema, ClientSchema } from './schemas/client.schema';
