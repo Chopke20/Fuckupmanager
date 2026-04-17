@@ -94,6 +94,13 @@ export default function OrderEquipmentSection({
     new Set(equipmentList.map((eq) => normalizeCategoryName(eq.category)).filter(Boolean))
   ).sort((a, b) => a.localeCompare(b))
 
+  /** Podpowiedzi kategorii dla własnych pozycji (bez powiązania z magazynem) — można też wpisać dowolną nazwę. */
+  const categoryDatalistOptions = useMemo(() => {
+    const defaults = ['Audio', 'Multimedia', 'Scena', 'Oświetlenie', 'Transport', 'Inne']
+    const merged = [...categories, ...defaults.map((d) => normalizeCategoryName(d))]
+    return Array.from(new Set(merged.filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pl'))
+  }, [categories])
+
   // Sprawdź dostępność sprzętu
   const checkAvailability = useCallback(async (equipmentIds: string[], quantityByEq: Map<string, number>) => {
     if (!equipmentIds.length || !orderDateFrom || !orderDateTo) return
@@ -239,6 +246,11 @@ export default function OrderEquipmentSection({
           <option key={eq.id} value={eq.name} />
         ))}
       </datalist>
+      <datalist id="order-equipment-category-datalist">
+        {categoryDatalistOptions.map((c) => (
+          <option key={c} value={c} />
+        ))}
+      </datalist>
       <div className="flex justify-between items-center">
         <h3 className="text-base font-semibold">Wykaz sprzętu</h3>
         {isCheckingAvailability && <span className="text-sm text-blue-500">Sprawdzanie dostępności…</span>}
@@ -327,9 +339,25 @@ export default function OrderEquipmentSection({
                       </div>
                     </td>
                     <td className="py-1.5 px-3">
-                      <span className="inline-flex px-2 py-1 text-xs rounded bg-surface border border-border">
-                        {normalizeCategoryName(item.category || 'Inne')}
-                      </span>
+                      {item.equipmentId ? (
+                        <span className="inline-flex px-2 py-1 text-xs rounded bg-surface border border-border">
+                          {normalizeCategoryName(item.category || 'Inne')}
+                        </span>
+                      ) : (
+                        <input
+                          list="order-equipment-category-datalist"
+                          type="text"
+                          className="w-full min-w-[7.5rem] max-w-[14rem] px-2 py-1 text-xs bg-background border border-border rounded"
+                          value={item.category ?? 'Inne'}
+                          onChange={(e) => updateItem(index, { category: e.target.value })}
+                          onBlur={(e) => {
+                            const v = e.target.value.trim()
+                            updateItem(index, { category: v ? normalizeCategoryName(v) : 'Inne' })
+                          }}
+                          title="Kategoria w ofercie / PDF — wybierz z listy lub wpisz własną"
+                          placeholder="Kategoria"
+                        />
+                      )}
                     </td>
                     <td className="py-1 px-2">
                       <input
