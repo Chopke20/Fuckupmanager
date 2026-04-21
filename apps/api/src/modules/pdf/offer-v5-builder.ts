@@ -38,6 +38,14 @@ const PROJECT_CONTACTS: Record<string, { name: string; phone: string }> = {
   MICHAL: { name: 'Michał Rokicki', phone: '793 435 302' },
 }
 
+const PDF_TIME_ZONE = 'Europe/Warsaw'
+
+function fmtPlDate(dateLike: string | Date): string {
+  const d = new Date(dateLike)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: PDF_TIME_ZONE })
+}
+
 function getTemplatePath(): string {
   const dir = __dirname
   const nextToSrc = path.join(dir, 'templates', 'offer-v5.html')
@@ -142,8 +150,8 @@ export function buildOfferHtmlV5(
   const companyEmail = issuer?.email ?? COMPANY.email
   const companyPhone = issuer?.phone ?? COMPANY.phone
 
-  const issuedDate = options?.issuedAt != null ? new Date(options.issuedAt) : new Date()
-  const headerMeta = `Warszawa, ${issuedDate.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' })} &nbsp;·&nbsp; Ważna ${validityDays} dni od daty wystawienia`
+  const issuedDate = options?.issuedAt != null ? options.issuedAt : new Date()
+  const headerMeta = `Warszawa, ${fmtPlDate(issuedDate)} &nbsp;·&nbsp; Ważna ${validityDays} dni od daty wystawienia`
 
   const companyDetails = issuer
     ? [
@@ -186,8 +194,7 @@ export function buildOfferHtmlV5(
       ? ''
       : stages
           .map((stage) => {
-            const d = new Date(stage.date)
-            const dateStr = d.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+            const dateStr = fmtPlDate(stage.date)
             const type = stage.type ? (stageLabels[stage.type] ?? stage.type) : '—'
             const start = stage.timeStart ?? '—'
             const end = stage.timeEnd ?? '—'
@@ -259,10 +266,7 @@ export function buildOfferHtmlV5(
   const stageTypeLabels: Record<string, string> = { MONTAZ: 'Montaż', EVENT: 'Wydarzenie', DEMONTAZ: 'Demontaż', CUSTOM: 'Inne' }
   const stageById = new Map(
     (order.stages ?? []).map((s) => {
-      const d = new Date(s.date)
-      const dateStr = Number.isNaN(d.getTime())
-        ? '—'
-        : d.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      const dateStr = fmtPlDate(s.date)
       const typeLabel = s.type ? (stageTypeLabels[s.type] ?? s.type) : 'Etap'
       const timeLabel = [s.timeStart, s.timeEnd].filter(Boolean).join(' → ')
       return [s.id, `${typeLabel} · ${dateStr}${timeLabel ? ` · ${timeLabel}` : ''}`]

@@ -19,6 +19,14 @@ const PROJECT_CONTACTS: Record<string, { name: string; phone: string }> = {
   MICHAL: { name: 'Michał Rokicki', phone: '793 435 302' },
 }
 
+const PDF_TIME_ZONE = 'Europe/Warsaw'
+
+function fmtPlDate(dateLike: string | Date): string {
+  const d = new Date(dateLike)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: PDF_TIME_ZONE })
+}
+
 function getTemplatesDir(): string {
   const nextToSrc = path.join(__dirname, 'templates')
   if (fs.existsSync(path.join(nextToSrc, 'warehouse-v1.html'))) return nextToSrc
@@ -116,14 +124,14 @@ export function buildWarehousePdfHtml(params: BuildWarehousePdfHtmlParams): stri
         .join('<br>\n          ')
     : '—'
 
-  const issuedDate = params.issuedAt != null ? new Date(params.issuedAt) : new Date()
+  const issuedDate = params.issuedAt != null ? params.issuedAt : new Date()
   const orderRef =
     params.orderNumber != null && params.orderYear != null
       ? `${params.orderNumber}/${params.orderYear}`
       : '—'
-  const dateStr = issuedDate.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' })
-  const fromStr = params.startDate.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' })
-  const toStr = params.endDate.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const dateStr = fmtPlDate(issuedDate)
+  const fromStr = fmtPlDate(params.startDate)
+  const toStr = fmtPlDate(params.endDate)
   const venueLine = params.venue?.trim() ? escapeHtml(params.venue.trim()) : null
   const headerMetaParts = [`Warszawa, ${dateStr}`, `Zlecenie nr ${orderRef}`]
   if (venueLine) headerMetaParts.push(`Miejsce: ${venueLine}`)
