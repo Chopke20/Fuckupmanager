@@ -575,12 +575,18 @@ export default function CalendarWidget() {
               onClick={async () => {
                 const kind = eventMenu.event.extendedProps.kind
                 if (kind === 'order' && eventMenu.event.extendedProps.orderId) {
+                  const ok = window.confirm('Czy na pewno chcesz usunąć to zlecenie? Zlecenie trafi do kosza.')
+                  if (!ok) return
                   await deleteOrderMutation.mutateAsync(eventMenu.event.extendedProps.orderId)
                 }
                 if (kind === 'note' && eventMenu.event.extendedProps.noteId) {
+                  const ok = window.confirm('Czy na pewno chcesz usunąć tę notatkę?')
+                  if (!ok) return
                   await deleteNoteMutation.mutateAsync(eventMenu.event.extendedProps.noteId)
                 }
                 if (kind === 'block' && eventMenu.event.extendedProps.blockId) {
+                  const ok = window.confirm('Czy na pewno chcesz usunąć tę rezerwację sprzętu?')
+                  if (!ok) return
                   await deleteBlockMutation.mutateAsync(eventMenu.event.extendedProps.blockId)
                 }
                 closeMenus()

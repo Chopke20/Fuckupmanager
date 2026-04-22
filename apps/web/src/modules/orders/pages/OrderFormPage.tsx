@@ -18,6 +18,7 @@ import OrderProductionSection from '../components/OrderProductionSection';
 import OrderTransportSection from '../components/OrderTransportSection';
 import OrderFinancialSection from '../components/OrderFinancialSection';
 import OrderRecurringSection from '../components/OrderRecurringSection';
+import ConfirmationModal from '../../../shared/components/ConfirmationModal';
 
 const UNSAVED_LEAVE_MSG =
   'Masz niezapisane zmiany w zleceniu. Opuścić stronę bez zapisywania?';
@@ -148,6 +149,8 @@ export default function OrderFormPage() {
   const [activeSection, setActiveSection] = useState('header');
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [dismissedHints, setDismissedHints] = useState<Set<string>>(new Set());
+  const [unsavedModalOpen, setUnsavedModalOpen] = useState(false);
+  const [pendingNav, setPendingNav] = useState<null | { kind: 'path'; to: string } | { kind: 'blocker' }>(null);
 
   const methods = useForm<Partial<Order>>({
     defaultValues: {
@@ -203,9 +206,8 @@ export default function OrderFormPage() {
 
   useEffect(() => {
     if (blocker.state !== 'blocked') return;
-    const ok = window.confirm(UNSAVED_LEAVE_MSG);
-    if (ok) blocker.proceed();
-    else blocker.reset();
+    setPendingNav({ kind: 'blocker' });
+    setUnsavedModalOpen(true);
   }, [blocker]);
 
   // Ładowanie zlecenia z API — nie nadpisuj, gdy użytkownik ma niezapisane zmiany
@@ -219,7 +221,11 @@ export default function OrderFormPage() {
 
   const tryNavigateAway = useCallback(
     (to: string) => {
-      if (formState.isDirty && !window.confirm(UNSAVED_LEAVE_MSG)) return;
+      if (formState.isDirty) {
+        setPendingNav({ kind: 'path', to });
+        setUnsavedModalOpen(true);
+        return;
+      }
       navigate(to);
     },
     [formState.isDirty, navigate]
@@ -952,6 +958,30 @@ export default function OrderFormPage() {
           </div>
         </div>
       </form>
+
+      <ConfirmationModal
+        isOpen={unsavedModalOpen}
+        title="Niezapisane zmiany"
+        message={UNSAVED_LEAVE_MSG}
+        confirmLabel="Tak, porzuć"
+        cancelLabel="Nie, zostań"
+        onClose={() => {
+          if (pendingNav?.kind === 'blocker') blocker.reset?.();
+          setPendingNav(null);
+          setUnsavedModalOpen(false);
+        }}
+        onConfirm={() => {
+          const next = pendingNav;
+          setPendingNav(null);
+          setUnsavedModalOpen(false);
+          // Unikamy click-through w momencie zmiany trasy.
+          setTimeout(() => {
+            if (!next) return;
+            if (next.kind === 'path') navigate(next.to);
+            if (next.kind === 'blocker') blocker.proceed?.();
+          }, 0);
+        }}
+      />
     </FormProvider>
   );
 }
