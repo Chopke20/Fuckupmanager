@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useLocation, useSearchParams, useBlocker } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Save, FileText, Calendar, DollarSign, Repeat, X, AlertCircle } from 'lucide-react';
@@ -151,6 +151,7 @@ export default function OrderFormPage() {
   const [dismissedHints, setDismissedHints] = useState<Set<string>>(new Set());
   const [unsavedModalOpen, setUnsavedModalOpen] = useState(false);
   const [pendingNav, setPendingNav] = useState<null | { kind: 'path'; to: string } | { kind: 'blocker' }>(null);
+  const submitInFlightRef = useRef(false);
 
   const methods = useForm<Partial<Order>>({
     defaultValues: {
@@ -179,6 +180,7 @@ export default function OrderFormPage() {
   });
 
   const { watch, setValue, handleSubmit, formState, getValues, reset } = methods;
+  const isSaving = formState.isSubmitting || createOrderMutation.isPending || updateOrderMutation.isPending;
 
   useOrderFormDraft(id, methods, isEditing, { skipDateRestore: !!query.get('date') });
 
@@ -489,12 +491,15 @@ export default function OrderFormPage() {
   );
 
   const onSubmit = async () => {
+    if (submitInFlightRef.current) return;
+    submitInFlightRef.current = true;
     setSubmitError(null);
     const data = getValues();
     const payload = buildPayload(data as Partial<Order>);
     const validationError = validateOrderPayload(payload, isEditing, data.equipmentItems as Partial<OrderEquipmentItem>[] | undefined);
     if (validationError) {
       setSubmitError(validationError);
+      submitInFlightRef.current = false;
       return;
     }
     try {
@@ -530,6 +535,8 @@ export default function OrderFormPage() {
             : 'Nie udało się zapisać zlecenia.';
 
       setSubmitError(msg);
+    } finally {
+      submitInFlightRef.current = false;
     }
   };
 
@@ -635,6 +642,7 @@ export default function OrderFormPage() {
               <div className="flex gap-2">
               <button
                 type="submit"
+                disabled={isSaving}
                 className="px-3 py-1.5 text-sm border-2 border-primary text-primary bg-transparent rounded font-medium hover:bg-primary/10 transition-colors flex items-center gap-1.5"
               >
                 <Save size={18} />
@@ -946,6 +954,7 @@ export default function OrderFormPage() {
                   <div className="flex gap-2">
                     <button
                       type="submit"
+                    disabled={isSaving}
                       className="px-3 py-1.5 text-sm border-2 border-primary text-primary bg-transparent rounded font-medium hover:bg-primary/10 transition-colors flex items-center gap-1.5"
                     >
                       <Save size={18} />
