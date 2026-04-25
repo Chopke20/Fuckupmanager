@@ -24,6 +24,16 @@ function isValidCode(code: string): boolean {
   return /^[a-z0-9_-]{2,32}$/.test(code)
 }
 
+function databaseIdentity(databaseUrl: string): string {
+  try {
+    const url = new URL(databaseUrl)
+    const dbName = url.pathname.replace(/^\/+/, '')
+    return `${url.protocol}//${url.hostname}:${url.port || '5432'}/${dbName}`
+  } catch {
+    return databaseUrl
+  }
+}
+
 function parseRegistryFromEnv(): CompanyRegistryEntry[] {
   const raw = process.env.COMPANY_DATABASES_JSON?.trim()
   if (!raw) return []
@@ -93,6 +103,17 @@ export function getCompanyRegistry(): CompanyRegistryEntry[] {
   const rows = Array.from(byCode.values())
   const hasDefault = rows.some((r) => r.isDefault)
   if (!hasDefault && rows[0]) rows[0].isDefault = true
+  const dbToCompany = new Map<string, string>()
+  for (const row of rows) {
+    const key = databaseIdentity(row.databaseUrl)
+    const existing = dbToCompany.get(key)
+    if (existing && existing !== row.code) {
+      throw new Error(
+        `Błąd konfiguracji: firmy '${existing}' i '${row.code}' wskazują na tę samą bazę (${key}).`
+      )
+    }
+    dbToCompany.set(key, row.code)
+  }
   cachedRegistry = rows
   return rows
 }

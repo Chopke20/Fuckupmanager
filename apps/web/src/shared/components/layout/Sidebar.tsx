@@ -6,6 +6,7 @@ export default function Sidebar() {
   const { hasPermission, user } = useAuth()
   const brandName = user?.brandName || 'Lama Stage'
   const logoSrc = user?.logoDarkBgUrl || '/logo.png'
+  const companyCode = user?.companyCode || 'main'
   const navItems = [
     { to: '/', label: 'Overview', icon: LayoutDashboard },
     { to: '/orders', label: 'Zlecenia', icon: ClipboardList },
@@ -55,6 +56,9 @@ export default function Sidebar() {
       <div className="p-3 border-t border-border space-y-1.5">
         <div className="text-xs text-muted-foreground leading-snug">
           v.0.5.0 • {brandName} © 2026
+        </div>
+        <div className="text-[10px] uppercase tracking-wider text-muted-foreground/80">
+          Firma: {companyCode}
         </div>
         <div className="text-[10px] font-mono text-muted-foreground/90 bg-surface/80 border border-border rounded px-2 py-1 leading-tight break-all">
           {typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'main-unknown'}

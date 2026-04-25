@@ -61,6 +61,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 export function bindCompanyContext(req: Request, res: Response, next: NextFunction) {
   const companyCode = typeof res.locals.companyCode === 'string' ? res.locals.companyCode : null
   if (!companyCode) return next(new AppError('Brak kontekstu firmy.', 401, 'UNAUTHORIZED'))
+  res.setHeader('X-Company-Code', companyCode)
   runWithCompanyContext(companyCode, async () => {
     next()
   }).catch(next)

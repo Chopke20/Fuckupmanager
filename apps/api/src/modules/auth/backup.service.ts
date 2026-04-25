@@ -1,4 +1,5 @@
 import fs from 'fs'
+import os from 'os'
 import path from 'path'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -29,6 +30,8 @@ export async function createDatabaseBackup(companyCodeRaw: string): Promise<Back
   }
 
   const pgDumpPath = process.env.PG_DUMP_PATH?.trim() || 'pg_dump'
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lama-pgdump-'))
+  const tmpDumpPath = path.join(tmpDir, `backup-${companyCode}.dump`)
   const dumpArgs = [
     '--format=custom',
     '--no-owner',
@@ -36,28 +39,38 @@ export async function createDatabaseBackup(companyCodeRaw: string): Promise<Back
     '--dbname',
     company.databaseUrl,
     '--file',
-    '-',
+    tmpDumpPath,
   ]
 
-  const { stdout } = await execFileAsync(pgDumpPath, dumpArgs, {
-    encoding: 'buffer',
-    maxBuffer: 512 * 1024 * 1024,
-  })
-  const buffer = Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout)
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-  const filename = `${BACKUP_FILENAME_PREFIX}-${companyCode}-${timestamp}.dump`
-
-  let copiedToDir: string | undefined
-  const backupDir = process.env.BACKUP_DIR
-  if (backupDir) {
-    const dir = path.resolve(backupDir)
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true })
+  try {
+    await execFileAsync(pgDumpPath, dumpArgs, { maxBuffer: 64 * 1024 * 1024 })
+    const stat = fs.statSync(tmpDumpPath)
+    if (!stat.isFile() || stat.size <= 0) {
+      throw new Error(`Backup firmy '${companyCode}' ma nieprawidłowy rozmiar (${stat.size} B).`)
     }
-    const destPath = path.join(dir, filename)
-    fs.writeFileSync(destPath, buffer)
-    copiedToDir = dir
-  }
+    const buffer = fs.readFileSync(tmpDumpPath)
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+    const filename = `${BACKUP_FILENAME_PREFIX}-${companyCode}-${timestamp}.dump`
 
-  return { buffer, filename, copiedToDir }
+    let copiedToDir: string | undefined
+    const backupDir = process.env.BACKUP_DIR
+    if (backupDir) {
+      const dir = path.resolve(backupDir)
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true })
+      }
+      const destPath = path.join(dir, filename)
+      fs.writeFileSync(destPath, buffer)
+      copiedToDir = dir
+    }
+
+    return { buffer, filename, copiedToDir }
+  } finally {
+    try {
+      if (fs.existsSync(tmpDumpPath)) fs.unlinkSync(tmpDumpPath)
+      fs.rmdirSync(tmpDir)
+    } catch {
+      // ignore tmp cleanup errors
+    }
+  }
 }
