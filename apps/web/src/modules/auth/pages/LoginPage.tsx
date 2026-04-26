@@ -103,9 +103,7 @@ export default function LoginPage() {
           )}
           {companiesError ? <p className="text-xs text-destructive">{companiesError}</p> : null}
         </div>
-        {selectedCompany?.loginHelpText ? (
-          <p className="text-xs text-muted-foreground">{selectedCompany.loginHelpText}</p>
-        ) : null}
+        {/* Brak dodatkowych podpisów po wyborze firmy (celowo pusto). */}
         {error && <div className="text-sm text-red-400">{error}</div>}
         <div className="space-y-1">
           <label className="text-sm">E-mail</label>

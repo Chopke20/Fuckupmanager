@@ -109,14 +109,32 @@ export async function updateCurrentCompanyAppSettings(payload: unknown) {
   }
   await getOrCreateSettingsRow()
   const data = parsed.data
-  const nextContactsJson = (() => {
-    if ((data as { projectContacts?: unknown }).projectContacts == null) return null
-    try {
-      return JSON.stringify((data as { projectContacts?: unknown }).projectContacts)
-    } catch {
-      return null
-    }
-  })()
+
+  const hasKey = (obj: unknown, key: string) =>
+    typeof obj === 'object' && obj !== null && Object.prototype.hasOwnProperty.call(obj, key)
+
+  const nextContactsJson =
+    hasKey(data, 'projectContacts')
+      ? (() => {
+          const v = (data as { projectContacts?: unknown }).projectContacts
+          if (v == null) return null
+          try {
+            return JSON.stringify(v)
+          } catch {
+            return null
+          }
+        })()
+      : undefined
+
+  const nextWarehouseAddress =
+    hasKey(data, 'warehouseAddress')
+      ? trimOrNull((data as { warehouseAddress?: unknown }).warehouseAddress)
+      : undefined
+
+  const nextDefaultProjectContactId =
+    hasKey(data, 'defaultProjectContactId')
+      ? trimOrNull((data as { defaultProjectContactId?: unknown }).defaultProjectContactId)
+      : undefined
   const updated = await prisma.appSettings.update({
     where: { id: 1 },
     data: {
@@ -131,9 +149,9 @@ export async function updateCurrentCompanyAppSettings(payload: unknown) {
       logoLightBgUrl: trimOrNull(data.logoLightBgUrl),
       primaryColorHex: normalizeHex(trimOrNull(data.primaryColorHex)),
       documentFooterText: trimOrNull(data.documentFooterText),
-      warehouseAddress: trimOrNull((data as { warehouseAddress?: unknown }).warehouseAddress),
+      warehouseAddress: nextWarehouseAddress,
       projectContactsJson: nextContactsJson,
-      defaultProjectContactId: trimOrNull((data as { defaultProjectContactId?: unknown }).defaultProjectContactId),
+      defaultProjectContactId: nextDefaultProjectContactId,
       sidebarLogoVariant: trimOrNull((data as { sidebarLogoVariant?: unknown }).sidebarLogoVariant),
       loginLogoVariant: trimOrNull((data as { loginLogoVariant?: unknown }).loginLogoVariant),
       documentsLogoVariant: trimOrNull((data as { documentsLogoVariant?: unknown }).documentsLogoVariant),

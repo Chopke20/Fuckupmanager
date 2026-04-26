@@ -360,6 +360,31 @@ export default function AdminUsersPage() {
     inviteMutation.mutate()
   }
 
+  const saveDocumentSettings = () => {
+    setProjectContactsError(null)
+    const cleaned = projectContacts
+      .map((c) => ({
+        id: String(c.id || '').trim(),
+        name: String(c.name || '').trim(),
+        phone: c.phone ? String(c.phone).trim() : null,
+        email: c.email ? String(c.email).trim() : null,
+      }))
+      .filter((c) => c.id && c.name)
+
+    const payload: any = {
+      warehouseAddress: warehouseAddress || null,
+      projectContacts: cleaned,
+      defaultProjectContactId: cleaned.length === 0 ? null : (defaultProjectContactId || cleaned[0]!.id).trim(),
+    }
+
+    if (cleaned.length > 0 && !cleaned.some((c) => c.id === payload.defaultProjectContactId)) {
+      setProjectContactsError('Domyślny opiekun musi być wybrany z listy.')
+      return
+    }
+
+    appSettingsMutation.mutate(payload)
+  }
+
   const inviteErrorMessage = (() => {
     const err = inviteMutation.error
     if (!err) return null
@@ -520,17 +545,6 @@ export default function AdminUsersPage() {
               </div>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => appSettingsMutation.mutate({ warehouseAddress })}
-              disabled={appSettingsMutation.isPending}
-              className="px-3 py-2 text-sm border border-border rounded hover:bg-surface disabled:opacity-50"
-            >
-              {appSettingsMutation.isPending ? 'Zapisywanie…' : 'Zapisz siedzibę magazynu'}
-            </button>
-            {appSettingsQuery.isLoading ? <span className="text-xs text-muted-foreground">Ładowanie…</span> : null}
-          </div>
           <p className="text-[11px] text-muted-foreground">
             To ustawienie jest uzywane do obliczania dystansu (Google Distance Matrix) dla transportu w zleceniach.
           </p>
@@ -606,37 +620,25 @@ export default function AdminUsersPage() {
             </button>
           </div>
           {projectContactsError ? <div className="text-xs text-destructive">{projectContactsError}</div> : null}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setProjectContactsError(null)
-                const cleaned = projectContacts
-                  .map((c) => ({
-                    id: String(c.id || '').trim(),
-                    name: String(c.name || '').trim(),
-                    phone: c.phone ? String(c.phone).trim() : null,
-                    email: c.email ? String(c.email).trim() : null,
-                  }))
-                  .filter((c) => c.id && c.name)
-                if (cleaned.length === 0) {
-                  appSettingsMutation.mutate({ projectContacts: [], defaultProjectContactId: null })
-                  return
-                }
-                const defaultId = (defaultProjectContactId || cleaned[0]!.id).trim()
-                if (!cleaned.some((c) => c.id === defaultId)) {
-                  setProjectContactsError('Domyślny opiekun musi być wybrany z listy.')
-                  return
-                }
-                appSettingsMutation.mutate({ projectContacts: cleaned, defaultProjectContactId: defaultId })
-              }}
-              disabled={appSettingsMutation.isPending}
-              className="px-3 py-2 text-sm border border-border rounded hover:bg-surface disabled:opacity-50"
-            >
-              {appSettingsMutation.isPending ? 'Zapisywanie…' : 'Zapisz opiekunów'}
-            </button>
-          </div>
         </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={saveDocumentSettings}
+            disabled={appSettingsMutation.isPending}
+            className="bg-primary text-black rounded px-3 py-2 text-sm disabled:opacity-50"
+          >
+            {appSettingsMutation.isPending ? 'Zapisywanie…' : 'Zapisz ustawienia dokumentow'}
+          </button>
+          {appSettingsQuery.isLoading ? <span className="text-xs text-muted-foreground">Ładowanie…</span> : null}
+          {appSettingsMutation.isError ? (
+            <span className="text-xs text-destructive">
+              {mutationErrorMessage(appSettingsMutation.error, 'Nie udalo sie zapisac ustawien dokumentow.')}
+            </span>
+          ) : null}
+        </div>
+
         <div className="space-y-3">
           <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 text-[11px] text-muted-foreground">
             <div>Od km</div>
