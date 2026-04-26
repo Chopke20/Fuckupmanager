@@ -223,3 +223,53 @@ PDF może wtedy wymagać ręcznej instalacji bibliotek (§5).
 ---
 
 *Ostatnia aktualizacja runbooka: 2026-04 — pokrywa znane awarie: migracje, env/SMTP/API, PDF/Chromium, PM2.*
+
+---
+
+## 9. Codzienny backup baz (bez Hetzner Backups)
+
+Jeśli nie korzystasz z płatnych backupów Hetznera, ustaw codzienny `pg_dump` na serwerze.
+
+### 9.1 Skrypt
+
+W repo jest skrypt:
+
+- `scripts/backup-databases.sh`
+
+Robi backup dla wszystkich firm z `COMPANY_DATABASES_JSON` (lub fallback do `DATABASE_URL`), sprawdza rozmiar dumpa (żeby nie było 0B) i trzyma retencję (domyślnie 14 dni).
+
+### 9.2 Konfiguracja (serwer)
+
+Zmienna `COMPANY_DATABASES_JSON` jest w `/var/www/lamaapp/apps/api/.env`.
+
+Opcjonalnie możesz ustawić:
+- `BACKUP_DIR` (domyślnie `/var/backups/lamaapp`)
+- `BACKUP_RETENTION_DAYS` (domyślnie `14`)
+- `PG_DUMP_PATH` (domyślnie `pg_dump`)
+
+### 9.3 Uruchomienie ręczne (test)
+
+```bash
+sudo bash /var/www/lamaapp/scripts/backup-databases.sh
+ls -lh /var/backups/lamaapp | tail -n 20
+```
+
+### 9.4 Cron (codziennie 02:10)
+
+Edytuj crontab roota:
+
+```bash
+crontab -e
+```
+
+Dodaj:
+
+```bash
+10 2 * * * APP_ROOT=/var/www/lamaapp BACKUP_ENV_FILE=/var/www/lamaapp/apps/api/.env BACKUP_DIR=/var/backups/lamaapp BACKUP_RETENTION_DAYS=14 /bin/bash /var/www/lamaapp/scripts/backup-databases.sh >> /var/log/lamaapp-backup.log 2>&1
+```
+
+Sprawdź log:
+
+```bash
+tail -120 /var/log/lamaapp-backup.log
+```

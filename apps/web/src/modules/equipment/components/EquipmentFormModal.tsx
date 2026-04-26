@@ -133,7 +133,7 @@ export default function EquipmentFormModal({
     const preparedData: CreateEquipmentDto = {
       ...formData,
       category: isResource ? 'ZASOBY' : normalizeCategoryName(formData.category),
-      subcategory: isResource ? normalizedSubcategory : undefined,
+      subcategory: isResource ? (normalizedSubcategory || undefined) : undefined,
       pricingRule: { day1: 1.0, nextDays: formData.pricingRule?.nextDays ?? 0.5 },
     }
     const dataToSend = isUnlimited
