@@ -52,6 +52,26 @@ function getOfferNumberDisplay(order: OrderWithRelations, nextVersion?: number):
 }
 
 export class PdfController {
+  private pickDefaultProjectContact(appSettings: unknown): { name?: string | null; phone?: string | null; email?: string | null } | null {
+    const s = appSettings as { projectContactsJson?: string | null; defaultProjectContactId?: string | null } | null
+    const raw = s?.projectContactsJson
+    if (!raw || !raw.trim()) return null
+    let list: Array<{ id?: unknown; name?: unknown; phone?: unknown; email?: unknown }> = []
+    try {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) list = parsed as any
+    } catch {
+      return null
+    }
+    const defaultId = s?.defaultProjectContactId ?? null
+    const pick = defaultId ? list.find((c) => String(c.id ?? '') === defaultId) : (list[0] ?? null)
+    if (!pick) return null
+    const name = typeof pick.name === 'string' ? pick.name : null
+    const phone = typeof pick.phone === 'string' ? pick.phone : null
+    const email = typeof pick.email === 'string' ? pick.email : null
+    return { name, phone, email }
+  }
+
   /** Podgląd PDF bez podbijania wersji */
   async previewOffer(req: Request, res: Response) {
     try {
@@ -67,17 +87,14 @@ export class PdfController {
       const offerNumberDisplay = getOfferNumberDisplay(order, nextVer)
       const generatedAt = new Date().toISOString()
       const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
+      const projectContact = this.pickDefaultProjectContact(appSettings)
       const snapshot = buildOrderOfferSnapshotFromOrder(order, draftPayload, {
         generatedAt,
         documentNumber: offerNumberDisplay,
       })
       const html = buildOfferHtmlV5(orderOfferSnapshotToPdfOrderLike(snapshot), offerNumberDisplay, {
         issuedAt: generatedAt,
-        projectContact: {
-          name: (appSettings as { projectContactName?: string | null } | null)?.projectContactName ?? null,
-          phone: (appSettings as { projectContactPhone?: string | null } | null)?.projectContactPhone ?? null,
-          email: (appSettings as { projectContactEmail?: string | null } | null)?.projectContactEmail ?? null,
-        },
+        projectContact,
       })
       const pdfBuffer = await this.renderPdf(html)
       res.setHeader('Content-Type', 'application/pdf')
@@ -123,6 +140,7 @@ export class PdfController {
       const draftPayload = await loadOfferDraftPayload(prisma, orderId, order)
       const generatedAt = new Date().toISOString()
       const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
+      const projectContact = this.pickDefaultProjectContact(appSettings)
       const newVersion = (order.offerVersion ?? 0) + 1
       const candidateOfferNumber = buildDocumentNumber({
         documentType: 'OFFER',
@@ -212,11 +230,7 @@ export class PdfController {
 
       const html = buildOfferHtmlV5(orderOfferSnapshotToPdfOrderLike(snapshot), finalOfferNumber, {
         issuedAt: generatedAt,
-        projectContact: {
-          name: (appSettings as { projectContactName?: string | null } | null)?.projectContactName ?? null,
-          phone: (appSettings as { projectContactPhone?: string | null } | null)?.projectContactPhone ?? null,
-          email: (appSettings as { projectContactEmail?: string | null } | null)?.projectContactEmail ?? null,
-        },
+        projectContact,
       })
       const pdfBuffer = await this.renderPdf(html)
 
@@ -280,22 +294,15 @@ export class PdfController {
       const issuedAt: string | undefined =
         parsed.success && parsed.data.generatedAt ? parsed.data.generatedAt : issuedAtFallback
       const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
+      const projectContact = this.pickDefaultProjectContact(appSettings)
       const html = parsed.success
         ? buildOfferHtmlV5(orderOfferSnapshotToPdfOrderLike(parsed.data), exportRecord.documentNumber, {
             issuedAt,
-            projectContact: {
-              name: (appSettings as { projectContactName?: string | null } | null)?.projectContactName ?? null,
-              phone: (appSettings as { projectContactPhone?: string | null } | null)?.projectContactPhone ?? null,
-              email: (appSettings as { projectContactEmail?: string | null } | null)?.projectContactEmail ?? null,
-            },
+            projectContact,
           })
         : buildOfferHtmlV5(raw as OrderLike, exportRecord.documentNumber, {
             issuedAt,
-            projectContact: {
-              name: (appSettings as { projectContactName?: string | null } | null)?.projectContactName ?? null,
-              phone: (appSettings as { projectContactPhone?: string | null } | null)?.projectContactPhone ?? null,
-              email: (appSettings as { projectContactEmail?: string | null } | null)?.projectContactEmail ?? null,
-            },
+            projectContact,
           })
       const pdfBuffer = await this.renderPdf(html)
 
@@ -375,6 +382,7 @@ export class PdfController {
 
       const issuer = await resolveDefaultIssuerForDraft(prisma)
       const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
+      const projectContact = this.pickDefaultProjectContact(appSettings)
       const generatedAt = new Date().toISOString()
       const html = buildWarehousePdfHtml({
         documentNumberDisplay,
@@ -405,11 +413,7 @@ export class PdfController {
           sortOrder: e.sortOrder,
         })),
         projectContactKey: order.projectContactKey,
-        projectContact: {
-          name: (appSettings as { projectContactName?: string | null } | null)?.projectContactName ?? null,
-          phone: (appSettings as { projectContactPhone?: string | null } | null)?.projectContactPhone ?? null,
-          email: (appSettings as { projectContactEmail?: string | null } | null)?.projectContactEmail ?? null,
-        },
+        projectContact,
       })
 
       const pdfBuffer = await this.renderPdf(html)

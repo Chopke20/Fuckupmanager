@@ -419,9 +419,12 @@ model AppSettings {
   primaryColorHex    String?
   documentFooterText String?
   warehouseAddress   String?
-  projectContactName  String?
-  projectContactPhone String?
-  projectContactEmail String?
+  projectContactsJson     String? @db.Text
+  defaultProjectContactId String?
+  sidebarLogoVariant String?
+  loginLogoVariant   String?
+  documentsLogoVariant String?
+  offerLogoVariant   String? // legacy (deprecated)
   emailSenderName    String?
   emailFooterText    String?
   replyToEmail       String?

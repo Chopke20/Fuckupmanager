@@ -4,6 +4,15 @@ import { CompanyCodeSchema } from './auth.schema'
 const NullableTrimmed = z.string().trim().max(500).nullable().optional()
 const NullableUrl = z.string().trim().url().nullable().optional()
 
+const ProjectContactSchema = z.object({
+  id: z.string().trim().min(1).max(64),
+  name: z.string().trim().min(1).max(120),
+  phone: z.string().trim().max(80).optional().nullable(),
+  email: z.string().trim().email().optional().nullable(),
+})
+
+const LogoVariantSchema = z.enum(['DARK', 'LIGHT'])
+
 export const AppSettingsSchema = z.object({
   brandName: z.string().trim().min(1).max(120),
   brandTagline: NullableTrimmed,
@@ -17,9 +26,11 @@ export const AppSettingsSchema = z.object({
   primaryColorHex: z.string().trim().regex(/^#?[0-9a-fA-F]{6}$/).nullable().optional(),
   documentFooterText: NullableTrimmed,
   warehouseAddress: NullableTrimmed,
-  projectContactName: NullableTrimmed,
-  projectContactPhone: NullableTrimmed,
-  projectContactEmail: z.string().trim().email().nullable().optional(),
+  projectContacts: z.array(ProjectContactSchema).optional().nullable(),
+  defaultProjectContactId: z.string().trim().min(1).max(64).optional().nullable(),
+  sidebarLogoVariant: LogoVariantSchema.nullable().optional(),
+  loginLogoVariant: LogoVariantSchema.nullable().optional(),
+  documentsLogoVariant: LogoVariantSchema.nullable().optional(),
   emailSenderName: z.string().trim().max(160).nullable().optional(),
   emailFooterText: NullableTrimmed,
   replyToEmail: z.string().trim().email().nullable().optional(),

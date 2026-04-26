@@ -31,9 +31,11 @@ function defaultSettingsForCompany(companyCode: string) {
     primaryColorHex: null,
     documentFooterText: null,
     warehouseAddress: null,
-    projectContactName: null,
-    projectContactPhone: null,
-    projectContactEmail: null,
+    projectContactsJson: null,
+    defaultProjectContactId: null,
+    sidebarLogoVariant: null,
+    loginLogoVariant: null,
+    documentsLogoVariant: null,
     emailSenderName: null,
     emailFooterText: null,
     replyToEmail: null,
@@ -64,6 +66,15 @@ function toPublicDto(companyCode: string, row: Awaited<ReturnType<typeof getOrCr
 
 export async function getCurrentCompanyAppSettings() {
   const row = await getOrCreateSettingsRow()
+  const contacts = (() => {
+    const raw = (row as { projectContactsJson?: string | null }).projectContactsJson
+    if (!raw || !raw.trim()) return null
+    try {
+      return JSON.parse(raw) as unknown
+    } catch {
+      return null
+    }
+  })()
   return AppSettingsSchema.parse({
     brandName: row.brandName,
     brandTagline: row.brandTagline,
@@ -77,9 +88,13 @@ export async function getCurrentCompanyAppSettings() {
     primaryColorHex: row.primaryColorHex,
     documentFooterText: row.documentFooterText,
     warehouseAddress: (row as { warehouseAddress?: string | null }).warehouseAddress ?? null,
-    projectContactName: (row as { projectContactName?: string | null }).projectContactName ?? null,
-    projectContactPhone: (row as { projectContactPhone?: string | null }).projectContactPhone ?? null,
-    projectContactEmail: (row as { projectContactEmail?: string | null }).projectContactEmail ?? null,
+    projectContacts: contacts as any,
+    defaultProjectContactId: (row as { defaultProjectContactId?: string | null }).defaultProjectContactId ?? null,
+    sidebarLogoVariant: (row as { sidebarLogoVariant?: string | null }).sidebarLogoVariant ?? null,
+    loginLogoVariant: (row as { loginLogoVariant?: string | null }).loginLogoVariant ?? null,
+    documentsLogoVariant: (row as { documentsLogoVariant?: string | null; offerLogoVariant?: string | null }).documentsLogoVariant
+      ?? (row as { offerLogoVariant?: string | null }).offerLogoVariant
+      ?? null,
     emailSenderName: row.emailSenderName,
     emailFooterText: row.emailFooterText,
     replyToEmail: row.replyToEmail,
@@ -93,6 +108,14 @@ export async function updateCurrentCompanyAppSettings(payload: unknown) {
   }
   await getOrCreateSettingsRow()
   const data = parsed.data
+  const nextContactsJson = (() => {
+    if ((data as { projectContacts?: unknown }).projectContacts == null) return null
+    try {
+      return JSON.stringify((data as { projectContacts?: unknown }).projectContacts)
+    } catch {
+      return null
+    }
+  })()
   const updated = await prisma.appSettings.update({
     where: { id: 1 },
     data: {
@@ -108,9 +131,11 @@ export async function updateCurrentCompanyAppSettings(payload: unknown) {
       primaryColorHex: normalizeHex(trimOrNull(data.primaryColorHex)),
       documentFooterText: trimOrNull(data.documentFooterText),
       warehouseAddress: trimOrNull((data as { warehouseAddress?: unknown }).warehouseAddress),
-      projectContactName: trimOrNull((data as { projectContactName?: unknown }).projectContactName),
-      projectContactPhone: trimOrNull((data as { projectContactPhone?: unknown }).projectContactPhone),
-      projectContactEmail: trimOrNull((data as { projectContactEmail?: unknown }).projectContactEmail),
+      projectContactsJson: nextContactsJson,
+      defaultProjectContactId: trimOrNull((data as { defaultProjectContactId?: unknown }).defaultProjectContactId),
+      sidebarLogoVariant: trimOrNull((data as { sidebarLogoVariant?: unknown }).sidebarLogoVariant),
+      loginLogoVariant: trimOrNull((data as { loginLogoVariant?: unknown }).loginLogoVariant),
+      documentsLogoVariant: trimOrNull((data as { documentsLogoVariant?: unknown }).documentsLogoVariant),
       emailSenderName: trimOrNull(data.emailSenderName),
       emailFooterText: trimOrNull(data.emailFooterText),
       replyToEmail: trimOrNull(data.replyToEmail),
@@ -129,9 +154,21 @@ export async function updateCurrentCompanyAppSettings(payload: unknown) {
     primaryColorHex: updated.primaryColorHex,
     documentFooterText: updated.documentFooterText,
     warehouseAddress: (updated as { warehouseAddress?: string | null }).warehouseAddress ?? null,
-    projectContactName: (updated as { projectContactName?: string | null }).projectContactName ?? null,
-    projectContactPhone: (updated as { projectContactPhone?: string | null }).projectContactPhone ?? null,
-    projectContactEmail: (updated as { projectContactEmail?: string | null }).projectContactEmail ?? null,
+    projectContacts: (() => {
+      const raw = (updated as { projectContactsJson?: string | null }).projectContactsJson
+      if (!raw || !raw.trim()) return null
+      try {
+        return JSON.parse(raw) as unknown
+      } catch {
+        return null
+      }
+    })() as any,
+    defaultProjectContactId: (updated as { defaultProjectContactId?: string | null }).defaultProjectContactId ?? null,
+    sidebarLogoVariant: (updated as { sidebarLogoVariant?: string | null }).sidebarLogoVariant ?? null,
+    loginLogoVariant: (updated as { loginLogoVariant?: string | null }).loginLogoVariant ?? null,
+    documentsLogoVariant: (updated as { documentsLogoVariant?: string | null; offerLogoVariant?: string | null }).documentsLogoVariant
+      ?? (updated as { offerLogoVariant?: string | null }).offerLogoVariant
+      ?? null,
     emailSenderName: updated.emailSenderName,
     emailFooterText: updated.emailFooterText,
     replyToEmail: updated.replyToEmail,

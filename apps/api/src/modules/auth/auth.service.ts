@@ -60,6 +60,9 @@ function toSafeUserWithCompany(user: User, companyCode: string): SafeUser & {
   brandName: string
   logoDarkBgUrl: string | null
   logoLightBgUrl: string | null
+  sidebarLogoVariant?: string | null
+  loginLogoVariant?: string | null
+  documentsLogoVariant?: string | null
 } {
   const company = getCompanyByCode(companyCode) ?? getDefaultCompany()
   return {
@@ -82,6 +85,11 @@ async function withDbBranding<T extends { brandName: string; logoDarkBgUrl: stri
     brandName: row.brandName || base.brandName,
     logoDarkBgUrl: row.logoDarkBgUrl ?? base.logoDarkBgUrl,
     logoLightBgUrl: row.logoLightBgUrl ?? base.logoLightBgUrl,
+    sidebarLogoVariant: (row as { sidebarLogoVariant?: string | null }).sidebarLogoVariant ?? null,
+    loginLogoVariant: (row as { loginLogoVariant?: string | null }).loginLogoVariant ?? null,
+    documentsLogoVariant: (row as { documentsLogoVariant?: string | null; offerLogoVariant?: string | null }).documentsLogoVariant
+      ?? (row as { offerLogoVariant?: string | null }).offerLogoVariant
+      ?? null,
   }
 }
 

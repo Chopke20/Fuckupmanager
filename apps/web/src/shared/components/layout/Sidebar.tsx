@@ -5,7 +5,14 @@ import { useAuth } from '../../../modules/auth/AuthProvider'
 export default function Sidebar() {
   const { hasPermission, user } = useAuth()
   const appName = 'Lama Stage'
-  const logoSrc = user?.logoDarkBgUrl || '/logo.png'
+  const companyName = user?.brandName || appName
+  const pickLogo = (): string | null => {
+    const variant = user?.sidebarLogoVariant
+    if (!variant) return null
+    const url = variant === 'LIGHT' ? user?.logoLightBgUrl : user?.logoDarkBgUrl
+    return url || null
+  }
+  const logoSrc = pickLogo()
   const companyCode = user?.companyCode || 'main'
   const navItems = [
     { to: '/', label: 'Overview', icon: LayoutDashboard },
@@ -20,10 +27,10 @@ export default function Sidebar() {
   return (
     <aside className="w-44 shrink-0 bg-black border-r border-border flex flex-col">
       <div className="p-3 border-b border-border flex items-center gap-2">
-        <img src={logoSrc} alt={appName} className="h-8 w-8 object-contain" />
+        {logoSrc ? <img src={logoSrc} alt={companyName} className="h-8 w-8 object-contain" /> : null}
         <div className="min-w-0">
           <h1 className="text-base font-bold text-primary font-heading truncate">
-            {appName.toUpperCase()}
+            {companyName.toUpperCase()}
           </h1>
           <p className="text-[10px] text-muted-foreground uppercase tracking-wider truncate">
             Fuckup Manager

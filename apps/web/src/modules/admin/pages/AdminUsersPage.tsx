@@ -21,6 +21,8 @@ import { formatRoleLabel } from '../../../lib/roleLabels'
 import { financeApi } from '../../orders/api/pdf.api'
 import AdminIssuerProfilesSection from '../components/AdminIssuerProfilesSection'
 import AdminAppSettingsSection from '../components/AdminAppSettingsSection'
+import { apiGetAppSettings, apiUpdateAppSettings } from '../../auth/auth.api'
+import { api } from '../../../shared/api/client'
 
 type TransportRangeDraft = {
   fromKm: number
@@ -32,6 +34,8 @@ type TransportSettingsDraft = {
   ranges: TransportRangeDraft[]
   longDistancePerKm: number
 }
+
+type ProjectContactDraft = { id: string; name: string; phone?: string | null; email?: string | null }
 
 const DEFAULT_TRANSPORT_DRAFT: TransportSettingsDraft = {
   ranges: [
@@ -86,6 +90,13 @@ export default function AdminUsersPage() {
   const [roleDeleteTarget, setRoleDeleteTarget] = useState<string | null>(null)
   const [transportDraft, setTransportDraft] = useState<TransportSettingsDraft>(DEFAULT_TRANSPORT_DRAFT)
   const [transportError, setTransportError] = useState<string | null>(null)
+  const [warehouseQuery, setWarehouseQuery] = useState('')
+  const [warehouseSuggestions, setWarehouseSuggestions] = useState<Array<{ placeId: string; description: string }>>([])
+  const [warehouseLoading, setWarehouseLoading] = useState(false)
+  const [warehouseAddress, setWarehouseAddress] = useState<string>('')
+  const [projectContacts, setProjectContacts] = useState<ProjectContactDraft[]>([])
+  const [defaultProjectContactId, setDefaultProjectContactId] = useState<string>('')
+  const [projectContactsError, setProjectContactsError] = useState<string | null>(null)
   const [backupError, setBackupError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'users' | 'branding' | 'documents' | 'backup'>('users')
 
@@ -195,6 +206,17 @@ export default function AdminUsersPage() {
     queryKey: ['transport-pricing-settings'],
     queryFn: financeApi.getTransportPricingSettings,
   })
+  const appSettingsQuery = useQuery({
+    queryKey: ['admin-app-settings'],
+    queryFn: apiGetAppSettings,
+  })
+  const appSettingsMutation = useMutation({
+    mutationFn: apiUpdateAppSettings,
+    onSuccess: async (updated) => {
+      setWarehouseAddress(updated.warehouseAddress ?? '')
+      await queryClient.invalidateQueries({ queryKey: ['admin-app-settings'] })
+    },
+  })
   const transportSettingsMutation = useMutation({
     mutationFn: financeApi.updateTransportPricingSettings,
     onSuccess: async (data) => {
@@ -219,6 +241,36 @@ export default function AdminUsersPage() {
       longDistancePerKm: data.longDistancePerKm,
     })
   }, [transportSettingsQuery.data])
+
+  useEffect(() => {
+    const s = appSettingsQuery.data
+    if (!s) return
+    setWarehouseAddress(s.warehouseAddress ?? '')
+    const list = (s.projectContacts ?? []) as ProjectContactDraft[]
+    setProjectContacts(Array.isArray(list) ? list : [])
+    setDefaultProjectContactId(s.defaultProjectContactId ?? '')
+  }, [appSettingsQuery.data])
+
+  useEffect(() => {
+    const q = (warehouseQuery || '').trim()
+    if (q.length < 2) {
+      setWarehouseSuggestions([])
+      setWarehouseLoading(false)
+      return
+    }
+    const t = setTimeout(async () => {
+      try {
+        setWarehouseLoading(true)
+        const res = await api.get<{ data: Array<{ placeId: string; description: string }> }>('/places/autocomplete', { query: q })
+        setWarehouseSuggestions((res.data ?? []).map((x) => ({ placeId: x.placeId, description: x.description })))
+      } catch {
+        setWarehouseSuggestions([])
+      } finally {
+        setWarehouseLoading(false)
+      }
+    }, 250)
+    return () => clearTimeout(t)
+  }, [warehouseQuery])
 
   const handleInvite = (e: FormEvent) => {
     e.preventDefault()
@@ -294,6 +346,157 @@ export default function AdminUsersPage() {
         <p className="text-xs text-muted-foreground mb-3">
           Te wartości są używane do automatycznej wyceny transportu we wszystkich nowych i edytowanych zleceniach.
         </p>
+        <div className="mb-4 border border-border rounded p-3 bg-surface-2/20 space-y-2">
+          <div className="text-xs font-semibold">Siedziba magazynu (punkt startowy do km)</div>
+          <div className="relative">
+            <input
+              value={warehouseQuery || warehouseAddress}
+              onChange={(e) => {
+                setWarehouseQuery(e.target.value)
+                setWarehouseAddress(e.target.value)
+              }}
+              className="w-full bg-surface border border-border rounded px-3 py-2 text-sm"
+              placeholder="Wpisz adres i wybierz z podpowiedzi Google"
+            />
+            {warehouseLoading ? (
+              <div className="absolute right-3 top-2.5 text-xs text-muted-foreground">Ładowanie…</div>
+            ) : null}
+            {warehouseSuggestions.length > 0 && (
+              <div className="absolute z-30 mt-1 w-full bg-card border border-border rounded shadow-lg max-h-56 overflow-auto">
+                {warehouseSuggestions.map((s) => (
+                  <button
+                    key={s.placeId}
+                    type="button"
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-surface-2"
+                    onClick={() => {
+                      setWarehouseAddress(s.description)
+                      setWarehouseQuery('')
+                      setWarehouseSuggestions([])
+                    }}
+                  >
+                    {s.description}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => appSettingsMutation.mutate({ warehouseAddress })}
+              disabled={appSettingsMutation.isPending}
+              className="px-3 py-2 text-sm border border-border rounded hover:bg-surface disabled:opacity-50"
+            >
+              {appSettingsMutation.isPending ? 'Zapisywanie…' : 'Zapisz siedzibę magazynu'}
+            </button>
+            {appSettingsQuery.isLoading ? <span className="text-xs text-muted-foreground">Ładowanie…</span> : null}
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            To ustawienie jest używane do obliczania km (Google Distance Matrix) dla transportu w zleceniach.
+          </p>
+        </div>
+        <div className="mb-4 border border-border rounded p-3 bg-surface-2/20 space-y-2">
+          <div className="text-xs font-semibold">Opiekunowie projektu (PDF)</div>
+          <p className="text-[11px] text-muted-foreground">
+            Dane widoczne w stopce PDF jako „Opiekun projektu”. Możesz dodać kilku opiekunów i wybrać domyślnego dla tej firmy.
+          </p>
+          <div className="space-y-2">
+            {projectContacts.map((c, idx) => (
+              <div key={c.id} className="grid md:grid-cols-[24px_1fr_1fr_1fr_80px] gap-2 items-start">
+                <div className="pt-2 flex justify-center">
+                  <input
+                    type="radio"
+                    name="default-project-contact"
+                    checked={defaultProjectContactId === c.id}
+                    onChange={() => setDefaultProjectContactId(c.id)}
+                  />
+                </div>
+                <input
+                  value={c.name}
+                  onChange={(e) =>
+                    setProjectContacts((prev) =>
+                      prev.map((row, i) => (i === idx ? { ...row, name: e.target.value } : row))
+                    )
+                  }
+                  className="bg-surface border border-border rounded px-3 py-2 text-sm"
+                  placeholder="Imię i nazwisko"
+                />
+                <input
+                  value={c.phone ?? ''}
+                  onChange={(e) =>
+                    setProjectContacts((prev) =>
+                      prev.map((row, i) => (i === idx ? { ...row, phone: e.target.value || null } : row))
+                    )
+                  }
+                  className="bg-surface border border-border rounded px-3 py-2 text-sm"
+                  placeholder="Telefon (opcjonalnie)"
+                />
+                <input
+                  value={c.email ?? ''}
+                  onChange={(e) =>
+                    setProjectContacts((prev) =>
+                      prev.map((row, i) => (i === idx ? { ...row, email: e.target.value || null } : row))
+                    )
+                  }
+                  className="bg-surface border border-border rounded px-3 py-2 text-sm"
+                  placeholder="E-mail (opcjonalnie)"
+                />
+                <button
+                  type="button"
+                  className="px-3 py-2 text-xs border border-border rounded hover:bg-surface"
+                  onClick={() => {
+                    setProjectContacts((prev) => prev.filter((_, i) => i !== idx))
+                    if (defaultProjectContactId === c.id) setDefaultProjectContactId('')
+                  }}
+                >
+                  Usuń
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="px-3 py-2 text-xs border border-dashed border-border rounded hover:bg-surface w-fit"
+              onClick={() => {
+                const id = `C${Date.now()}`
+                setProjectContacts((prev) => [...prev, { id, name: '', phone: null, email: null }])
+                if (!defaultProjectContactId) setDefaultProjectContactId(id)
+              }}
+            >
+              + Dodaj opiekuna
+            </button>
+          </div>
+          {projectContactsError ? <div className="text-xs text-destructive">{projectContactsError}</div> : null}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setProjectContactsError(null)
+                const cleaned = projectContacts
+                  .map((c) => ({
+                    id: String(c.id || '').trim(),
+                    name: String(c.name || '').trim(),
+                    phone: c.phone ? String(c.phone).trim() : null,
+                    email: c.email ? String(c.email).trim() : null,
+                  }))
+                  .filter((c) => c.id && c.name)
+                if (cleaned.length === 0) {
+                  appSettingsMutation.mutate({ projectContacts: [], defaultProjectContactId: null })
+                  return
+                }
+                const defaultId = (defaultProjectContactId || cleaned[0]!.id).trim()
+                if (!cleaned.some((c) => c.id === defaultId)) {
+                  setProjectContactsError('Domyślny opiekun musi być wybrany z listy.')
+                  return
+                }
+                appSettingsMutation.mutate({ projectContacts: cleaned, defaultProjectContactId: defaultId })
+              }}
+              disabled={appSettingsMutation.isPending}
+              className="px-3 py-2 text-sm border border-border rounded hover:bg-surface disabled:opacity-50"
+            >
+              {appSettingsMutation.isPending ? 'Zapisywanie…' : 'Zapisz opiekunów'}
+            </button>
+          </div>
+        </div>
         <div className="space-y-3">
           <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 text-[11px] text-muted-foreground">
             <div>Od km</div>

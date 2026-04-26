@@ -16,9 +16,8 @@ const EMPTY_SETTINGS: AppSettings = {
   primaryColorHex: null,
   documentFooterText: null,
   warehouseAddress: null,
-  projectContactName: null,
-  projectContactPhone: null,
-  projectContactEmail: null,
+  projectContacts: null,
+  defaultProjectContactId: null,
   emailSenderName: null,
   emailFooterText: null,
   replyToEmail: null,
@@ -102,50 +101,51 @@ export default function AdminAppSettingsSection() {
             />
           </label>
         </div>
-        <label className="text-xs space-y-1 block">
-          <span className="text-muted-foreground">Siedziba magazynu (do liczenia km transportu)</span>
-          <input
-            value={draft.warehouseAddress ?? ''}
-            onChange={(e) => setDraft((prev) => ({ ...prev, warehouseAddress: e.target.value || null }))}
-            className="w-full bg-surface border border-border rounded px-3 py-2 text-sm"
-            placeholder="Np. Wał Miedzeszyński 251, Warszawa"
-          />
-        </label>
         <div className="border border-border rounded p-3 bg-surface-2/20 space-y-2">
-          <div className="text-xs font-semibold">Opiekun projektu (PDF)</div>
+          <div className="text-xs font-semibold">Użycie logo</div>
           <p className="text-[11px] text-muted-foreground">
-            Dane widoczne w stopce PDF jako „Opiekun projektu”. Edytuje tylko Admin.
+            Dla każdego miejsca wybierz wariant (ciemne/jasne). Brak wyboru = logo nie jest pokazywane.
           </p>
           <div className="grid md:grid-cols-3 gap-2">
             <label className="text-xs space-y-1">
-              <span className="text-muted-foreground">Imię i nazwisko</span>
-              <input
-                value={draft.projectContactName ?? ''}
-                onChange={(e) => setDraft((prev) => ({ ...prev, projectContactName: e.target.value || null }))}
+              <span className="text-muted-foreground">Panel główny</span>
+              <select
+                value={draft.sidebarLogoVariant ?? ''}
+                onChange={(e) => setDraft((prev) => ({ ...prev, sidebarLogoVariant: (e.target.value || null) as any }))}
                 className="w-full bg-surface border border-border rounded px-3 py-2 text-sm"
-                placeholder="Np. Tadeusz Mikołajczyk"
-              />
+              >
+                <option value="">Nie pokazuj</option>
+                <option value="DARK">Ciemne</option>
+                <option value="LIGHT">Jasne</option>
+              </select>
             </label>
             <label className="text-xs space-y-1">
-              <span className="text-muted-foreground">Telefon</span>
-              <input
-                value={draft.projectContactPhone ?? ''}
-                onChange={(e) => setDraft((prev) => ({ ...prev, projectContactPhone: e.target.value || null }))}
+              <span className="text-muted-foreground">Panel logowania</span>
+              <select
+                value={draft.loginLogoVariant ?? ''}
+                onChange={(e) => setDraft((prev) => ({ ...prev, loginLogoVariant: (e.target.value || null) as any }))}
                 className="w-full bg-surface border border-border rounded px-3 py-2 text-sm"
-                placeholder="Np. 666 666 666"
-              />
+              >
+                <option value="">Nie pokazuj</option>
+                <option value="DARK">Ciemne</option>
+                <option value="LIGHT">Jasne</option>
+              </select>
             </label>
             <label className="text-xs space-y-1">
-              <span className="text-muted-foreground">E-mail</span>
-              <input
-                value={draft.projectContactEmail ?? ''}
-                onChange={(e) => setDraft((prev) => ({ ...prev, projectContactEmail: e.target.value || null }))}
+              <span className="text-muted-foreground">Dokumenty (PDF)</span>
+              <select
+                value={draft.documentsLogoVariant ?? ''}
+                onChange={(e) => setDraft((prev) => ({ ...prev, documentsLogoVariant: (e.target.value || null) as any }))}
                 className="w-full bg-surface border border-border rounded px-3 py-2 text-sm"
-                placeholder="Np. kontakt@twojafirma.pl"
-              />
+              >
+                <option value="">Nie pokazuj</option>
+                <option value="DARK">Ciemne</option>
+                <option value="LIGHT">Jasne</option>
+              </select>
             </label>
           </div>
         </div>
+        {/* Siedziba magazynu + opiekunowie projektu są w Admin → Dokumenty i komunikacja → Transport. */}
         <div className="grid md:grid-cols-3 gap-2">
           <label className="text-xs space-y-1">
             <span className="text-muted-foreground">E-mail kontaktowy</span>
