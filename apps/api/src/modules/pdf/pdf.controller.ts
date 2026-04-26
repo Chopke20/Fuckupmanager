@@ -110,6 +110,36 @@ export class PdfController {
     }
   }
 
+  private async tryLoadLogoAsDataUri(logoUrl: string | null): Promise<string | null> {
+    if (!logoUrl) return null
+    const url = logoUrl.trim()
+    if (!/^https?:\/\//i.test(url)) return null
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 7000)
+    try {
+      const response = await fetch(url, { signal: controller.signal })
+      if (!response.ok) return null
+      const contentType = response.headers.get('content-type') || ''
+      if (!contentType.toLowerCase().startsWith('image/')) return null
+      const bytes = Buffer.from(await response.arrayBuffer())
+      return `data:${contentType};base64,${bytes.toString('base64')}`
+    } catch {
+      return null
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+
+  private async resolvePdfBranding(appSettings: unknown): Promise<{ accentColorHex: string | null; logoUrl: string | null }> {
+    const base = this.getPdfBranding(appSettings)
+    const inlineLogo = await this.tryLoadLogoAsDataUri(base.logoUrl)
+    return {
+      accentColorHex: base.accentColorHex,
+      logoUrl: inlineLogo ?? base.logoUrl,
+    }
+  }
+
   /** Podgląd PDF bez podbijania wersji */
   async previewOffer(req: Request, res: Response) {
     try {
@@ -125,7 +155,7 @@ export class PdfController {
       const offerNumberDisplay = getOfferNumberDisplay(order, nextVer)
       const generatedAt = new Date().toISOString()
       const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
-      const branding = this.getPdfBranding(appSettings)
+      const branding = await this.resolvePdfBranding(appSettings)
       const preferredContactId =
         (draftPayload && typeof draftPayload === 'object' && 'projectContactId' in (draftPayload as any))
           ? String((draftPayload as any).projectContactId ?? '').trim() || null
@@ -185,7 +215,7 @@ export class PdfController {
       const draftPayload = await loadOfferDraftPayload(prisma, orderId, order)
       const generatedAt = new Date().toISOString()
       const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
-      const branding = this.getPdfBranding(appSettings)
+      const branding = await this.resolvePdfBranding(appSettings)
       const preferredContactId =
         (draftPayload && typeof draftPayload === 'object' && 'projectContactId' in (draftPayload as any))
           ? String((draftPayload as any).projectContactId ?? '').trim() || null
@@ -346,7 +376,7 @@ export class PdfController {
       const issuedAt: string | undefined =
         parsed.success && parsed.data.generatedAt ? parsed.data.generatedAt : issuedAtFallback
       const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
-      const branding = this.getPdfBranding(appSettings)
+      const branding = await this.resolvePdfBranding(appSettings)
       const projectContact = this.pickProjectContact(appSettings, null)
       const html = parsed.success
         ? buildOfferHtmlV5(orderOfferSnapshotToPdfOrderLike(parsed.data), exportRecord.documentNumber, {
@@ -439,7 +469,7 @@ export class PdfController {
 
       const issuer = await resolveDefaultIssuerForDraft(prisma)
       const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
-      const branding = this.getPdfBranding(appSettings)
+      const branding = await this.resolvePdfBranding(appSettings)
       const projectContact = this.pickProjectContact(appSettings, null)
       const generatedAt = new Date().toISOString()
       const html = buildWarehousePdfHtml({

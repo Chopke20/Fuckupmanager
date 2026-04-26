@@ -168,7 +168,7 @@ export default function AdminIssuerProfilesSection() {
   if (!hasPermission('admin.users.read')) return null
 
   return (
-    <section className="bg-card border border-border rounded-lg p-4">
+    <section className="bg-card border border-border rounded-lg p-3">
       <h2 className="text-sm font-semibold mb-1">Profile firmy (wystawca dokumentów)</h2>
       <p className="text-xs text-muted-foreground mb-3">
         Wspólne źródło danych dla oferty i przyszłych formularzy. Domyślny profil trafia do nowych draftów oferty.
@@ -181,11 +181,11 @@ export default function AdminIssuerProfilesSection() {
       )}
 
       {!listQuery.isLoading && !listQuery.isError && (
-        <ul className="space-y-2 mb-3">
+        <ul className="space-y-1.5 mb-3">
           {rows.map((p) => (
             <li
               key={p.id}
-              className="flex flex-wrap items-center justify-between gap-2 py-2 px-2 rounded border border-border/80 bg-background/50"
+              className="flex flex-wrap items-center justify-between gap-2 py-1.5 px-2 rounded border border-border/80 bg-background/50"
             >
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium truncate flex items-center gap-2">

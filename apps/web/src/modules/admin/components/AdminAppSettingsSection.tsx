@@ -73,11 +73,11 @@ export default function AdminAppSettingsSection() {
     : normalizeHexColor(draft.primaryColorHex) != null
 
   if (settingsQuery.isLoading) {
-    return <section className="bg-card border border-border rounded-lg p-4 text-sm text-muted-foreground">Ładowanie ustawień firmy...</section>
+    return <section className="bg-card border border-border rounded-lg p-3 text-sm text-muted-foreground">Ładowanie ustawień firmy...</section>
   }
 
   return (
-    <section className="bg-card border border-border rounded-lg p-4 space-y-4">
+    <section className="bg-card border border-border rounded-lg p-3 space-y-3">
       <div>
         <h2 className="text-sm font-semibold">Tozsamosc firmy i komunikacja</h2>
         <p className="text-xs text-muted-foreground">

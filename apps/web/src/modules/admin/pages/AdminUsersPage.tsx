@@ -410,11 +410,11 @@ export default function AdminUsersPage() {
   )
 
   return (
-    <div className="space-y-5">
-      <section className="bg-card border border-border rounded-lg p-4">
+    <div className="space-y-4">
+      <section className="bg-card border border-border rounded-lg p-3">
         <h1 className="text-lg font-semibold mb-1">Ustawienia administratora</h1>
         <p className="text-sm text-muted-foreground">
-          Wszystkie ustawienia zostaja bez zmian funkcjonalnych - pogrupowane tak, aby szybciej znalezc potrzebna sekcje.
+          Wszystkie ustawienia sa tu, ale zebrane w krotsze i bardziej zwarte sekcje.
         </p>
         <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
           {ADMIN_TABS.map((tab) => (
@@ -422,7 +422,7 @@ export default function AdminUsersPage() {
               key={tab.key}
               type="button"
               onClick={() => setActiveTab(tab.key)}
-              className={`text-left rounded-md border p-3 ${activeTab === tab.key ? 'bg-surface border-primary text-primary' : 'border-border text-muted-foreground hover:bg-surface/60'}`}
+              className={`text-left rounded-md border px-3 py-2.5 ${activeTab === tab.key ? 'bg-surface border-primary text-primary' : 'border-border text-muted-foreground hover:bg-surface/60'}`}
             >
               <div className="text-xs font-semibold uppercase tracking-wide">{tab.title}</div>
               <div className={`mt-1 text-[11px] ${activeTab === tab.key ? 'text-primary/90' : 'text-muted-foreground'}`}>
@@ -434,10 +434,9 @@ export default function AdminUsersPage() {
       </section>
 
       {activeTab === 'branding' && <AdminAppSettingsSection />}
-      {activeTab === 'documents' && <AdminIssuerProfilesSection />}
 
       {canBackup && activeTab === 'backup' && (
-      <section className="bg-card border border-border rounded-lg p-4">
+      <section className="bg-card border border-border rounded-lg p-3">
         <h2 className="text-sm font-semibold mb-3">Backup bazy danych</h2>
         <p className="text-xs text-muted-foreground mb-3">
           Pobierz pelna kopie bazy PostgreSQL dla tej firmy. Rekomendowane przed wdrozeniem, migracja lub testami na produkcji.
@@ -463,11 +462,19 @@ export default function AdminUsersPage() {
       )}
 
       {activeTab === 'documents' && (
-      <section className="bg-card border border-border rounded-lg p-4">
-        <h2 className="text-sm font-semibold mb-1">Transport i dane dokumentow</h2>
-        <p className="text-xs text-muted-foreground mb-3">
-          Ta sekcja steruje danymi wykorzystywanymi w PDF oraz globalna wycena transportu dla nowych i edytowanych zlecen.
-        </p>
+      <div className="space-y-3">
+        <section className="bg-card border border-border rounded-lg p-3">
+          <h2 className="text-sm font-semibold mb-1">Dokumenty i dane firmowe</h2>
+          <p className="text-xs text-muted-foreground">
+            Najpierw ustaw profil wystawcy, potem parametry PDF i transportu.
+          </p>
+        </section>
+        <AdminIssuerProfilesSection />
+        <section className="bg-card border border-border rounded-lg p-3">
+          <h2 className="text-sm font-semibold mb-1">Transport i dane dokumentow</h2>
+          <p className="text-xs text-muted-foreground mb-3">
+            Ustawienia ponizej sa wspolne dla PDF i wycen transportu.
+          </p>
         <div className="mb-4 border border-border rounded p-3 bg-surface-2/20 space-y-2">
           <div className="text-xs font-semibold">Adres magazynu (punkt startowy liczenia km)</div>
           <div className="relative">
@@ -748,13 +755,14 @@ export default function AdminUsersPage() {
           )}
         </div>
       </section>
+      </div>
       )}
 
       {activeTab === 'users' && (
-      <section className="bg-card border border-border rounded-lg p-4">
-        <h2 className="text-sm font-semibold mb-1">Dodaj osobe do zespolu</h2>
+      <section className="bg-card border border-border rounded-lg p-3 overflow-x-auto space-y-3">
+        <h2 className="text-sm font-semibold mb-1">Zespol: dodawanie i zarzadzanie kontami</h2>
         <p className="text-xs text-muted-foreground mb-3">
-          Konto pojawi sie jako aktywne dopiero po otwarciu linku z maila i ustawieniu hasla przez uzytkownika.
+          W jednym miejscu: zaproszenie, lista kont, zmiana roli i odebranie dostepu.
         </p>
         <form onSubmit={handleInvite} className="grid md:grid-cols-4 gap-2">
           <input
@@ -788,15 +796,8 @@ export default function AdminUsersPage() {
         {inviteMutation.isError && inviteErrorMessage ? (
           <p className="text-xs text-destructive mt-2">{inviteErrorMessage}</p>
         ) : null}
-      </section>
-      )}
-
-      {activeTab === 'users' && (
-      <section className="bg-card border border-border rounded-lg p-4 overflow-x-auto">
-        <h2 className="text-sm font-semibold mb-1">Lista kont i role</h2>
-        <p className="text-xs text-muted-foreground mb-3">
-          W tej tabeli mozesz zmienic role, zresetowac haslo albo odebrac dostep.
-        </p>
+        <div className="border-t border-border/70 pt-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Lista kont i role</h3>
         {usersQuery.isLoading ? (
           <p className="text-sm text-muted-foreground">Ładowanie...</p>
         ) : (
@@ -854,11 +855,14 @@ export default function AdminUsersPage() {
             </tbody>
           </table>
         )}
+        </div>
       </section>
       )}
 
-      {canReadRoles && activeTab === 'users' && (
-      <section className="bg-card border border-border rounded-lg p-4 overflow-x-auto space-y-4">
+      {activeTab === 'users' && (
+      <div className="grid xl:grid-cols-[1.8fr_1fr] gap-3">
+      {canReadRoles && (
+      <section className="bg-card border border-border rounded-lg p-3 overflow-x-auto space-y-4">
         <h2 className="text-sm font-semibold mb-1">Role i uprawnienia</h2>
         <p className="text-xs text-muted-foreground">
           Uprawnienia sa pogrupowane tematycznie. Najpierw utworz role, potem doprecyzuj jej dostep.
@@ -972,8 +976,8 @@ export default function AdminUsersPage() {
       </section>
       )}
 
-      {canReadAudit && activeTab === 'users' && (
-      <section className="bg-card border border-border rounded-lg p-4 overflow-x-auto">
+      {canReadAudit && (
+      <section className="bg-card border border-border rounded-lg p-3 overflow-x-auto">
         <h2 className="text-sm font-semibold mb-1">Historia dzialan administracyjnych</h2>
         <p className="text-xs text-muted-foreground mb-3">
           Szybki podglad kto, kiedy i na czym wykonal operacje administracyjne.
@@ -1011,6 +1015,8 @@ export default function AdminUsersPage() {
           </table>
         )}
       </section>
+      )}
+      </div>
       )}
 
       <ConfirmationModal
