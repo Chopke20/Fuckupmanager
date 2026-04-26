@@ -125,7 +125,6 @@ export type OrderLike = {
 export type BuildOfferHtmlV5Options = {
   /** Data w nagłówku („Warszawa, …”) — domyślnie bieżąca. Ze snapshotu: `generatedAt`. */
   issuedAt?: string | Date
-  documentFooterText?: string | null
 }
 
 export function buildOfferHtmlV5(
@@ -472,9 +471,7 @@ export function buildOfferHtmlV5(
       ${COMPANY.name}<br>
       ${COMPANY.address}<br>
       NIP: ${COMPANY.nip}`
-  const footerRight = options?.documentFooterText?.trim()
-    ? `${footerRightCore}<br>${escapeHtml(options.documentFooterText.trim())}`
-    : footerRightCore
+  const footerRight = footerRightCore
 
   const replacements: [string, string][] = [
     ['{{OFFER_NUMBER}}', offerNumberDisplay],

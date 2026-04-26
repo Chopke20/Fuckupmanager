@@ -42,9 +42,9 @@ export default function TopBar() {
             </div>
           </button>
           {menuOpen && (
-            <div className="absolute right-0 mt-2 w-44 bg-card border border-border rounded shadow-lg z-20">
+            <div className="absolute right-0 mt-2 w-44 bg-surface border border-border rounded shadow-lg z-20 overflow-hidden">
               <button
-                className="w-full text-left text-sm px-3 py-2 hover:bg-surface"
+                className="w-full text-left text-sm px-3 py-2 bg-surface hover:bg-surface-2"
                 onClick={async () => {
                   setMenuOpen(false)
                   await logout()

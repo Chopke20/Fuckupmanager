@@ -87,7 +87,6 @@ export type BuildWarehousePdfHtmlParams = {
   } | null
   equipmentItems: WarehousePdfEquipmentRow[]
   projectContactKey?: string | null
-  documentFooterText?: string | null
 }
 
 export function buildWarehousePdfHtml(params: BuildWarehousePdfHtmlParams): string {
@@ -177,9 +176,7 @@ export function buildWarehousePdfHtml(params: BuildWarehousePdfHtmlParams): stri
       ${escapeHtml(companyName)}<br>
       ${escapeHtml(companyAddress)}<br>
       NIP: ${escapeHtml(companyNip)}`
-  const footerRight = params.documentFooterText?.trim()
-    ? `${footerRightCore}<br>${escapeHtml(params.documentFooterText.trim())}`
-    : footerRightCore
+  const footerRight = footerRightCore
 
   const replacements: [string, string][] = [
     ['{{HDR_LOGO}}', hdrLogo],

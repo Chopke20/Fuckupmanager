@@ -4,7 +4,7 @@ import { useAuth } from '../../../modules/auth/AuthProvider'
 
 export default function Sidebar() {
   const { hasPermission, user } = useAuth()
-  const brandName = user?.brandName || 'Lama Stage'
+  const appName = 'Lama Stage'
   const logoSrc = user?.logoDarkBgUrl || '/logo.png'
   const companyCode = user?.companyCode || 'main'
   const navItems = [
@@ -20,13 +20,13 @@ export default function Sidebar() {
   return (
     <aside className="w-44 shrink-0 bg-black border-r border-border flex flex-col">
       <div className="p-3 border-b border-border flex items-center gap-2">
-        <img src={logoSrc} alt={brandName} className="h-8 w-8 object-contain" />
+        <img src={logoSrc} alt={appName} className="h-8 w-8 object-contain" />
         <div className="min-w-0">
           <h1 className="text-base font-bold text-primary font-heading truncate">
-            {brandName.toUpperCase()}
+            {appName.toUpperCase()}
           </h1>
           <p className="text-[10px] text-muted-foreground uppercase tracking-wider truncate">
-            Panel operacyjny
+            Fuckup Manager
           </p>
         </div>
       </div>
@@ -55,7 +55,7 @@ export default function Sidebar() {
       </nav>
       <div className="p-3 border-t border-border space-y-1.5">
         <div className="text-xs text-muted-foreground leading-snug">
-          v.0.5.0 • {brandName} © 2026
+          v.0.5.0 • {appName} © 2026
         </div>
         <div className="text-[10px] uppercase tracking-wider text-muted-foreground/80">
           Firma: {companyCode}

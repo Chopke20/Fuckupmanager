@@ -71,7 +71,7 @@ export default function AdminAppSettingsSection() {
       <form className="space-y-3" onSubmit={onSubmit}>
         <div className="grid md:grid-cols-2 gap-2">
           <label className="text-xs space-y-1">
-            <span className="text-muted-foreground">Nazwa aplikacji</span>
+            <span className="text-muted-foreground">Nazwa firmy</span>
             <input
               value={draft.brandName ?? ''}
               onChange={(e) => setField('brandName', e.target.value)}
@@ -79,23 +79,7 @@ export default function AdminAppSettingsSection() {
               required
             />
           </label>
-          <label className="text-xs space-y-1">
-            <span className="text-muted-foreground">Podtytuł</span>
-            <input
-              value={draft.brandTagline ?? ''}
-              onChange={(e) => setField('brandTagline', e.target.value)}
-              className="w-full bg-surface border border-border rounded px-3 py-2 text-sm"
-            />
-          </label>
         </div>
-        <label className="text-xs space-y-1 block">
-          <span className="text-muted-foreground">Tekst na logowaniu</span>
-          <input
-            value={draft.loginHeadline ?? ''}
-            onChange={(e) => setField('loginHeadline', e.target.value)}
-            className="w-full bg-surface border border-border rounded px-3 py-2 text-sm"
-          />
-        </label>
         <div className="grid md:grid-cols-2 gap-2">
           <label className="text-xs space-y-1">
             <span className="text-muted-foreground">Logo (ciemne tło)</span>
@@ -158,14 +142,6 @@ export default function AdminAppSettingsSection() {
             />
           </label>
         </div>
-        <label className="text-xs space-y-1 block">
-          <span className="text-muted-foreground">Stopka dokumentów PDF</span>
-          <input
-            value={draft.documentFooterText ?? ''}
-            onChange={(e) => setField('documentFooterText', e.target.value)}
-            className="w-full bg-surface border border-border rounded px-3 py-2 text-sm"
-          />
-        </label>
         <button
           type="submit"
           className="bg-primary text-black rounded px-3 py-2 text-sm disabled:opacity-50"

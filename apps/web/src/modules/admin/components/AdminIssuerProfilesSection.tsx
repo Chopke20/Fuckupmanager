@@ -26,6 +26,16 @@ const emptyForm = (): CreateIssuerProfileInput & { profileKey?: string } => ({
   phone: '',
 })
 
+function normalizeProfileKey(raw: string): string {
+  return raw
+    .trim()
+    .replace(/\s+/g, '_')
+    .replace(/[^A-Za-z0-9_]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 80)
+}
+
 function profileToForm(p: IssuerProfilePublic): CreateIssuerProfileInput & { profileKey?: string } {
   return {
     profileKey: p.profileKey,
@@ -69,8 +79,9 @@ export default function AdminIssuerProfilesSection() {
 
   const createMut = useMutation({
     mutationFn: () => {
+      const normalizedKey = normalizeProfileKey(form.profileKey ?? '')
       const body: CreateIssuerProfileInput = {
-        ...(form.profileKey?.trim() ? { profileKey: form.profileKey.trim() } : {}),
+        ...(normalizedKey ? { profileKey: normalizedKey } : {}),
         companyName: form.companyName.trim(),
         address: form.address.trim(),
         nip: form.nip.trim(),
@@ -247,9 +258,15 @@ export default function AdminIssuerProfilesSection() {
               <input
                 value={form.profileKey ?? ''}
                 onChange={(e) => setForm((f) => ({ ...f, profileKey: e.target.value }))}
+                onBlur={() =>
+                  setForm((f) => ({ ...f, profileKey: normalizeProfileKey(f.profileKey ?? '') }))
+                }
                 placeholder="np. LAMA_STAGE — puste = wygeneruj automatycznie"
                 className="mt-0.5 w-full px-2 py-1 text-sm bg-background border border-border rounded font-mono"
               />
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Dozwolone znaki: litery/cyfry/_. Spacje i polskie znaki zostaną zamienione na <span className="font-mono">_</span>.
+              </p>
             </label>
           )}
           <label className="block text-xs">
