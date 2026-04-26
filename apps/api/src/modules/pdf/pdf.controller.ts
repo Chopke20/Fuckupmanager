@@ -79,6 +79,37 @@ export class PdfController {
     return { name, phone, email }
   }
 
+  private normalizeHexColor(value: unknown): string | null {
+    if (typeof value !== 'string') return null
+    const trimmed = value.trim()
+    if (!trimmed) return null
+    const withHash = trimmed.startsWith('#') ? trimmed : `#${trimmed}`
+    return /^#[0-9a-fA-F]{6}$/.test(withHash) ? withHash.toUpperCase() : null
+  }
+
+  private pickDocumentsLogoUrl(appSettings: unknown): string | null {
+    const s = appSettings as {
+      logoDarkBgUrl?: string | null
+      logoLightBgUrl?: string | null
+      documentsLogoVariant?: string | null
+      offerLogoVariant?: string | null
+    } | null
+    const dark = typeof s?.logoDarkBgUrl === 'string' && s.logoDarkBgUrl.trim() ? s.logoDarkBgUrl.trim() : null
+    const light = typeof s?.logoLightBgUrl === 'string' && s.logoLightBgUrl.trim() ? s.logoLightBgUrl.trim() : null
+    const variant = s?.documentsLogoVariant ?? s?.offerLogoVariant ?? null
+    if (variant === 'LIGHT') return light ?? dark
+    if (variant === 'DARK') return dark ?? light
+    return dark ?? light
+  }
+
+  private getPdfBranding(appSettings: unknown): { accentColorHex: string | null; logoUrl: string | null } {
+    const s = appSettings as { primaryColorHex?: string | null } | null
+    return {
+      accentColorHex: this.normalizeHexColor(s?.primaryColorHex ?? null),
+      logoUrl: this.pickDocumentsLogoUrl(appSettings),
+    }
+  }
+
   /** Podgląd PDF bez podbijania wersji */
   async previewOffer(req: Request, res: Response) {
     try {
@@ -94,6 +125,7 @@ export class PdfController {
       const offerNumberDisplay = getOfferNumberDisplay(order, nextVer)
       const generatedAt = new Date().toISOString()
       const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
+      const branding = this.getPdfBranding(appSettings)
       const preferredContactId =
         (draftPayload && typeof draftPayload === 'object' && 'projectContactId' in (draftPayload as any))
           ? String((draftPayload as any).projectContactId ?? '').trim() || null
@@ -106,6 +138,8 @@ export class PdfController {
       const html = buildOfferHtmlV5(orderOfferSnapshotToPdfOrderLike(snapshot), offerNumberDisplay, {
         issuedAt: generatedAt,
         projectContact,
+        accentColorHex: branding.accentColorHex,
+        logoUrl: branding.logoUrl,
       })
       const pdfBuffer = await this.renderPdf(html)
       res.setHeader('Content-Type', 'application/pdf')
@@ -151,6 +185,7 @@ export class PdfController {
       const draftPayload = await loadOfferDraftPayload(prisma, orderId, order)
       const generatedAt = new Date().toISOString()
       const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
+      const branding = this.getPdfBranding(appSettings)
       const preferredContactId =
         (draftPayload && typeof draftPayload === 'object' && 'projectContactId' in (draftPayload as any))
           ? String((draftPayload as any).projectContactId ?? '').trim() || null
@@ -246,6 +281,8 @@ export class PdfController {
       const html = buildOfferHtmlV5(orderOfferSnapshotToPdfOrderLike(snapshot), finalOfferNumber, {
         issuedAt: generatedAt,
         projectContact,
+        accentColorHex: branding.accentColorHex,
+        logoUrl: branding.logoUrl,
       })
       const pdfBuffer = await this.renderPdf(html)
 
@@ -309,15 +346,20 @@ export class PdfController {
       const issuedAt: string | undefined =
         parsed.success && parsed.data.generatedAt ? parsed.data.generatedAt : issuedAtFallback
       const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
+      const branding = this.getPdfBranding(appSettings)
       const projectContact = this.pickProjectContact(appSettings, null)
       const html = parsed.success
         ? buildOfferHtmlV5(orderOfferSnapshotToPdfOrderLike(parsed.data), exportRecord.documentNumber, {
             issuedAt,
             projectContact,
+            accentColorHex: branding.accentColorHex,
+            logoUrl: branding.logoUrl,
           })
         : buildOfferHtmlV5(raw as OrderLike, exportRecord.documentNumber, {
             issuedAt,
             projectContact,
+            accentColorHex: branding.accentColorHex,
+            logoUrl: branding.logoUrl,
           })
       const pdfBuffer = await this.renderPdf(html)
 
@@ -397,6 +439,7 @@ export class PdfController {
 
       const issuer = await resolveDefaultIssuerForDraft(prisma)
       const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
+      const branding = this.getPdfBranding(appSettings)
       const projectContact = this.pickProjectContact(appSettings, null)
       const generatedAt = new Date().toISOString()
       const html = buildWarehousePdfHtml({
@@ -429,6 +472,8 @@ export class PdfController {
         })),
         projectContactKey: order.projectContactKey,
         projectContact,
+        accentColorHex: branding.accentColorHex,
+        logoUrl: branding.logoUrl,
       })
 
       const pdfBuffer = await this.renderPdf(html)

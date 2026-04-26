@@ -8,6 +8,7 @@ export const UserPublicSchema = z.object({
   brandName: z.string().trim().min(1),
   logoDarkBgUrl: z.string().trim().url().nullable().optional(),
   logoLightBgUrl: z.string().trim().url().nullable().optional(),
+  primaryColorHex: z.string().trim().regex(/^#?[0-9a-fA-F]{6}$/).nullable().optional(),
   sidebarLogoVariant: z.enum(['DARK', 'LIGHT']).nullable().optional(),
   loginLogoVariant: z.enum(['DARK', 'LIGHT']).nullable().optional(),
   documentsLogoVariant: z.enum(['DARK', 'LIGHT']).nullable().optional(),

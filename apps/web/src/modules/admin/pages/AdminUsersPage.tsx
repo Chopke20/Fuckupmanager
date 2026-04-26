@@ -74,6 +74,87 @@ function validateRanges(ranges: TransportRangeDraft[]) {
   return null
 }
 
+type AdminTab = 'users' | 'branding' | 'documents' | 'backup'
+type PermissionGroup = {
+  key: string
+  label: string
+  hint: string
+  permissions: Permission[]
+}
+
+const ADMIN_TABS: Array<{ key: AdminTab; title: string; description: string }> = [
+  {
+    key: 'users',
+    title: 'Zespol i dostepy',
+    description: 'Zapraszanie osob, role, uprawnienia i historia zmian',
+  },
+  {
+    key: 'branding',
+    title: 'Tozsamosc firmy',
+    description: 'Branding, kontakt i ustawienia widoczne dla uzytkownikow',
+  },
+  {
+    key: 'documents',
+    title: 'Dokumenty i wycena',
+    description: 'Profile wystawcy, opiekunowie PDF oraz kalkulacja transportu',
+  },
+  {
+    key: 'backup',
+    title: 'Bezpieczenstwo danych',
+    description: 'Pobieranie kopii bazy przed wiekszymi zmianami i wdrozeniami',
+  },
+]
+
+const PERMISSION_GROUP_META: Record<string, { label: string; hint: string }> = {
+  admin: {
+    label: 'Administracja',
+    hint: 'Uzytkownicy, role, audyt i operacje systemowe',
+  },
+  orders: {
+    label: 'Zlecenia',
+    hint: 'Tworzenie, edycja i obieg dokumentow zlecen',
+  },
+  clients: {
+    label: 'Klienci',
+    hint: 'Dostep do bazy klientow i ich danych',
+  },
+  equipment: {
+    label: 'Sprzet',
+    hint: 'Lista sprzetu, status i dostepnosc',
+  },
+  finance: {
+    label: 'Finanse',
+    hint: 'Wartosci finansowe, podsumowania i rozliczenia',
+  },
+  default: {
+    label: 'Pozostale',
+    hint: 'Uprawnienia niewpisujace sie w glowny obszar',
+  },
+}
+
+function buildPermissionGroups(permissions: readonly Permission[]): PermissionGroup[] {
+  const fallbackMeta = { label: 'Pozostale', hint: 'Uprawnienia niewpisujace sie w glowny obszar' }
+  const grouped = permissions.reduce<Record<string, Permission[]>>((acc, permission) => {
+    const [moduleKey] = permission.split('.')
+    const groupKey = moduleKey || 'default'
+    if (!acc[groupKey]) acc[groupKey] = []
+    acc[groupKey]!.push(permission)
+    return acc
+  }, {})
+
+  return Object.entries(grouped)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, values]) => {
+      const meta = PERMISSION_GROUP_META[key] ?? PERMISSION_GROUP_META.default ?? fallbackMeta
+      return {
+        key,
+        label: meta.label,
+        hint: meta.hint,
+        permissions: [...values].sort((a, b) => a.localeCompare(b)),
+      }
+    })
+}
+
 export default function AdminUsersPage() {
   const { hasPermission } = useAuth()
   const queryClient = useQueryClient()
@@ -98,7 +179,7 @@ export default function AdminUsersPage() {
   const [defaultProjectContactId, setDefaultProjectContactId] = useState<string>('')
   const [projectContactsError, setProjectContactsError] = useState<string | null>(null)
   const [backupError, setBackupError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'users' | 'branding' | 'documents' | 'backup'>('users')
+  const [activeTab, setActiveTab] = useState<AdminTab>('users')
 
   const canReadUsers = hasPermission('admin.users.read')
   const canReadAudit = hasPermission('admin.audit.read')
@@ -232,6 +313,7 @@ export default function AdminUsersPage() {
 
   const users = useMemo(() => usersQuery.data?.data || [], [usersQuery.data])
   const roles = useMemo(() => rolesQuery.data?.data || [], [rolesQuery.data])
+  const permissionGroups = useMemo(() => buildPermissionGroups(PERMISSIONS), [])
 
   useEffect(() => {
     const data = transportSettingsQuery.data
@@ -298,16 +380,56 @@ export default function AdminUsersPage() {
     else setter([...list, perm])
   }
 
+  const renderPermissionEditor = (
+    selectedPermissions: Permission[],
+    setSelectedPermissions: (next: Permission[]) => void,
+    keyPrefix: string,
+  ) => (
+    <div className="space-y-3">
+      {permissionGroups.map((group) => (
+        <div key={`${keyPrefix}-${group.key}`} className="border border-border rounded-md p-3 bg-surface/30">
+          <div className="mb-2">
+            <div className="text-xs font-semibold">{group.label}</div>
+            <div className="text-[11px] text-muted-foreground">{group.hint}</div>
+          </div>
+          <div className="grid md:grid-cols-2 gap-1.5">
+            {group.permissions.map((perm) => (
+              <label key={`${keyPrefix}-${perm}`} className="flex items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={selectedPermissions.includes(perm)}
+                  onChange={() => togglePermission(perm, selectedPermissions, setSelectedPermissions)}
+                />
+                <span>{perm}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+
   return (
     <div className="space-y-5">
       <section className="bg-card border border-border rounded-lg p-4">
         <h1 className="text-lg font-semibold mb-1">Ustawienia administratora</h1>
-        <p className="text-sm text-muted-foreground">Zarządzaj dostępami, danymi firmy, dokumentami i backupami tej instancji.</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button type="button" onClick={() => setActiveTab('users')} className={`px-3 py-1.5 text-xs rounded border ${activeTab === 'users' ? 'bg-surface border-primary text-primary' : 'border-border text-muted-foreground'}`}>Użytkownicy i role</button>
-          <button type="button" onClick={() => setActiveTab('branding')} className={`px-3 py-1.5 text-xs rounded border ${activeTab === 'branding' ? 'bg-surface border-primary text-primary' : 'border-border text-muted-foreground'}`}>Firma i branding</button>
-          <button type="button" onClick={() => setActiveTab('documents')} className={`px-3 py-1.5 text-xs rounded border ${activeTab === 'documents' ? 'bg-surface border-primary text-primary' : 'border-border text-muted-foreground'}`}>Dokumenty i komunikacja</button>
-          <button type="button" onClick={() => setActiveTab('backup')} className={`px-3 py-1.5 text-xs rounded border ${activeTab === 'backup' ? 'bg-surface border-primary text-primary' : 'border-border text-muted-foreground'}`}>Backup i odtwarzanie</button>
+        <p className="text-sm text-muted-foreground">
+          Wszystkie ustawienia zostaja bez zmian funkcjonalnych - pogrupowane tak, aby szybciej znalezc potrzebna sekcje.
+        </p>
+        <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+          {ADMIN_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              className={`text-left rounded-md border p-3 ${activeTab === tab.key ? 'bg-surface border-primary text-primary' : 'border-border text-muted-foreground hover:bg-surface/60'}`}
+            >
+              <div className="text-xs font-semibold uppercase tracking-wide">{tab.title}</div>
+              <div className={`mt-1 text-[11px] ${activeTab === tab.key ? 'text-primary/90' : 'text-muted-foreground'}`}>
+                {tab.description}
+              </div>
+            </button>
+          ))}
         </div>
       </section>
 
@@ -318,7 +440,7 @@ export default function AdminUsersPage() {
       <section className="bg-card border border-border rounded-lg p-4">
         <h2 className="text-sm font-semibold mb-3">Backup bazy danych</h2>
         <p className="text-xs text-muted-foreground mb-3">
-          Pobierz pełną kopię bazy PostgreSQL dla tej firmy. Zachowaj kopię w bezpiecznym miejscu przed wdrożeniem i testami.
+          Pobierz pelna kopie bazy PostgreSQL dla tej firmy. Rekomendowane przed wdrozeniem, migracja lub testami na produkcji.
         </p>
         <div className="flex items-center gap-2">
           <button
@@ -342,12 +464,12 @@ export default function AdminUsersPage() {
 
       {activeTab === 'documents' && (
       <section className="bg-card border border-border rounded-lg p-4">
-        <h2 className="text-sm font-semibold mb-3">Ustawienia transportu (globalne)</h2>
+        <h2 className="text-sm font-semibold mb-1">Transport i dane dokumentow</h2>
         <p className="text-xs text-muted-foreground mb-3">
-          Te wartości są używane do automatycznej wyceny transportu we wszystkich nowych i edytowanych zleceniach.
+          Ta sekcja steruje danymi wykorzystywanymi w PDF oraz globalna wycena transportu dla nowych i edytowanych zlecen.
         </p>
         <div className="mb-4 border border-border rounded p-3 bg-surface-2/20 space-y-2">
-          <div className="text-xs font-semibold">Siedziba magazynu (punkt startowy do km)</div>
+          <div className="text-xs font-semibold">Adres magazynu (punkt startowy liczenia km)</div>
           <div className="relative">
             <input
               value={warehouseQuery || warehouseAddress}
@@ -392,11 +514,11 @@ export default function AdminUsersPage() {
             {appSettingsQuery.isLoading ? <span className="text-xs text-muted-foreground">Ładowanie…</span> : null}
           </div>
           <p className="text-[11px] text-muted-foreground">
-            To ustawienie jest używane do obliczania km (Google Distance Matrix) dla transportu w zleceniach.
+            To ustawienie jest uzywane do obliczania dystansu (Google Distance Matrix) dla transportu w zleceniach.
           </p>
         </div>
         <div className="mb-4 border border-border rounded p-3 bg-surface-2/20 space-y-2">
-          <div className="text-xs font-semibold">Opiekunowie projektu (PDF)</div>
+          <div className="text-xs font-semibold">Opiekunowie projektu (widoczni na PDF)</div>
           <p className="text-[11px] text-muted-foreground">
             Dane widoczne w stopce PDF jako „Opiekun projektu”. Możesz dodać kilku opiekunów i wybrać domyślnego dla tej firmy.
           </p>
@@ -630,9 +752,9 @@ export default function AdminUsersPage() {
 
       {activeTab === 'users' && (
       <section className="bg-card border border-border rounded-lg p-4">
-        <h2 className="text-sm font-semibold mb-3">Zaproś użytkownika</h2>
+        <h2 className="text-sm font-semibold mb-1">Dodaj osobe do zespolu</h2>
         <p className="text-xs text-muted-foreground mb-3">
-          Nowe konto pojawi się na liście dopiero po otwarciu linku z maila i ustawieniu hasła.
+          Konto pojawi sie jako aktywne dopiero po otwarciu linku z maila i ustawieniu hasla przez uzytkownika.
         </p>
         <form onSubmit={handleInvite} className="grid md:grid-cols-4 gap-2">
           <input
@@ -671,7 +793,10 @@ export default function AdminUsersPage() {
 
       {activeTab === 'users' && (
       <section className="bg-card border border-border rounded-lg p-4 overflow-x-auto">
-        <h2 className="text-sm font-semibold mb-3">Lista użytkowników</h2>
+        <h2 className="text-sm font-semibold mb-1">Lista kont i role</h2>
+        <p className="text-xs text-muted-foreground mb-3">
+          W tej tabeli mozesz zmienic role, zresetowac haslo albo odebrac dostep.
+        </p>
         {usersQuery.isLoading ? (
           <p className="text-sm text-muted-foreground">Ładowanie...</p>
         ) : (
@@ -734,7 +859,17 @@ export default function AdminUsersPage() {
 
       {canReadRoles && activeTab === 'users' && (
       <section className="bg-card border border-border rounded-lg p-4 overflow-x-auto space-y-4">
-        <h2 className="text-sm font-semibold">Role i uprawnienia (edytowalne)</h2>
+        <h2 className="text-sm font-semibold mb-1">Role i uprawnienia</h2>
+        <p className="text-xs text-muted-foreground">
+          Uprawnienia sa pogrupowane tematycznie. Najpierw utworz role, potem doprecyzuj jej dostep.
+        </p>
+        <div className="border border-border rounded-md p-3 bg-surface/30 space-y-3">
+          <div>
+            <h3 className="text-xs font-semibold">Nowa rola</h3>
+            <p className="text-[11px] text-muted-foreground">
+              Klucz roli powinien byc stabilny (np. SALES_MANAGER), a nazwa czytelna dla zespolu.
+            </p>
+          </div>
         <div className="grid md:grid-cols-3 gap-2">
           <input
             value={newRoleKey}
@@ -755,18 +890,7 @@ export default function AdminUsersPage() {
             className="bg-surface border border-border rounded px-3 py-2 text-sm"
           />
         </div>
-        <div className="grid md:grid-cols-3 gap-2">
-          {PERMISSIONS.map((perm) => (
-            <label key={perm} className="flex items-center gap-2 text-xs">
-              <input
-                type="checkbox"
-                checked={newRolePermissions.includes(perm)}
-                onChange={() => togglePermission(perm, newRolePermissions, setNewRolePermissions)}
-              />
-              <span>{perm}</span>
-            </label>
-          ))}
-        </div>
+        {renderPermissionEditor(newRolePermissions, setNewRolePermissions, 'new-role')}
         <button
           className="bg-primary text-black rounded px-3 py-2 text-sm disabled:opacity-50"
           onClick={() => createRoleMutation.mutate()}
@@ -774,6 +898,7 @@ export default function AdminUsersPage() {
         >
           {createRoleMutation.isPending ? 'Tworzenie...' : 'Utwórz rolę'}
         </button>
+        </div>
 
         <table className="w-full text-sm">
           <thead>
@@ -794,18 +919,7 @@ export default function AdminUsersPage() {
                 </td>
                 <td className="py-2">
                   {editingRoleKey === role.roleKey ? (
-                    <div className="grid md:grid-cols-2 gap-1">
-                      {PERMISSIONS.map((perm) => (
-                        <label key={perm} className="flex items-center gap-2 text-xs">
-                          <input
-                            type="checkbox"
-                            checked={editingPermissions.includes(perm)}
-                            onChange={() => togglePermission(perm, editingPermissions, setEditingPermissions)}
-                          />
-                          <span>{perm}</span>
-                        </label>
-                      ))}
-                    </div>
+                    renderPermissionEditor(editingPermissions, setEditingPermissions, role.roleKey)
                   ) : (
                     <div className="text-xs text-muted-foreground break-words">{role.permissions.join(', ')}</div>
                   )}
@@ -860,7 +974,10 @@ export default function AdminUsersPage() {
 
       {canReadAudit && activeTab === 'users' && (
       <section className="bg-card border border-border rounded-lg p-4 overflow-x-auto">
-        <h2 className="text-sm font-semibold mb-3">Audit logi (akcje Admin)</h2>
+        <h2 className="text-sm font-semibold mb-1">Historia dzialan administracyjnych</h2>
+        <p className="text-xs text-muted-foreground mb-3">
+          Szybki podglad kto, kiedy i na czym wykonal operacje administracyjne.
+        </p>
         {auditQuery.isLoading ? (
           <p className="text-sm text-muted-foreground">Ładowanie logów...</p>
         ) : (

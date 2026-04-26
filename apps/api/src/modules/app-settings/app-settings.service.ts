@@ -57,6 +57,7 @@ function toPublicDto(companyCode: string, row: Awaited<ReturnType<typeof getOrCr
     loginHeadline: row.loginHeadline,
     logoDarkBgUrl: row.logoDarkBgUrl,
     logoLightBgUrl: row.logoLightBgUrl,
+    loginLogoVariant: (row as { loginLogoVariant?: 'DARK' | 'LIGHT' | null }).loginLogoVariant ?? null,
     primaryColorHex: row.primaryColorHex,
     supportEmail: row.supportEmail,
     supportPhone: row.supportPhone,
@@ -194,6 +195,8 @@ export async function listPublicCompaniesWithBranding() {
           displayName: settings.brandName || company.displayName,
           logoDarkBgUrl: settings.logoDarkBgUrl ?? company.logoDarkBgUrl ?? null,
           logoLightBgUrl: settings.logoLightBgUrl ?? company.logoLightBgUrl ?? null,
+          loginLogoVariant: settings.loginLogoVariant ?? null,
+          primaryColorHex: settings.primaryColorHex ?? null,
           loginHelpText: settings.loginHeadline ?? company.loginHelpText ?? null,
         })
       } catch {
@@ -202,6 +205,8 @@ export async function listPublicCompaniesWithBranding() {
           displayName: company.displayName,
           logoDarkBgUrl: company.logoDarkBgUrl ?? null,
           logoLightBgUrl: company.logoLightBgUrl ?? null,
+          loginLogoVariant: null,
+          primaryColorHex: null,
           loginHelpText: company.loginHelpText ?? null,
         })
       }

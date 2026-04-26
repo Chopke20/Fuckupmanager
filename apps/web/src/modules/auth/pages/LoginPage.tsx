@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from 'react'
 import { useLocation, useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../AuthProvider'
 import { apiListPublicCompanies, PublicCompany } from '../auth.api'
+import { applyCompanyTheme } from '../../../lib/companyTheme'
 
 export default function LoginPage() {
   const [companies, setCompanies] = useState<PublicCompany[]>([])
@@ -36,6 +37,17 @@ export default function LoginPage() {
 
   const selectedCompany = companies.find((item) => item.code === selectedCompanyCode) ?? null
 
+  useEffect(() => {
+    applyCompanyTheme(selectedCompany?.primaryColorHex ?? null)
+  }, [selectedCompany?.primaryColorHex])
+
+  const resolveLoginLogo = (company: PublicCompany): string | null => {
+    const variant = company.loginLogoVariant
+    if (variant === 'LIGHT') return company.logoLightBgUrl ?? company.logoDarkBgUrl ?? null
+    if (variant === 'DARK') return company.logoDarkBgUrl ?? company.logoLightBgUrl ?? null
+    return company.logoDarkBgUrl ?? company.logoLightBgUrl ?? null
+  }
+
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!selectedCompanyCode) {
@@ -69,6 +81,7 @@ export default function LoginPage() {
             <div className="grid grid-cols-2 gap-2">
               {companies.map((company) => {
                 const selected = selectedCompanyCode === company.code
+                const logoUrl = resolveLoginLogo(company)
                 return (
                   <button
                     key={company.code}
@@ -78,8 +91,8 @@ export default function LoginPage() {
                       selected ? 'border-primary bg-surface' : 'border-border hover:bg-surface'
                     }`}
                   >
-                    {company.logoDarkBgUrl ? (
-                      <img src={company.logoDarkBgUrl} alt={company.displayName} className="h-8 w-full object-contain object-left mb-1" />
+                    {logoUrl ? (
+                      <img src={logoUrl} alt={company.displayName} className="h-8 w-full object-contain object-left mb-1" />
                     ) : null}
                     <div className="text-sm font-medium">{company.displayName}</div>
                   </button>

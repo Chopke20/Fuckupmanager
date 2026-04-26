@@ -43,6 +43,7 @@ export const AppSettingsPublicSchema = z.object({
   loginHeadline: z.string().trim().nullable().optional(),
   logoDarkBgUrl: z.string().trim().url().nullable().optional(),
   logoLightBgUrl: z.string().trim().url().nullable().optional(),
+  loginLogoVariant: LogoVariantSchema.nullable().optional(),
   primaryColorHex: z.string().trim().nullable().optional(),
   supportEmail: z.string().trim().nullable().optional(),
   supportPhone: z.string().trim().nullable().optional(),

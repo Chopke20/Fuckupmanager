@@ -45,6 +45,13 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;')
 }
 
+function normalizeHexColor(value?: string | null): string | null {
+  if (!value) return null
+  const trimmed = value.trim()
+  const withHash = trimmed.startsWith('#') ? trimmed : `#${trimmed}`
+  return /^#[0-9a-fA-F]{6}$/.test(withHash) ? withHash.toUpperCase() : null
+}
+
 export type WarehousePdfIssuer = {
   companyName: string
   nip: string
@@ -83,13 +90,21 @@ export type BuildWarehousePdfHtmlParams = {
   equipmentItems: WarehousePdfEquipmentRow[]
   projectContactKey?: string | null
   projectContact?: { name?: string | null; phone?: string | null; email?: string | null } | null
+  accentColorHex?: string | null
+  logoUrl?: string | null
 }
 
 export function buildWarehousePdfHtml(params: BuildWarehousePdfHtmlParams): string {
   const templatePath = path.join(getTemplatesDir(), 'warehouse-v1.html')
   let html = fs.readFileSync(templatePath, 'utf-8')
+  const accent = normalizeHexColor(params.accentColorHex)
+  if (accent) {
+    html = html.replace(/--accent:\s*#[0-9a-fA-F]{6};/, `--accent: ${accent};`)
+  }
 
-  const hdrLogo = extractHdrLogoFromOfferHtml()
+  const hdrLogo = params.logoUrl?.trim()
+    ? `<img class="hdr__logo" src="${escapeHtml(params.logoUrl.trim())}" alt="Logo">`
+    : extractHdrLogoFromOfferHtml()
   const issuer = params.issuer
   const companyName = issuer.companyName || COMPANY.name
   const companyNip = issuer.nip || COMPANY.nip

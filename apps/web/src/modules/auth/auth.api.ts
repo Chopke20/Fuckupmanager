@@ -19,6 +19,8 @@ export type PublicCompany = {
   displayName: string
   logoDarkBgUrl?: string | null
   logoLightBgUrl?: string | null
+  loginLogoVariant?: 'DARK' | 'LIGHT' | null
+  primaryColorHex?: string | null
   loginHelpText?: string | null
 }
 

@@ -46,6 +46,8 @@ export const PublicCompanySchema = z.object({
   displayName: z.string().trim().min(1),
   logoDarkBgUrl: z.string().trim().url().nullable().optional(),
   logoLightBgUrl: z.string().trim().url().nullable().optional(),
+  loginLogoVariant: z.enum(['DARK', 'LIGHT']).nullable().optional(),
+  primaryColorHex: z.string().trim().regex(/^#?[0-9a-fA-F]{6}$/).nullable().optional(),
   loginHelpText: z.string().trim().max(240).nullable().optional(),
 });
 

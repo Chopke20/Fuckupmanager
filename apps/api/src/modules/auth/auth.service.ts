@@ -60,6 +60,7 @@ function toSafeUserWithCompany(user: User, companyCode: string): SafeUser & {
   brandName: string
   logoDarkBgUrl: string | null
   logoLightBgUrl: string | null
+  primaryColorHex?: string | null
   sidebarLogoVariant?: string | null
   loginLogoVariant?: string | null
   documentsLogoVariant?: string | null
@@ -71,10 +72,16 @@ function toSafeUserWithCompany(user: User, companyCode: string): SafeUser & {
     brandName: company.displayName,
     logoDarkBgUrl: company.logoDarkBgUrl ?? null,
     logoLightBgUrl: company.logoLightBgUrl ?? null,
+    primaryColorHex: null,
   }
 }
 
-async function withDbBranding<T extends { brandName: string; logoDarkBgUrl: string | null; logoLightBgUrl: string | null }>(
+async function withDbBranding<T extends {
+  brandName: string
+  logoDarkBgUrl: string | null
+  logoLightBgUrl: string | null
+  primaryColorHex?: string | null
+}>(
   companyCode: string,
   base: T,
 ): Promise<T> {
@@ -85,6 +92,7 @@ async function withDbBranding<T extends { brandName: string; logoDarkBgUrl: stri
     brandName: row.brandName || base.brandName,
     logoDarkBgUrl: row.logoDarkBgUrl ?? base.logoDarkBgUrl,
     logoLightBgUrl: row.logoLightBgUrl ?? base.logoLightBgUrl,
+    primaryColorHex: row.primaryColorHex ?? base.primaryColorHex ?? null,
     sidebarLogoVariant: (row as { sidebarLogoVariant?: string | null }).sidebarLogoVariant ?? null,
     loginLogoVariant: (row as { loginLogoVariant?: string | null }).loginLogoVariant ?? null,
     documentsLogoVariant: (row as { documentsLogoVariant?: string | null; offerLogoVariant?: string | null }).documentsLogoVariant

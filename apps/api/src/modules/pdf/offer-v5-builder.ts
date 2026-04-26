@@ -58,6 +58,28 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;')
 }
 
+function normalizeHexColor(value?: string | null): string | null {
+  if (!value) return null
+  const trimmed = value.trim()
+  const withHash = trimmed.startsWith('#') ? trimmed : `#${trimmed}`
+  return /^#[0-9a-fA-F]{6}$/.test(withHash) ? withHash.toUpperCase() : null
+}
+
+function applyAccentColor(html: string, colorHex?: string | null): string {
+  const accent = normalizeHexColor(colorHex)
+  if (!accent) return html
+  return html.replace(/--accent:\s*#[0-9a-fA-F]{6};/, `--accent:   ${accent};`)
+}
+
+function applyHeaderLogo(html: string, logoUrl?: string | null): string {
+  const clean = typeof logoUrl === 'string' ? logoUrl.trim() : ''
+  if (!clean) return html
+  return html.replace(
+    /<img class="hdr__logo"[^>]*>/,
+    `<img class="hdr__logo" src="${escapeHtml(clean)}" alt="Logo">`,
+  )
+}
+
 function fmtNum(n: number): string {
   return n.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
 }
@@ -121,6 +143,8 @@ export type BuildOfferHtmlV5Options = {
   /** Data w nagłówku („Warszawa, …”) — domyślnie bieżąca. Ze snapshotu: `generatedAt`. */
   issuedAt?: string | Date
   projectContact?: { name?: string | null; phone?: string | null; email?: string | null } | null
+  accentColorHex?: string | null
+  logoUrl?: string | null
 }
 
 export function buildOfferHtmlV5(
@@ -130,6 +154,8 @@ export function buildOfferHtmlV5(
 ): string {
   const templatePath = getTemplatePath()
   let html = fs.readFileSync(templatePath, 'utf-8')
+  html = applyAccentColor(html, options?.accentColorHex)
+  html = applyHeaderLogo(html, options?.logoUrl)
 
   const vatRate = order.vatRate ?? 23
   const validityDays = order.offerValidityDays ?? 14

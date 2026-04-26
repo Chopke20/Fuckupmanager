@@ -11,6 +11,7 @@
     --popover: 0 0% 5%;
     --popover-foreground: 0 0% 100%;
     --primary: 145 100% 50%;
+    --primary-hover: 145 100% 40%;
     --primary-foreground: 0 0% 0%;
     --secondary: 0 0% 8%;
     --secondary-foreground: 0 0% 100%;
@@ -23,6 +24,7 @@
     --border: 0 0% 12%;
     --input: 0 0% 12%;
     --ring: 145 100% 50%;
+    --primary-rgb: 0 255 136;
   }
 }
 
@@ -71,11 +73,11 @@
 
 /* Neon glow utility */
 .neon-glow {
-  box-shadow: 0 0 8px rgba(0, 255, 136, 0.3);
+  box-shadow: 0 0 8px rgba(var(--primary-rgb), 0.3);
 }
 
 .neon-glow-lg {
-  box-shadow: 0 0 16px rgba(0, 255, 136, 0.4);
+  box-shadow: 0 0 16px rgba(var(--primary-rgb), 0.4);
 }
 
 /* Selection */

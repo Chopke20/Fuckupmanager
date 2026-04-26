@@ -1,6 +1,7 @@
 import { Permission, resolvePermissionsForRole, UserPublic } from '@lama-stage/shared-types'
 import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react'
 import { apiLogin, apiLogout, apiMe } from './auth.api'
+import { applyCompanyTheme, resetCompanyTheme } from '../../lib/companyTheme'
 
 interface AuthContextValue {
   user: UserPublic | null
@@ -45,6 +46,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshMe()
   }, [])
 
+  useEffect(() => {
+    if (user?.primaryColorHex) {
+      applyCompanyTheme(user.primaryColorHex)
+      return
+    }
+    resetCompanyTheme()
+  }, [user?.primaryColorHex])
+
   const login = async (companyCode: string, email: string, password: string) => {
     const me = await apiLogin(companyCode, email, password)
     setUser(me)
@@ -55,6 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     await apiLogout()
     setUser(null)
+    resetCompanyTheme()
   }
 
   const value = useMemo<AuthContextValue>(() => ({

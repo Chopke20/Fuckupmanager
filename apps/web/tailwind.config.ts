@@ -15,8 +15,8 @@ export default {
         surface: '#111111',
         'surface-2': '#1a1a1a',
         border: '#222222',
-        primary: '#00ff88',      // Neonowa zieleń — TYLKO na aktywne elementy
-        'primary-hover': '#00cc6a',
+        primary: 'hsl(var(--primary) / <alpha-value>)',
+        'primary-hover': 'hsl(var(--primary-hover) / <alpha-value>)',
         muted: '#666666',
         'muted-foreground': '#8a8a8a',
         destructive: '#ff3333',
@@ -35,8 +35,8 @@ export default {
         xl: '6px',
       },
       boxShadow: {
-        'neon': '0 0 8px rgba(0,255,136,0.3)',
-        'neon-lg': '0 0 16px rgba(0,255,136,0.4)',
+        neon: '0 0 8px hsl(var(--primary) / 0.3)',
+        'neon-lg': '0 0 16px hsl(var(--primary) / 0.4)',
       },
     },
   },
