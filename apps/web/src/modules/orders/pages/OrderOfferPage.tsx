@@ -909,20 +909,12 @@ export default function OrderOfferPage() {
                 className="mt-1 w-full px-2 py-1 text-sm bg-background border border-border rounded"
               />
             </label>
-            <label className="text-sm">
-              Osoba wystawiająca
-              <select
-                value={draft.projectContactKey ?? ''}
-                onChange={(e) =>
-                  setDraft((prev) => (prev ? { ...prev, projectContactKey: (e.target.value || null) as any } : prev))
-                }
-                className="mt-1 w-full px-2 py-1 text-sm bg-background border border-border rounded"
-              >
-                <option value="">—</option>
-                <option value="RAFAL">Rafał Szydłowski</option>
-                <option value="MICHAL">Michał Rokicki</option>
-              </select>
-            </label>
+            <div className="text-sm">
+              <div className="mb-1">Opiekun projektu</div>
+              <div className="mt-1 w-full px-2 py-1 text-sm bg-surface border border-border rounded text-muted-foreground">
+                Ustawiany w Admin → Firma i branding (dla danej firmy).
+              </div>
+            </div>
             <label className="text-sm">
               Waluta
               <select

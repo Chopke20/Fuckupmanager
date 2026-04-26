@@ -18,7 +18,7 @@
  * - {{TRANSPORT_TBODY}} / {{TRANSPORT_TFOOT}} → pozycje transportowe (isTransport), wg etapów
  * - {{FIN_SUMMARY_ROWS}}→ sprzęt + obsługa + transport, rabat, netto, VAT, brutto
  * - {{RECURRING_BLOCK}} → gdy order.isRecurring + recurringConfig.repetitions (koszt 1 event / cykl)
- * - {{FOOTER_LEFT}}     → Opiekun (PROJECT_CONTACTS + email wystawcy / domyślny)
+ * - {{FOOTER_LEFT}}     → Opiekun (z app settings lub email wystawcy / domyślny)
  * - {{FOOTER_RIGHT}}    → Dane rejestrowe: offerIssuer lub COMPANY
  */
 import fs from 'fs'
@@ -31,11 +31,6 @@ const COMPANY = {
   www: process.env.DEFAULT_PDF_COMPANY_WWW ?? 'www.twojadomena.pl',
   email: process.env.DEFAULT_PDF_COMPANY_EMAIL ?? 'kontakt@twojadomena.pl',
   phone: process.env.DEFAULT_PDF_COMPANY_PHONE ?? '',
-}
-
-const PROJECT_CONTACTS: Record<string, { name: string; phone: string }> = {
-  RAFAL: { name: 'Rafał Szydłowski', phone: '504 361 781' },
-  MICHAL: { name: 'Michał Rokicki', phone: '793 435 302' },
 }
 
 const PDF_TIME_ZONE = 'Europe/Warsaw'
@@ -125,6 +120,7 @@ export type OrderLike = {
 export type BuildOfferHtmlV5Options = {
   /** Data w nagłówku („Warszawa, …”) — domyślnie bieżąca. Ze snapshotu: `generatedAt`. */
   issuedAt?: string | Date
+  projectContact?: { name?: string | null; phone?: string | null; email?: string | null } | null
 }
 
 export function buildOfferHtmlV5(
@@ -458,9 +454,16 @@ export function buildOfferHtmlV5(
     }
   }
 
-  const opiekun = order.projectContactKey ? PROJECT_CONTACTS[order.projectContactKey] : null
+  const opiekun = options?.projectContact ?? null
+  const opiekunName = opiekun?.name?.trim() ? opiekun.name.trim() : ''
+  const opiekunPhone = opiekun?.phone?.trim() ? opiekun.phone.trim() : ''
+  const opiekunEmail = opiekun?.email?.trim() ? opiekun.email.trim() : companyEmail
   const footerLeft = `<span class="footer__label">Opiekun projektu</span>
-      ${opiekun ? `${escapeHtml(opiekun.name)}<br>\n      tel. ${escapeHtml(opiekun.phone)}<br>\n      ${escapeHtml(companyEmail)}` : escapeHtml(companyEmail)}`
+      ${
+        opiekunName
+          ? `${escapeHtml(opiekunName)}<br>\n      ${opiekunPhone ? `tel. ${escapeHtml(opiekunPhone)}<br>\n      ` : ''}${escapeHtml(opiekunEmail)}`
+          : escapeHtml(companyEmail)
+      }`
 
   const footerRightCore = issuer
     ? `<span class="footer__label">Dane rejestrowe</span>

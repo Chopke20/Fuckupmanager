@@ -14,11 +14,6 @@ const COMPANY = {
   phone: process.env.DEFAULT_PDF_COMPANY_PHONE ?? '',
 }
 
-const PROJECT_CONTACTS: Record<string, { name: string; phone: string }> = {
-  RAFAL: { name: 'Rafał Szydłowski', phone: '504 361 781' },
-  MICHAL: { name: 'Michał Rokicki', phone: '793 435 302' },
-}
-
 const PDF_TIME_ZONE = 'Europe/Warsaw'
 
 function fmtPlDate(dateLike: string | Date): string {
@@ -87,6 +82,7 @@ export type BuildWarehousePdfHtmlParams = {
   } | null
   equipmentItems: WarehousePdfEquipmentRow[]
   projectContactKey?: string | null
+  projectContact?: { name?: string | null; phone?: string | null; email?: string | null } | null
 }
 
 export function buildWarehousePdfHtml(params: BuildWarehousePdfHtmlParams): string {
@@ -168,9 +164,16 @@ export function buildWarehousePdfHtml(params: BuildWarehousePdfHtmlParams): stri
           })
           .join('\n')
 
-  const opiekun = params.projectContactKey ? PROJECT_CONTACTS[params.projectContactKey] : null
+  const opiekun = params.projectContact ?? null
+  const opiekunName = opiekun?.name?.trim() ? opiekun.name.trim() : ''
+  const opiekunPhone = opiekun?.phone?.trim() ? opiekun.phone.trim() : ''
+  const opiekunEmail = opiekun?.email?.trim() ? opiekun.email.trim() : companyEmail
   const footerLeft = `<span class="footer__label">Kontakt</span>
-      ${opiekun ? `${escapeHtml(opiekun.name)}<br>\n      tel. ${escapeHtml(opiekun.phone)}<br>\n      ${escapeHtml(companyEmail)}` : escapeHtml(companyEmail)}`
+      ${
+        opiekunName
+          ? `${escapeHtml(opiekunName)}<br>\n      ${opiekunPhone ? `tel. ${escapeHtml(opiekunPhone)}<br>\n      ` : ''}${escapeHtml(opiekunEmail)}`
+          : escapeHtml(companyEmail)
+      }`
 
   const footerRightCore = `<span class="footer__label">Dane rejestrowe</span>
       ${escapeHtml(companyName)}<br>

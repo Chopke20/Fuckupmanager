@@ -418,6 +418,10 @@ model AppSettings {
   logoLightBgUrl     String?
   primaryColorHex    String?
   documentFooterText String?
+  warehouseAddress   String?
+  projectContactName  String?
+  projectContactPhone String?
+  projectContactEmail String?
   emailSenderName    String?
   emailFooterText    String?
   replyToEmail       String?

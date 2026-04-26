@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express'
+import { prisma } from '../../prisma/client'
 
 /** Nowe Places API (v1) – więcej wyników, ograniczenie do Polski. Fallback na legacy gdy v1 niedostępne. */
 type PlacePrediction = {
@@ -79,25 +80,31 @@ async function autocompleteLegacy(apiKey: string, query: string): Promise<{ plac
 }
 
 /** Magazyn – punkt startowy do liczenia odległości drogowej (w jedną stronę). */
-const WAREHOUSE_ORIGIN = 'Wał Miedzeszyński 251, Warszawa'
+const DEFAULT_WAREHOUSE_ORIGIN = 'Wał Miedzeszyński 251, Warszawa'
 
-/** Cache odległości po placeId (km), żeby nie dzwonić do API przy każdym odświeżeniu. */
+/** Cache odległości po (origin + placeId) (km), żeby nie dzwonić do API przy każdym odświeżeniu. */
 const distanceCache = new Map<string, number>()
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24 // 24 h
 const cacheTimestamps = new Map<string, number>()
 
-function getCachedDistanceKm(placeId: string): number | null {
-  const ts = cacheTimestamps.get(placeId)
+function cacheKey(origin: string, placeId: string): string {
+  return `${origin}::${placeId}`
+}
+
+function getCachedDistanceKm(origin: string, placeId: string): number | null {
+  const key = cacheKey(origin, placeId)
+  const ts = cacheTimestamps.get(key)
   if (ts && Date.now() - ts < CACHE_TTL_MS) {
-    const km = distanceCache.get(placeId)
+    const km = distanceCache.get(key)
     if (typeof km === 'number') return km
   }
   return null
 }
 
-function setCachedDistanceKm(placeId: string, km: number) {
-  distanceCache.set(placeId, km)
-  cacheTimestamps.set(placeId, Date.now())
+function setCachedDistanceKm(origin: string, placeId: string, km: number) {
+  const key = cacheKey(origin, placeId)
+  distanceCache.set(key, km)
+  cacheTimestamps.set(key, Date.now())
 }
 
 type DistanceMatrixElement = { status: string; distance?: { value: number; text: string }; duration?: { value: number; text: string } }
@@ -115,13 +122,17 @@ export const getDistanceFromWarehouse = async (req: Request, res: Response, next
       return res.json({ data: { distanceKm: null } })
     }
 
-    const cached = getCachedDistanceKm(placeId)
+    const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
+    const originRaw = (appSettings as { warehouseAddress?: string | null } | null)?.warehouseAddress ?? null
+    const origin = originRaw && originRaw.trim() ? originRaw.trim() : DEFAULT_WAREHOUSE_ORIGIN
+
+    const cached = getCachedDistanceKm(origin, placeId)
     if (cached !== null) {
       return res.json({ data: { distanceKm: cached } })
     }
 
     const url = new URL('https://maps.googleapis.com/maps/api/distancematrix/json')
-    url.searchParams.set('origins', WAREHOUSE_ORIGIN)
+    url.searchParams.set('origins', origin)
     url.searchParams.set('destinations', `place_id:${placeId}`)
     url.searchParams.set('key', apiKey)
     url.searchParams.set('language', 'pl')
@@ -139,7 +150,7 @@ export const getDistanceFromWarehouse = async (req: Request, res: Response, next
     const distanceKm = valueM != null ? Math.round((valueM / 1000) * 10) / 10 : null
 
     if (distanceKm !== null) {
-      setCachedDistanceKm(placeId, distanceKm)
+      setCachedDistanceKm(origin, placeId, distanceKm)
     }
 
     return res.json({ data: { distanceKm } })

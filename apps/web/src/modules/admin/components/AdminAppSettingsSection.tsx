@@ -15,6 +15,10 @@ const EMPTY_SETTINGS: AppSettings = {
   logoLightBgUrl: null,
   primaryColorHex: null,
   documentFooterText: null,
+  warehouseAddress: null,
+  projectContactName: null,
+  projectContactPhone: null,
+  projectContactEmail: null,
   emailSenderName: null,
   emailFooterText: null,
   replyToEmail: null,
@@ -97,6 +101,50 @@ export default function AdminAppSettingsSection() {
               className="w-full bg-surface border border-border rounded px-3 py-2 text-sm"
             />
           </label>
+        </div>
+        <label className="text-xs space-y-1 block">
+          <span className="text-muted-foreground">Siedziba magazynu (do liczenia km transportu)</span>
+          <input
+            value={draft.warehouseAddress ?? ''}
+            onChange={(e) => setDraft((prev) => ({ ...prev, warehouseAddress: e.target.value || null }))}
+            className="w-full bg-surface border border-border rounded px-3 py-2 text-sm"
+            placeholder="Np. Wał Miedzeszyński 251, Warszawa"
+          />
+        </label>
+        <div className="border border-border rounded p-3 bg-surface-2/20 space-y-2">
+          <div className="text-xs font-semibold">Opiekun projektu (PDF)</div>
+          <p className="text-[11px] text-muted-foreground">
+            Dane widoczne w stopce PDF jako „Opiekun projektu”. Edytuje tylko Admin.
+          </p>
+          <div className="grid md:grid-cols-3 gap-2">
+            <label className="text-xs space-y-1">
+              <span className="text-muted-foreground">Imię i nazwisko</span>
+              <input
+                value={draft.projectContactName ?? ''}
+                onChange={(e) => setDraft((prev) => ({ ...prev, projectContactName: e.target.value || null }))}
+                className="w-full bg-surface border border-border rounded px-3 py-2 text-sm"
+                placeholder="Np. Tadeusz Mikołajczyk"
+              />
+            </label>
+            <label className="text-xs space-y-1">
+              <span className="text-muted-foreground">Telefon</span>
+              <input
+                value={draft.projectContactPhone ?? ''}
+                onChange={(e) => setDraft((prev) => ({ ...prev, projectContactPhone: e.target.value || null }))}
+                className="w-full bg-surface border border-border rounded px-3 py-2 text-sm"
+                placeholder="Np. 666 666 666"
+              />
+            </label>
+            <label className="text-xs space-y-1">
+              <span className="text-muted-foreground">E-mail</span>
+              <input
+                value={draft.projectContactEmail ?? ''}
+                onChange={(e) => setDraft((prev) => ({ ...prev, projectContactEmail: e.target.value || null }))}
+                className="w-full bg-surface border border-border rounded px-3 py-2 text-sm"
+                placeholder="Np. kontakt@twojafirma.pl"
+              />
+            </label>
+          </div>
         </div>
         <div className="grid md:grid-cols-3 gap-2">
           <label className="text-xs space-y-1">
