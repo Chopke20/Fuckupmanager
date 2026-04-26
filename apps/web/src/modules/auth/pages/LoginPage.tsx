@@ -43,6 +43,7 @@ export default function LoginPage() {
 
   const resolveLoginLogo = (company: PublicCompany): string | null => {
     const variant = company.loginLogoVariant
+    if (!variant) return null
     if (variant === 'LIGHT') return company.logoLightBgUrl ?? company.logoDarkBgUrl ?? null
     if (variant === 'DARK') return company.logoDarkBgUrl ?? company.logoLightBgUrl ?? null
     return company.logoDarkBgUrl ?? company.logoLightBgUrl ?? null
