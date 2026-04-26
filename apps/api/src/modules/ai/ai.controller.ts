@@ -110,7 +110,20 @@ export const rewriteOrderDescription = async (req: Request, res: Response, next:
       .join('\n')
 
     const systemPrompt =
-      'Jesteś menedżerem projektów w firmie Lama Stage. Twoim zadaniem jest tworzenie wewnętrznych opisów zleceń z perspektywy firmy realizującej. Dane wejściowe obejmują: podstawowe informacje o zleceniu (nazwa, miejsce, status) oraz notatki od klienta (zapytania, pytania, opisy potrzeb). Stwórz zwięzły opis wewnętrzny (4–6 zdań) do użytku wewnętrznego (brief, koordynacja, planowanie). Opis ma przedstawiać, co Lama Stage zrealizuje dla klienta, a nie że szukamy firmy. Nie dodawaj list, emoji, nagłówków.'
+      [
+        'Jesteś menedżerem projektów po stronie wykonawcy usług eventowych. Tworzysz wewnętrzne opisy zleceń do briefu/koordynacji/planowania.',
+        '',
+        'Zasady bezwzględne:',
+        '- Nie używaj żadnych nazw firm ani marek (ani wykonawcy, ani klienta). Nie pisz m.in. "Lama Stage".',
+        '- Nie cytuj dosłownie notatek klienta; przepisz je na język operacyjny wykonawcy.',
+        '- Zero lania wody i okrągłych słów: żadnych "kompleksowo", "profesjonalnie", "najwyższa jakość", "zadbamy o".',
+        '- Brak list, emoji i nagłówków. Tylko 4–6 zdań.',
+        '',
+        'Co ma się znaleźć w opisie:',
+        '- Co dokładnie realizujemy (zakres + kluczowe deliverables).',
+        '- Gdzie i kiedy (termin / zakres dat) oraz najważniejsze ograniczenia logistyczne/techniczne.',
+        '- Co jest po stronie klienta do potwierdzenia (jeśli w notatkach są braki/niejasności).',
+      ].join('\n')
 
     const userPrompt = [
       'Kontekst zlecenia (informacje podstawowe):',
@@ -121,7 +134,7 @@ export const rewriteOrderDescription = async (req: Request, res: Response, next:
       payload.retry
         ? 'Stwórz alternatywną wersję z innymi sformułowaniami, ale zachowaj tę samą treść.'
         : '',
-      'Utwórz wewnętrzny opis tego zlecenia (4–6 zdań) z perspektywy Lama Stage jako wykonawcy. Gdy w notatkach klienta jest mowa o "poszukiwaniu firmy", "szukamy kogoś" itp., przekształć to na stwierdzenie, że Lama Stage zapewnia odpowiednie usługi. Wspomnij kluczowe elementy: co, gdzie, kiedy (termin), oraz główne wymagania techniczne/logistyczne. Zachowaj ton profesjonalny i zwięzły.',
+      'Utwórz wewnętrzny opis tego zlecenia (4–6 zdań) z perspektywy wykonawcy. Gdy w notatkach klienta jest mowa o "poszukiwaniu firmy", "szukamy kogoś" itp., przekształć to na stwierdzenie realizacyjne (co wykonawca zapewnia). Wspomnij kluczowe elementy: co, gdzie, kiedy (termin) oraz główne wymagania techniczne/logistyczne. Pisz konkretnie i operacyjnie.',
     ]
       .filter(Boolean)
       .join('\n')
@@ -182,7 +195,7 @@ export const generateOfferClientDescription = async (req: Request, res: Response
 
     const contextLines = [
       `Nazwa zlecenia / wydarzenia: ${payload.orderName}`,
-      payload.clientCompanyName ? `Klient (firma): ${payload.clientCompanyName}` : '',
+      payload.clientCompanyName ? `Klient (firma) – UWAGA: nie używaj tej nazwy w opisie: ${payload.clientCompanyName}` : '',
       payload.venue ? `Miejsce: ${payload.venue}` : '',
       payload.startDate ? `Data od: ${payload.startDate}` : '',
       payload.endDate ? `Data do: ${payload.endDate}` : '',
@@ -201,14 +214,25 @@ export const generateOfferClientDescription = async (req: Request, res: Response
       payload.retry
         ? 'Wygeneruj nową wersję opisu z innymi sformułowaniami, bez zmiany merytoryki.'
         : '',
-      'Napisz prosty, zrozumiały opis dla klienta końcowego (po polsku), jak event manager: krótko wyjaśnij co będzie realizowane, kiedy i gdzie. Bez żargonu wewnętrznego, bez list punktowanych, bez emoji, bez nagłówków Markdown.',
+      [
+        'Napisz prosty, zrozumiały opis dla klienta końcowego (po polsku), jak event manager: krótko wyjaśnij co będzie realizowane, kiedy i gdzie.',
+        'Zasady: nie używaj żadnych nazw firm/marek (ani wykonawcy, ani klienta); nie pisz "Lama Stage". Nie używaj marketingowych frazesów ani lania wody.',
+        'Bez żargonu wewnętrznego, bez list punktowanych, bez emoji, bez nagłówków Markdown.',
+      ].join(' '),
       'Wzorzec stylu: "Realizacja nagłośnienia i oświetlenia podczas gali wręczenia nagród dnia 24.12 z montażem dnia 23.12."',
     ]
       .filter(Boolean)
       .join('\n\n')
 
     const systemPrompt =
-      'Jesteś event managerem w firmie eventowej. Tworzysz prosty opis oferty widoczny dla klienta: jasno i konkretnie co, kiedy i gdzie będzie realizowane. Używaj prostego języka, bez wewnętrznego żargonu.'
+      [
+        'Jesteś event managerem po stronie wykonawcy. Tworzysz opis oferty widoczny dla klienta.',
+        '',
+        'Wymagania:',
+        '- 2–4 zdania, bez list i bez emoji.',
+        '- Konkret: co jest w zakresie, kiedy i gdzie. Zero lania wody.',
+        '- Nie używaj żadnych nazw firm/marek (ani wykonawcy, ani klienta).',
+      ].join('\n')
 
     const response = await axios.post(
       'https://openrouter.ai/api/v1/chat/completions',

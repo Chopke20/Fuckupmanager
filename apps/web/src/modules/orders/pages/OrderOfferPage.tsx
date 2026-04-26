@@ -10,6 +10,7 @@ import { formatOrderNumber } from '../utils/orderNumberFormat';
 import { groupOrderEquipmentByCategory } from '../utils/groupOrderEquipmentByCategory';
 import { apiListIssuerProfiles } from '../../admin/api/issuer-profiles.api';
 import { useAuth } from '../../auth/AuthProvider';
+import { apiGetAppSettings } from '../../auth/auth.api';
 
 function parseFilenameFromContentDisposition(header: string | undefined, fallback: string) {
   if (!header) return fallback;
@@ -19,7 +20,10 @@ function parseFilenameFromContentDisposition(header: string | undefined, fallbac
 
 type OfferDraft = {
   offerValidityDays: number;
-  projectContactKey: 'RAFAL' | 'MICHAL' | null;
+  /** Preferowane: nowy wybór z listy opiekunów w Admin. */
+  projectContactId?: string | null;
+  /** Legacy (stare dane) — trzymane dla kompatybilności. */
+  projectContactKey?: 'RAFAL' | 'MICHAL' | null;
   currency: 'PLN' | 'EUR';
   exchangeRateEur: number | null;
   vatRate: 0 | 23;
@@ -96,6 +100,24 @@ export default function OrderOfferPage() {
     queryFn: () => apiListIssuerProfiles(1, 200),
   });
   const issuerRows = issuerProfilesQuery.data?.data ?? [];
+
+  const appSettingsQuery = useQuery({
+    queryKey: ['app-settings'],
+    queryFn: () => apiGetAppSettings(),
+  });
+
+  const projectContacts = useMemo(() => {
+    const raw = (appSettingsQuery.data as any)?.projectContacts as any[] | null | undefined;
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .map((c) => ({
+        id: typeof c?.id === 'string' ? c.id : '',
+        name: typeof c?.name === 'string' ? c.name : '',
+        phone: typeof c?.phone === 'string' ? c.phone : '',
+        email: typeof c?.email === 'string' ? c.email : '',
+      }))
+      .filter((c) => c.id && c.name);
+  }, [appSettingsQuery.data]);
 
   useEffect(() => {
     if (!id) return;
@@ -911,9 +933,31 @@ export default function OrderOfferPage() {
             </label>
             <div className="text-sm">
               <div className="mb-1">Opiekun projektu</div>
-              <div className="mt-1 w-full px-2 py-1 text-sm bg-surface border border-border rounded text-muted-foreground">
-                Ustawiany w Admin → Firma i branding (dla danej firmy).
-              </div>
+              {projectContacts.length > 0 ? (
+                <select
+                  value={draft.projectContactId ?? ''}
+                  onChange={(e) =>
+                    setDraft((prev) =>
+                      prev ? { ...prev, projectContactId: e.target.value || null } : prev
+                    )
+                  }
+                  className="mt-1 w-full px-2 py-1 text-sm bg-background border border-border rounded"
+                  title="Wybór opiekuna projektu dla tego dokumentu"
+                >
+                  <option value="">Domyślny (z Admina)</option>
+                  {projectContacts.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                      {c.phone ? ` • ${c.phone}` : ''}
+                      {c.email ? ` • ${c.email}` : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="mt-1 w-full px-2 py-1 text-sm bg-surface border border-border rounded text-muted-foreground">
+                  Brak opiekunów projektu w Admin → Dokumenty i komunikacja.
+                </div>
+              )}
             </div>
             <label className="text-sm">
               Waluta

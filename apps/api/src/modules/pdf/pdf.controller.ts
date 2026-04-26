@@ -52,7 +52,10 @@ function getOfferNumberDisplay(order: OrderWithRelations, nextVersion?: number):
 }
 
 export class PdfController {
-  private pickDefaultProjectContact(appSettings: unknown): { name?: string | null; phone?: string | null; email?: string | null } | null {
+  private pickProjectContact(
+    appSettings: unknown,
+    preferredContactId?: string | null,
+  ): { name?: string | null; phone?: string | null; email?: string | null } | null {
     const s = appSettings as { projectContactsJson?: string | null; defaultProjectContactId?: string | null } | null
     const raw = s?.projectContactsJson
     if (!raw || !raw.trim()) return null
@@ -63,8 +66,12 @@ export class PdfController {
     } catch {
       return null
     }
+    const preferredId = preferredContactId ? String(preferredContactId) : null
     const defaultId = s?.defaultProjectContactId ?? null
-    const pick = defaultId ? list.find((c) => String(c.id ?? '') === defaultId) : (list[0] ?? null)
+    const pick =
+      (preferredId ? list.find((c) => String(c.id ?? '') === preferredId) : null) ??
+      (defaultId ? list.find((c) => String(c.id ?? '') === defaultId) : null) ??
+      (list[0] ?? null)
     if (!pick) return null
     const name = typeof pick.name === 'string' ? pick.name : null
     const phone = typeof pick.phone === 'string' ? pick.phone : null
@@ -87,7 +94,11 @@ export class PdfController {
       const offerNumberDisplay = getOfferNumberDisplay(order, nextVer)
       const generatedAt = new Date().toISOString()
       const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
-      const projectContact = this.pickDefaultProjectContact(appSettings)
+      const preferredContactId =
+        (draftPayload && typeof draftPayload === 'object' && 'projectContactId' in (draftPayload as any))
+          ? String((draftPayload as any).projectContactId ?? '').trim() || null
+          : null
+      const projectContact = this.pickProjectContact(appSettings, preferredContactId)
       const snapshot = buildOrderOfferSnapshotFromOrder(order, draftPayload, {
         generatedAt,
         documentNumber: offerNumberDisplay,
@@ -140,7 +151,11 @@ export class PdfController {
       const draftPayload = await loadOfferDraftPayload(prisma, orderId, order)
       const generatedAt = new Date().toISOString()
       const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
-      const projectContact = this.pickDefaultProjectContact(appSettings)
+      const preferredContactId =
+        (draftPayload && typeof draftPayload === 'object' && 'projectContactId' in (draftPayload as any))
+          ? String((draftPayload as any).projectContactId ?? '').trim() || null
+          : null
+      const projectContact = this.pickProjectContact(appSettings, preferredContactId)
       const newVersion = (order.offerVersion ?? 0) + 1
       const candidateOfferNumber = buildDocumentNumber({
         documentType: 'OFFER',
@@ -294,7 +309,7 @@ export class PdfController {
       const issuedAt: string | undefined =
         parsed.success && parsed.data.generatedAt ? parsed.data.generatedAt : issuedAtFallback
       const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
-      const projectContact = this.pickDefaultProjectContact(appSettings)
+      const projectContact = this.pickProjectContact(appSettings, null)
       const html = parsed.success
         ? buildOfferHtmlV5(orderOfferSnapshotToPdfOrderLike(parsed.data), exportRecord.documentNumber, {
             issuedAt,
@@ -382,7 +397,7 @@ export class PdfController {
 
       const issuer = await resolveDefaultIssuerForDraft(prisma)
       const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
-      const projectContact = this.pickDefaultProjectContact(appSettings)
+      const projectContact = this.pickProjectContact(appSettings, null)
       const generatedAt = new Date().toISOString()
       const html = buildWarehousePdfHtml({
         documentNumberDisplay,

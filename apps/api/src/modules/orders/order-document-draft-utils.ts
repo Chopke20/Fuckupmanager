@@ -60,6 +60,7 @@ export async function buildOfferDefaultDraft(
   const issuer = await resolveDefaultIssuerForDraft(db)
   return OfferDocumentDraftSchema.parse({
     offerValidityDays: order.offerValidityDays ?? 14,
+    projectContactId: null,
     projectContactKey: order.projectContactKey ?? null,
     currency: order.currency ?? 'PLN',
     exchangeRateEur: order.exchangeRateEur ?? null,

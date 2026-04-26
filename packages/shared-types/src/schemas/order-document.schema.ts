@@ -48,6 +48,11 @@ export const OfferIssuerSchema = z.object({
 
 export const OfferDocumentDraftSchema = z.object({
   offerValidityDays: z.number().int().min(1).max(180),
+  /**
+   * Wybrany opiekun projektu (dla tego dokumentu/oferty). Gdy null/undefined, PDF użyje domyślnego
+   * opiekuna ustawionego w App Settings (Admin).
+   */
+  projectContactId: z.string().trim().min(1).max(64).nullable().optional(),
   projectContactKey: ProjectContactKeySchema.nullable().optional(),
   currency: CurrencySchema,
   exchangeRateEur: z.number().positive().nullable().optional(),
