@@ -20,3 +20,14 @@ alwaysApply: true
 - Keep production-oriented instructions short in rules; detailed troubleshooting and server commands live in:
   - `docs/production-repair-runbook.md`
   - `docs/deploy-quick.md`
+
+## Extra production verification (multi-company)
+
+- After deploy, verify **both companies** are visible and distinct:
+  - `GET /api/auth/public-companies` returns all expected companies (e.g. `main`, `studioted`).
+  - Log in to each company and confirm the UI shows the company code and version:
+    - sidebar displays **`Firma: <companyCode>`**
+    - version displays **`main-<short_sha>`**
+- If CI/CD status cannot be checked locally (no GitHub CLI available), treat deploy status as **unknown** until you verify on the VPS:
+  - `ssh root@...` → `cd /var/www/lamaapp` → `./deploy.sh`
+  - then verify `/health`, PM2 logs, and version in UI.

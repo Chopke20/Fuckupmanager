@@ -7,6 +7,7 @@ alwaysApply: true
 
 - Prisma provider in `apps/api/prisma/schema.prisma` must remain **`postgresql`**.
 - Never switch schema or runtime to `sqlite` for this project.
+- This repo is **single-domain, multi-company, multi-database** (PostgreSQL) – data separation is mandatory.
 - After Prisma schema changes:
   - run `npx prisma generate`
   - apply schema changes via `npm run db:migrate` (preferred) or `npm run db:push` when explicitly intended
@@ -18,5 +19,14 @@ alwaysApply: true
   - log structured API errors (method/path/context)
 - For `apps/api` endpoints, validate and sanitize query params (`page`, `limit`, `search`, etc.) and return explicit `4xx` for invalid input.
 - Do not break CORS for local development dynamic ports.
+- Multi-company safety rules (do not relax without explicit user approval):
+  - `COMPANY_DATABASES_JSON` must parse cleanly and list all companies shown on login.
+  - Two different companies must **never** point to the same database URL (hard fail at boot is preferred).
+  - Auth/session must bind a request to a company context (cookie value contains `companyCode`; API should expose `X-Company-Code` header for visibility).
+  - Any destructive admin operation must be company-scoped by the current request context (never accept “raw” DB url/name from the client).
+- Backup safety rules:
+  - UI/API backups must never return 0B/empty dumps; verify size and fail loudly.
+  - Prefer `pg_dump -Fc` (custom format) and store dumps with company code in filename.
+  - Keep a production-grade daily backup outside of app UI (cron/script) with retention and logs (see `docs/production-repair-runbook.md`).
 - Detailed production recovery steps are documented in:
   - `docs/production-repair-runbook.md`
