@@ -1,9 +1,9 @@
-import { PrismaClient, Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import { CreateOrderSchema, UpdateOrderSchema, CreateOrderEquipmentItemSchema, CreateOrderStageSchema, CreateOrderProductionItemSchema } from '@lama-stage/shared-types'
 import { z } from 'zod'
 import { EquipmentUnavailableError } from '../../shared/errors/AppError'
 
-const prisma = new PrismaClient()
+import { prisma } from '../../prisma/client'
 
 const orderDetailInclude = {
   client: true,
