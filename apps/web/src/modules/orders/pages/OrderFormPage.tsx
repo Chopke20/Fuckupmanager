@@ -509,7 +509,12 @@ export default function OrderFormPage() {
       } else {
         const created = await createOrderMutation.mutateAsync(payload as CreateOrderDto);
         clearOrderDraft(undefined);
-        if (created?.id) navigate(`/orders/${created.id}`);
+        if (created?.id) {
+          // Zapis nowego zlecenia zmienia URL z /orders/new -> /orders/:id.
+          // Najpierw czyścimy stan "dirty", żeby blocker nie pytał o niezapisane zmiany.
+          reset(mapApiOrderToFormValues(created as any));
+          navigate(`/orders/${created.id}`);
+        }
         else navigate('/orders');
       }
     } catch (err: any) {
