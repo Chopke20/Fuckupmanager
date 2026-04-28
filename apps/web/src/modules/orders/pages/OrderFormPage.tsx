@@ -152,6 +152,7 @@ export default function OrderFormPage() {
   const [unsavedModalOpen, setUnsavedModalOpen] = useState(false);
   const [pendingNav, setPendingNav] = useState<null | { kind: 'path'; to: string } | { kind: 'blocker' }>(null);
   const submitInFlightRef = useRef(false);
+  const allowNextNavigationRef = useRef(false);
 
   const methods = useForm<Partial<Order>>({
     defaultValues: {
@@ -197,6 +198,11 @@ export default function OrderFormPage() {
 
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) => {
+      if (allowNextNavigationRef.current) {
+        // Jednorazowe przepuszczenie nawigacji (np. /orders/new -> /orders/:id po udanym zapisie).
+        allowNextNavigationRef.current = false;
+        return false;
+      }
       if (!formState.isDirty) return false;
       if (currentLocation.pathname === nextLocation.pathname) return false;
       if (isOrderEditToSameOrderDocumentRoute(currentLocation.pathname, nextLocation.pathname)) {
@@ -511,8 +517,10 @@ export default function OrderFormPage() {
         clearOrderDraft(undefined);
         if (created?.id) {
           // Zapis nowego zlecenia zmienia URL z /orders/new -> /orders/:id.
-          // Najpierw czyścimy stan "dirty", żeby blocker nie pytał o niezapisane zmiany.
-          reset(mapApiOrderToFormValues(created as any));
+          // 1) Czyścimy "dirty" bez ruszania danych (API create może zwracać niepełny obiekt).
+          // 2) Jednorazowo przepuszczamy nawigację bez pytania o porzucenie zmian.
+          reset(getValues() as any);
+          allowNextNavigationRef.current = true;
           navigate(`/orders/${created.id}`);
         }
         else navigate('/orders');
