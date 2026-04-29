@@ -231,6 +231,11 @@ export class PdfController {
         branding,
         projectContact,
       ))
+      // Ensure logo is inlined for Puppeteer reliability (especially for external SVG URLs).
+      branding = {
+        ...branding,
+        logoUrl: (await this.tryLoadLogoAsDataUri(branding.logoUrl)) ?? branding.logoUrl,
+      }
       const snapshot = buildOrderOfferSnapshotFromOrder(order, draftPayload, {
         generatedAt,
         documentNumber: offerNumberDisplay,
@@ -299,6 +304,11 @@ export class PdfController {
         branding,
         projectContact,
       ))
+      // Ensure logo is inlined for Puppeteer reliability (especially for external SVG URLs).
+      branding = {
+        ...branding,
+        logoUrl: (await this.tryLoadLogoAsDataUri(branding.logoUrl)) ?? branding.logoUrl,
+      }
       const newVersion = (order.offerVersion ?? 0) + 1
       const candidateOfferNumber = buildDocumentNumber({
         documentType: 'OFFER',
