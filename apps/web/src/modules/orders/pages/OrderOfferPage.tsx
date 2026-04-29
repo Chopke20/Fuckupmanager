@@ -965,16 +965,6 @@ export default function OrderOfferPage() {
                 </div>
               )}
             </div>
-            {enableToinenMusicMode ? (
-              <label className="text-sm md:col-span-2 flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={Boolean(draft.toinenMusicMode)}
-                  onChange={(e) => setDraft((prev) => (prev ? { ...prev, toinenMusicMode: e.target.checked } : prev))}
-                />
-                <span>Toinen Music mode (PDF)</span>
-              </label>
-            ) : null}
             <label className="text-sm">
               Waluta
               <select
@@ -1048,6 +1038,16 @@ export default function OrderOfferPage() {
                 </p>
               </div>
             )}
+            {enableToinenMusicMode ? (
+              <label className="text-sm md:col-span-5 flex items-center gap-2 pt-2 border-t border-border/60 mt-1">
+                <input
+                  type="checkbox"
+                  checked={Boolean(draft.toinenMusicMode)}
+                  onChange={(e) => setDraft((prev) => (prev ? { ...prev, toinenMusicMode: e.target.checked } : prev))}
+                />
+                <span>Toinen Music mode (PDF)</span>
+              </label>
+            ) : null}
           </div>
         </div>
       </div>
