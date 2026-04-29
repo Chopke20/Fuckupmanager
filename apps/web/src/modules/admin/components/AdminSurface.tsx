@@ -17,8 +17,10 @@ export function AdminPanel({ children, className }: AdminSurfaceProps) {
     <section
       className={[
         // Mocniejsza separacja od tła strony (Admin ma być "warstwowy").
-        'rounded-xl border border-border bg-[#0F0F0F]',
-        'shadow-[0_18px_44px_rgba(0,0,0,0.65)]',
+        // Podbijamy kontrast: panel wyraźnie jaśniejszy od tła aplikacji.
+        'rounded-xl border border-[#2A2A2A] bg-[#141414]',
+        'shadow-[0_22px_56px_rgba(0,0,0,0.72)]',
+        'ring-1 ring-white/5',
         className || '',
       ].join(' ')}
     >
@@ -31,7 +33,8 @@ export function AdminPanelHeader({ title, description, right, className }: Admin
   return (
     <div
       className={[
-        'px-4 py-3 bg-[#171717] border-b border-border',
+        // Header ma być jednoznacznie "paskiem".
+        'px-4 py-3 bg-[#202020] border-b border-[#2E2E2E]',
         'flex items-start justify-between gap-3',
         className || '',
       ].join(' ')}
@@ -53,8 +56,9 @@ export function AdminCard({ children, className }: AdminSurfaceProps) {
   return (
     <div
       className={[
-        'rounded-lg border border-border/90 bg-[#131313]',
-        'shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]',
+        // Karta jeszcze jaśniejsza od panelu: widoczne "karta w panelu".
+        'rounded-lg border border-[#2F2F2F] bg-[#1A1A1A]',
+        'shadow-[0_10px_22px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)]',
         className || '',
       ].join(' ')}
     >
@@ -67,7 +71,7 @@ export function AdminCardHeader({ title, description, right, className }: AdminS
   return (
     <div
       className={[
-        'px-3 py-2 bg-[#1B1B1B] border-b border-border',
+        'px-3 py-2 bg-[#262626] border-b border-[#333333]',
         'flex items-start justify-between gap-3',
         className || '',
       ].join(' ')}
