@@ -16,8 +16,9 @@ export function AdminPanel({ children, className }: AdminSurfaceProps) {
   return (
     <section
       className={[
-        'rounded-xl border border-border/80 bg-surface/60',
-        'shadow-[0_12px_28px_rgba(0,0,0,0.45)]',
+        // Mocniejsza separacja od tła strony (Admin ma być "warstwowy").
+        'rounded-xl border border-border bg-[#0F0F0F]',
+        'shadow-[0_18px_44px_rgba(0,0,0,0.65)]',
         className || '',
       ].join(' ')}
     >
@@ -30,7 +31,7 @@ export function AdminPanelHeader({ title, description, right, className }: Admin
   return (
     <div
       className={[
-        'px-4 py-3 bg-black/25 border-b border-border/70',
+        'px-4 py-3 bg-[#171717] border-b border-border',
         'flex items-start justify-between gap-3',
         className || '',
       ].join(' ')}
@@ -52,8 +53,8 @@ export function AdminCard({ children, className }: AdminSurfaceProps) {
   return (
     <div
       className={[
-        'rounded-lg border border-border/70 bg-surface-2/40',
-        'shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]',
+        'rounded-lg border border-border/90 bg-[#131313]',
+        'shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]',
         className || '',
       ].join(' ')}
     >
@@ -66,7 +67,7 @@ export function AdminCardHeader({ title, description, right, className }: AdminS
   return (
     <div
       className={[
-        'px-3 py-2 bg-black/20 border-b border-border/60',
+        'px-3 py-2 bg-[#1B1B1B] border-b border-border',
         'flex items-start justify-between gap-3',
         className || '',
       ].join(' ')}
