@@ -427,7 +427,15 @@ export class PdfController {
           if (!fresh?.client) {
             throw new Error('ORDER_CLIENT_MISSING_AFTER_UPDATE')
           }
-          const draftInTx = await loadOfferDraftPayload(tx, orderId, fresh)
+          let draftInTx = await loadOfferDraftPayload(tx, orderId, fresh)
+          // Important: apply special modes inside TX as well, because we re-load the draft from DB here.
+          // Otherwise, preview can look correct while "Generate" persists a snapshot with default issuer/footer.
+          ;({ draftPayload: draftInTx } = this.applyToinenMusicModeIfEnabled(
+            appSettings,
+            draftInTx,
+            branding,
+            projectContact,
+          ))
           const snap = buildOrderOfferSnapshotFromOrder(fresh, draftInTx, {
             generatedAt,
             documentNumber: candidateOfferNumber,
