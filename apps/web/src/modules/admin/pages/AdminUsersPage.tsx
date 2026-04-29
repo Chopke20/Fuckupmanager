@@ -23,6 +23,7 @@ import AdminIssuerProfilesSection from '../components/AdminIssuerProfilesSection
 import AdminAppSettingsSection from '../components/AdminAppSettingsSection'
 import { apiGetAppSettings, apiUpdateAppSettings } from '../../auth/auth.api'
 import { api } from '../../../shared/api/client'
+import { AdminCard, AdminCardBody, AdminCardHeader, AdminPanel, AdminPanelBody, AdminPanelHeader } from '../components/AdminSurface'
 
 type TransportRangeDraft = {
   fromKm: number
@@ -446,200 +447,218 @@ export default function AdminUsersPage() {
   )
 
   return (
-    <div className="space-y-4">
-      <section className="bg-card border border-border rounded-lg p-3">
-        <h1 className="text-lg font-semibold mb-1">Ustawienia administratora</h1>
-        <p className="text-sm text-muted-foreground">
-          Wszystkie ustawienia sa tu, ale zebrane w krotsze i bardziej zwarte sekcje.
-        </p>
-        <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-          {ADMIN_TABS.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-              className={`text-left rounded-md border px-3 py-2.5 ${activeTab === tab.key ? 'bg-surface border-primary text-primary' : 'border-border text-muted-foreground hover:bg-surface/60'}`}
-            >
-              <div className="text-xs font-semibold uppercase tracking-wide">{tab.title}</div>
-              <div className={`mt-1 text-[11px] ${activeTab === tab.key ? 'text-primary/90' : 'text-muted-foreground'}`}>
-                {tab.description}
-              </div>
-            </button>
-          ))}
-        </div>
-      </section>
+    <div className="space-y-6">
+      <AdminPanel>
+        <AdminPanelHeader
+          title="Ustawienia administratora"
+          description="Wybierz obszar. Sekcje sa od siebie wyraznie oddzielone (naglowek + osobne tlo + mocniejszy border)."
+        />
+        <AdminPanelBody>
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+            {ADMIN_TABS.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                className={[
+                  'text-left rounded-lg border px-3 py-2.5 transition-colors',
+                  activeTab === tab.key
+                    ? 'bg-black/25 border-primary text-primary'
+                    : 'border-border/70 text-muted-foreground hover:bg-black/15',
+                ].join(' ')}
+              >
+                <div className="text-xs font-semibold uppercase tracking-wide">{tab.title}</div>
+                <div className={`mt-1 text-[11px] ${activeTab === tab.key ? 'text-primary/90' : 'text-muted-foreground'}`}>
+                  {tab.description}
+                </div>
+              </button>
+            ))}
+          </div>
+        </AdminPanelBody>
+      </AdminPanel>
 
       {activeTab === 'branding' && <AdminAppSettingsSection />}
 
       {canBackup && activeTab === 'backup' && (
-      <section className="bg-card border border-border rounded-lg p-3">
-        <h2 className="text-sm font-semibold mb-3">Backup bazy danych</h2>
-        <p className="text-xs text-muted-foreground mb-3">
-          Pobierz pelna kopie bazy PostgreSQL dla tej firmy. Rekomendowane przed wdrozeniem, migracja lub testami na produkcji.
-        </p>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={async () => {
-              setBackupError(null)
-              try {
-                await apiDownloadDatabaseBackup()
-              } catch (e) {
-                setBackupError((e as Error)?.message ?? 'Nie udało się pobrać backupu.')
-              }
-            }}
-            className="bg-primary text-black rounded px-3 py-2 text-sm disabled:opacity-50"
-          >
-            Pobierz backup bazy (.dump)
-          </button>
-        </div>
-        {backupError && <p className="text-xs text-destructive mt-2">{backupError}</p>}
-      </section>
+        <AdminPanel>
+          <AdminPanelHeader
+            title="Backup bazy danych"
+            description="Pobierz kopie bazy dla tej firmy (zalecane przed wdrozeniem lub migracja)."
+          />
+          <AdminPanelBody className="space-y-2">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  setBackupError(null)
+                  try {
+                    await apiDownloadDatabaseBackup()
+                  } catch (e) {
+                    setBackupError((e as Error)?.message ?? 'Nie udało się pobrać backupu.')
+                  }
+                }}
+                className="bg-primary text-black rounded px-3 py-2 text-sm disabled:opacity-50"
+              >
+                Pobierz backup bazy (.dump)
+              </button>
+            </div>
+            {backupError && <p className="text-xs text-destructive">{backupError}</p>}
+          </AdminPanelBody>
+        </AdminPanel>
       )}
 
       {activeTab === 'documents' && (
-      <div className="space-y-3">
-        <section className="bg-card border border-border rounded-lg p-3">
-          <h2 className="text-sm font-semibold mb-1">Dokumenty i dane firmowe</h2>
-          <p className="text-xs text-muted-foreground">
-            Najpierw ustaw profil wystawcy, potem parametry PDF i transportu.
-          </p>
-        </section>
+      <div className="space-y-6">
+        <AdminPanel>
+          <AdminPanelHeader
+            title="Dokumenty i dane firmowe"
+            description="Najpierw ustaw profil wystawcy, potem dane PDF i transport."
+          />
+        </AdminPanel>
         <AdminIssuerProfilesSection />
-        <section className="bg-card border border-border rounded-lg p-3">
-          <h2 className="text-sm font-semibold mb-1">Transport i dane dokumentow</h2>
-          <p className="text-xs text-muted-foreground mb-3">
-            Ustawienia ponizej sa wspolne dla PDF i wycen transportu.
-          </p>
-        <div className="mb-4 border border-border rounded p-3 bg-surface-2/20 space-y-2">
-          <div className="text-xs font-semibold">Adres magazynu (punkt startowy liczenia km)</div>
-          <div className="relative">
-            <input
-              value={warehouseQuery || warehouseAddress}
-              onChange={(e) => {
-                setWarehouseQuery(e.target.value)
-                setWarehouseAddress(e.target.value)
-              }}
-              className="w-full bg-surface border border-border rounded px-3 py-2 text-sm"
-              placeholder="Wpisz adres i wybierz z podpowiedzi Google"
-            />
-            {warehouseLoading ? (
-              <div className="absolute right-3 top-2.5 text-xs text-muted-foreground">Ładowanie…</div>
-            ) : null}
-            {warehouseSuggestions.length > 0 && (
-              <div className="absolute z-30 mt-1 w-full bg-card border border-border rounded shadow-lg max-h-56 overflow-auto">
-                {warehouseSuggestions.map((s) => (
+        <AdminPanel>
+          <AdminPanelHeader
+            title="Transport i dane dokumentow"
+            description="Ustawienia wspolne dla PDF i wycen transportu."
+          />
+          <AdminPanelBody className="space-y-3">
+        <AdminCard>
+          <AdminCardHeader
+            title="Adres magazynu (punkt startowy liczenia km)"
+            description="Uzywane do obliczania dystansu (Google Distance Matrix) dla transportu w zleceniach."
+          />
+          <AdminCardBody>
+            <div className="relative">
+              <input
+                value={warehouseQuery || warehouseAddress}
+                onChange={(e) => {
+                  setWarehouseQuery(e.target.value)
+                  setWarehouseAddress(e.target.value)
+                }}
+                className="w-full bg-surface border border-border rounded px-3 py-2 text-sm"
+                placeholder="Wpisz adres i wybierz z podpowiedzi Google"
+              />
+              {warehouseLoading ? (
+                <div className="absolute right-3 top-2.5 text-xs text-muted-foreground">Ładowanie…</div>
+              ) : null}
+              {warehouseSuggestions.length > 0 && (
+                <div className="absolute z-30 mt-1 w-full bg-surface border border-border rounded shadow-lg max-h-56 overflow-auto">
+                  {warehouseSuggestions.map((s) => (
+                    <button
+                      key={s.placeId}
+                      type="button"
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-surface-2"
+                      onClick={() => {
+                        setWarehouseAddress(s.description)
+                        setWarehouseQuery('')
+                        setWarehouseSuggestions([])
+                      }}
+                    >
+                      {s.description}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </AdminCardBody>
+        </AdminCard>
+        <AdminCard>
+          <AdminCardHeader
+            title="Opiekunowie projektu (widoczni na PDF)"
+            description="Dane widoczne w stopce PDF jako „Opiekun projektu”."
+          />
+          <AdminCardBody className="space-y-2">
+            <div className="space-y-2">
+              {projectContacts.map((c, idx) => (
+                <div key={c.id} className="grid md:grid-cols-[24px_1fr_1fr_1fr_80px] gap-2 items-start">
+                  <div className="pt-2 flex justify-center">
+                    <input
+                      type="radio"
+                      name="default-project-contact"
+                      checked={defaultProjectContactId === c.id}
+                      onChange={() => setDefaultProjectContactId(c.id)}
+                    />
+                  </div>
+                  <input
+                    value={c.name}
+                    onChange={(e) =>
+                      setProjectContacts((prev) =>
+                        prev.map((row, i) => (i === idx ? { ...row, name: e.target.value } : row))
+                      )
+                    }
+                    className="bg-surface border border-border rounded px-3 py-2 text-sm"
+                    placeholder="Imię i nazwisko"
+                  />
+                  <input
+                    value={c.phone ?? ''}
+                    onChange={(e) =>
+                      setProjectContacts((prev) =>
+                        prev.map((row, i) => (i === idx ? { ...row, phone: e.target.value || null } : row))
+                      )
+                    }
+                    className="bg-surface border border-border rounded px-3 py-2 text-sm"
+                    placeholder="Telefon (opcjonalnie)"
+                  />
+                  <input
+                    value={c.email ?? ''}
+                    onChange={(e) =>
+                      setProjectContacts((prev) =>
+                        prev.map((row, i) => (i === idx ? { ...row, email: e.target.value || null } : row))
+                      )
+                    }
+                    className="bg-surface border border-border rounded px-3 py-2 text-sm"
+                    placeholder="E-mail (opcjonalnie)"
+                  />
                   <button
-                    key={s.placeId}
                     type="button"
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-surface-2"
+                    className="px-3 py-2 text-xs border border-border rounded hover:bg-surface"
                     onClick={() => {
-                      setWarehouseAddress(s.description)
-                      setWarehouseQuery('')
-                      setWarehouseSuggestions([])
+                      setProjectContacts((prev) => prev.filter((_, i) => i !== idx))
+                      if (defaultProjectContactId === c.id) setDefaultProjectContactId('')
                     }}
                   >
-                    {s.description}
+                    Usuń
                   </button>
-                ))}
-              </div>
-            )}
-          </div>
-          <p className="text-[11px] text-muted-foreground">
-            To ustawienie jest uzywane do obliczania dystansu (Google Distance Matrix) dla transportu w zleceniach.
-          </p>
-        </div>
-        <div className="mb-4 border border-border rounded p-3 bg-surface-2/20 space-y-2">
-          <div className="text-xs font-semibold">Opiekunowie projektu (widoczni na PDF)</div>
-          <p className="text-[11px] text-muted-foreground">
-            Dane widoczne w stopce PDF jako „Opiekun projektu”. Możesz dodać kilku opiekunów i wybrać domyślnego dla tej firmy.
-          </p>
-          <div className="space-y-2">
-            {projectContacts.map((c, idx) => (
-              <div key={c.id} className="grid md:grid-cols-[24px_1fr_1fr_1fr_80px] gap-2 items-start">
-                <div className="pt-2 flex justify-center">
-                  <input
-                    type="radio"
-                    name="default-project-contact"
-                    checked={defaultProjectContactId === c.id}
-                    onChange={() => setDefaultProjectContactId(c.id)}
-                  />
                 </div>
-                <input
-                  value={c.name}
-                  onChange={(e) =>
-                    setProjectContacts((prev) =>
-                      prev.map((row, i) => (i === idx ? { ...row, name: e.target.value } : row))
-                    )
-                  }
-                  className="bg-surface border border-border rounded px-3 py-2 text-sm"
-                  placeholder="Imię i nazwisko"
-                />
-                <input
-                  value={c.phone ?? ''}
-                  onChange={(e) =>
-                    setProjectContacts((prev) =>
-                      prev.map((row, i) => (i === idx ? { ...row, phone: e.target.value || null } : row))
-                    )
-                  }
-                  className="bg-surface border border-border rounded px-3 py-2 text-sm"
-                  placeholder="Telefon (opcjonalnie)"
-                />
-                <input
-                  value={c.email ?? ''}
-                  onChange={(e) =>
-                    setProjectContacts((prev) =>
-                      prev.map((row, i) => (i === idx ? { ...row, email: e.target.value || null } : row))
-                    )
-                  }
-                  className="bg-surface border border-border rounded px-3 py-2 text-sm"
-                  placeholder="E-mail (opcjonalnie)"
-                />
-                <button
-                  type="button"
-                  className="px-3 py-2 text-xs border border-border rounded hover:bg-surface"
-                  onClick={() => {
-                    setProjectContacts((prev) => prev.filter((_, i) => i !== idx))
-                    if (defaultProjectContactId === c.id) setDefaultProjectContactId('')
-                  }}
-                >
-                  Usuń
-                </button>
-              </div>
-            ))}
-            <button
-              type="button"
-              className="px-3 py-2 text-xs border border-dashed border-border rounded hover:bg-surface w-fit"
-              onClick={() => {
-                const id = `C${Date.now()}`
-                setProjectContacts((prev) => [...prev, { id, name: '', phone: null, email: null }])
-                if (!defaultProjectContactId) setDefaultProjectContactId(id)
-              }}
-            >
-              + Dodaj opiekuna
-            </button>
-          </div>
-          {projectContactsError ? <div className="text-xs text-destructive">{projectContactsError}</div> : null}
-        </div>
+              ))}
+              <button
+                type="button"
+                className="px-3 py-2 text-xs border border-dashed border-border rounded hover:bg-surface w-fit"
+                onClick={() => {
+                  const id = `C${Date.now()}`
+                  setProjectContacts((prev) => [...prev, { id, name: '', phone: null, email: null }])
+                  if (!defaultProjectContactId) setDefaultProjectContactId(id)
+                }}
+              >
+                + Dodaj opiekuna
+              </button>
+            </div>
+            {projectContactsError ? <div className="text-xs text-destructive">{projectContactsError}</div> : null}
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={saveDocumentSettings}
+                disabled={appSettingsMutation.isPending}
+                className="bg-primary text-black rounded px-3 py-2 text-sm disabled:opacity-50"
+              >
+                {appSettingsMutation.isPending ? 'Zapisywanie…' : 'Zapisz ustawienia dokumentow'}
+              </button>
+              {appSettingsQuery.isLoading ? <span className="text-xs text-muted-foreground">Ładowanie…</span> : null}
+              {appSettingsMutation.isError ? (
+                <span className="text-xs text-destructive">
+                  {mutationErrorMessage(appSettingsMutation.error, 'Nie udalo sie zapisac ustawien dokumentow.')}
+                </span>
+              ) : null}
+            </div>
+          </AdminCardBody>
+        </AdminCard>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={saveDocumentSettings}
-            disabled={appSettingsMutation.isPending}
-            className="bg-primary text-black rounded px-3 py-2 text-sm disabled:opacity-50"
-          >
-            {appSettingsMutation.isPending ? 'Zapisywanie…' : 'Zapisz ustawienia dokumentow'}
-          </button>
-          {appSettingsQuery.isLoading ? <span className="text-xs text-muted-foreground">Ładowanie…</span> : null}
-          {appSettingsMutation.isError ? (
-            <span className="text-xs text-destructive">
-              {mutationErrorMessage(appSettingsMutation.error, 'Nie udalo sie zapisac ustawien dokumentow.')}
-            </span>
-          ) : null}
-        </div>
-
-        <div className="space-y-3">
+        <AdminCard>
+          <AdminCardHeader
+            title="Kalkulacja transportu"
+            description="Przedzialy km oraz stawka kilometrówki."
+          />
+          <AdminCardBody className="space-y-3">
           <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 text-[11px] text-muted-foreground">
             <div>Od km</div>
             <div>Do km</div>
@@ -740,8 +759,7 @@ export default function AdminUsersPage() {
             Kilometrówka jest liczona od końca najwyższego przedziału w górę (km x 2 x stawka).
           </div>
           {transportError && <div className="text-xs text-destructive">{transportError}</div>}
-        </div>
-        <div className="mt-3 flex items-center gap-2">
+          <div className="mt-3 flex items-center gap-2">
           <button
             type="button"
             onClick={() => {
@@ -766,17 +784,21 @@ export default function AdminUsersPage() {
           {transportSettingsQuery.isError && (
             <span className="text-xs text-destructive">Brak dostępu do ustawień transportu.</span>
           )}
-        </div>
-      </section>
+          </div>
+          </AdminCardBody>
+        </AdminCard>
+          </AdminPanelBody>
+        </AdminPanel>
       </div>
       )}
 
       {activeTab === 'users' && (
-      <section className="bg-card border border-border rounded-lg p-3 overflow-x-auto space-y-3">
-        <h2 className="text-sm font-semibold mb-1">Zespol: dodawanie i zarzadzanie kontami</h2>
-        <p className="text-xs text-muted-foreground mb-3">
-          W jednym miejscu: zaproszenie, lista kont, zmiana roli i odebranie dostepu.
-        </p>
+      <AdminPanel>
+        <AdminPanelHeader
+          title="Zespol: dodawanie i zarzadzanie kontami"
+          description="Zaproszenie, lista kont, zmiana roli i odebranie dostepu."
+        />
+        <AdminPanelBody className="space-y-3 overflow-x-auto">
         <form onSubmit={handleInvite} className="grid md:grid-cols-4 gap-2">
           <input
             type="email"
@@ -869,17 +891,19 @@ export default function AdminUsersPage() {
           </table>
         )}
         </div>
-      </section>
+        </AdminPanelBody>
+      </AdminPanel>
       )}
 
       {activeTab === 'users' && (
       <div className="grid xl:grid-cols-[1.8fr_1fr] gap-3">
       {canReadRoles && (
-      <section className="bg-card border border-border rounded-lg p-3 overflow-x-auto space-y-4">
-        <h2 className="text-sm font-semibold mb-1">Role i uprawnienia</h2>
-        <p className="text-xs text-muted-foreground">
-          Uprawnienia sa pogrupowane tematycznie. Najpierw utworz role, potem doprecyzuj jej dostep.
-        </p>
+      <AdminPanel>
+        <AdminPanelHeader
+          title="Role i uprawnienia"
+          description="Uprawnienia sa pogrupowane tematycznie. Najpierw utworz role, potem doprecyzuj jej dostep."
+        />
+        <AdminPanelBody className="space-y-4 overflow-x-auto">
 
         {!canManageRoles ? (
           <div className="text-xs border border-warning/40 bg-warning/10 rounded p-2 text-muted-foreground">
@@ -999,15 +1023,17 @@ export default function AdminUsersPage() {
             ))}
           </tbody>
         </table>
-      </section>
+        </AdminPanelBody>
+      </AdminPanel>
       )}
 
       {canReadAudit && (
-      <section className="bg-card border border-border rounded-lg p-3 overflow-x-auto">
-        <h2 className="text-sm font-semibold mb-1">Historia dzialan administracyjnych</h2>
-        <p className="text-xs text-muted-foreground mb-3">
-          Szybki podglad kto, kiedy i na czym wykonal operacje administracyjne.
-        </p>
+      <AdminPanel>
+        <AdminPanelHeader
+          title="Historia dzialan administracyjnych"
+          description="Kto, kiedy i na czym wykonal operacje administracyjne."
+        />
+        <AdminPanelBody className="overflow-x-auto">
         {auditQuery.isLoading ? (
           <p className="text-sm text-muted-foreground">Ładowanie logów...</p>
         ) : (
@@ -1040,7 +1066,8 @@ export default function AdminUsersPage() {
             </tbody>
           </table>
         )}
-      </section>
+        </AdminPanelBody>
+      </AdminPanel>
       )}
       </div>
       )}

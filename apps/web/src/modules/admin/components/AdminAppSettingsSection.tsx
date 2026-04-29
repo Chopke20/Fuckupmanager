@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AppSettings } from '@lama-stage/shared-types'
 import { apiGetAppSettings, apiUpdateAppSettings } from '../../auth/auth.api'
 import { applyCompanyTheme, normalizeHexColor, THEME_DEFAULT_PRIMARY_HEX } from '../../../lib/companyTheme'
+import { AdminCard, AdminCardBody, AdminCardHeader, AdminPanel, AdminPanelBody, AdminPanelHeader } from './AdminSurface'
 
 const EMPTY_SETTINGS: AppSettings = {
   brandName: 'Lama Stage',
@@ -73,24 +74,28 @@ export default function AdminAppSettingsSection() {
     : normalizeHexColor(draft.primaryColorHex) != null
 
   if (settingsQuery.isLoading) {
-    return <section className="bg-card border border-border rounded-lg p-3 text-sm text-muted-foreground">Ładowanie ustawień firmy...</section>
+    return (
+      <AdminPanel>
+        <AdminPanelHeader title="Tozsamosc firmy i komunikacja" description="Ładowanie ustawień firmy..." />
+      </AdminPanel>
+    )
   }
 
   return (
-    <section className="bg-card border border-border rounded-lg p-3 space-y-3">
-      <div>
-        <h2 className="text-sm font-semibold">Tozsamosc firmy i komunikacja</h2>
-        <p className="text-xs text-muted-foreground">
-          Ustawienia ponizej kontroluja, jak firma wyglada i jak jest opisana w systemie, panelu logowania oraz wiadomosciach.
-        </p>
-      </div>
-      <form className="space-y-3" onSubmit={onSubmit}>
-        <div className="border border-border rounded p-3 bg-surface-2/20 space-y-2">
-          <div className="text-xs font-semibold">Podstawowa identyfikacja</div>
-          <p className="text-[11px] text-muted-foreground">
-            Nazwa i hasla widoczne dla uzytkownikow. Tu ustawiasz to, co najczesciej pojawia sie w interfejsie.
-          </p>
-          <div className="grid md:grid-cols-2 gap-2">
+    <AdminPanel>
+      <AdminPanelHeader
+        title="Tozsamosc firmy i komunikacja"
+        description="Ustawienia kontroluja wyglad firmy w systemie, panelu logowania, dokumentach i wiadomosciach."
+      />
+      <AdminPanelBody>
+        <form className="space-y-3" onSubmit={onSubmit}>
+          <AdminCard>
+            <AdminCardHeader
+              title="Podstawowa identyfikacja"
+              description="Nazwa i hasla widoczne dla uzytkownikow."
+            />
+            <AdminCardBody>
+              <div className="grid md:grid-cols-2 gap-2">
             <label className="text-xs space-y-1">
               <span className="text-muted-foreground">Nazwa firmy</span>
               <input
@@ -108,15 +113,17 @@ export default function AdminAppSettingsSection() {
                 className="w-full bg-surface border border-border rounded px-3 py-2 text-sm"
               />
             </label>
-          </div>
-        </div>
+              </div>
+            </AdminCardBody>
+          </AdminCard>
 
-        <div className="border border-border rounded p-3 bg-surface-2/20 space-y-2">
-          <div className="text-xs font-semibold">Kolor przewodni aplikacji</div>
-          <p className="text-[11px] text-muted-foreground">
-            Ten kolor steruje akcentami interfejsu (primary) i dokumentami PDF dla tej firmy.
-          </p>
-          <div className="grid md:grid-cols-[120px_1fr_auto] gap-2 items-end">
+          <AdminCard>
+            <AdminCardHeader
+              title="Kolor przewodni aplikacji"
+              description="Steruje akcentami interfejsu i dokumentami PDF."
+            />
+            <AdminCardBody>
+              <div className="grid md:grid-cols-[120px_1fr_auto] gap-2 items-end">
             <label className="text-xs space-y-1">
               <span className="text-muted-foreground">Kolor</span>
               <input
@@ -145,24 +152,26 @@ export default function AdminAppSettingsSection() {
             >
               Domyślny
             </button>
-          </div>
-          {!isPrimaryHexValid ? (
-            <p className="text-xs text-destructive">Nieprawidłowy format koloru. Użyj 6-znakowego kodu HEX.</p>
-          ) : null}
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-muted-foreground">Podgląd:</span>
-            <button type="button" className="bg-primary text-black rounded px-3 py-1.5 text-xs">
-              Przycisk primary
-            </button>
-          </div>
-        </div>
+              </div>
+              {!isPrimaryHexValid ? (
+                <p className="mt-2 text-xs text-destructive">Nieprawidłowy format koloru. Użyj 6-znakowego kodu HEX.</p>
+              ) : null}
+              <div className="mt-2 flex items-center gap-2">
+                <span className="text-[11px] text-muted-foreground">Podgląd:</span>
+                <button type="button" className="bg-primary text-black rounded px-3 py-1.5 text-xs">
+                  Przycisk primary
+                </button>
+              </div>
+            </AdminCardBody>
+          </AdminCard>
 
-        <div className="border border-border rounded p-3 bg-surface-2/20 space-y-2">
-          <div className="text-xs font-semibold">Logo i warianty tla</div>
-          <p className="text-[11px] text-muted-foreground">
-            Wprowadz adresy logo i zdecyduj, ktory wariant (ciemny/jasny) ma byc wyswietlany w konkretnym miejscu.
-          </p>
-          <div className="grid md:grid-cols-2 gap-2">
+          <AdminCard>
+            <AdminCardHeader
+              title="Logo i warianty tla"
+              description="Adresy logo dla jasnego i ciemnego tla."
+            />
+            <AdminCardBody>
+              <div className="grid md:grid-cols-2 gap-2">
             <label className="text-xs space-y-1">
               <span className="text-muted-foreground">Logo (ciemne tlo)</span>
               <input
@@ -179,15 +188,17 @@ export default function AdminAppSettingsSection() {
                 className="w-full bg-surface border border-border rounded px-3 py-2 text-sm"
               />
             </label>
-          </div>
-        </div>
+              </div>
+            </AdminCardBody>
+          </AdminCard>
 
-        <div className="border border-border rounded p-3 bg-surface-2/20 space-y-2">
-          <div className="text-xs font-semibold">Użycie logo</div>
-          <p className="text-[11px] text-muted-foreground">
-            Dla każdego miejsca wybierz wariant (ciemne/jasne). Brak wyboru = logo nie jest pokazywane.
-          </p>
-          <div className="grid md:grid-cols-3 gap-2">
+          <AdminCard>
+            <AdminCardHeader
+              title="Uzycie logo"
+              description="Brak wyboru = logo nie jest pokazywane."
+            />
+            <AdminCardBody>
+              <div className="grid md:grid-cols-3 gap-2">
             <label className="text-xs space-y-1">
               <span className="text-muted-foreground">Panel główny</span>
               <select
@@ -224,15 +235,17 @@ export default function AdminAppSettingsSection() {
                 <option value="LIGHT">Jasne</option>
               </select>
             </label>
-          </div>
-        </div>
+              </div>
+            </AdminCardBody>
+          </AdminCard>
         {/* Siedziba magazynu + opiekunowie projektu są w Admin → Dokumenty i komunikacja → Transport. */}
-        <div className="border border-border rounded p-3 bg-surface-2/20 space-y-2">
-          <div className="text-xs font-semibold">Kontakt widoczny dla uzytkownikow</div>
-          <p className="text-[11px] text-muted-foreground">
-            Dane kontaktowe, ktore moga byc pokazywane w interfejsie i materialach firmy.
-          </p>
-          <div className="grid md:grid-cols-3 gap-2">
+          <AdminCard>
+            <AdminCardHeader
+              title="Kontakt widoczny dla uzytkownikow"
+              description="Dane kontaktowe pokazywane w interfejsie."
+            />
+            <AdminCardBody>
+              <div className="grid md:grid-cols-3 gap-2">
             <label className="text-xs space-y-1">
               <span className="text-muted-foreground">E-mail kontaktowy</span>
               <input
@@ -257,14 +270,16 @@ export default function AdminAppSettingsSection() {
                 className="w-full bg-surface border border-border rounded px-3 py-2 text-sm"
               />
             </label>
-          </div>
-        </div>
-        <div className="border border-border rounded p-3 bg-surface-2/20 space-y-2">
-          <div className="text-xs font-semibold">Nadawca wiadomosci e-mail</div>
-          <p className="text-[11px] text-muted-foreground">
-            Ustaw, jak system podpisuje i kieruje odpowiedzi na wiadomosci automatyczne.
-          </p>
-          <div className="grid md:grid-cols-2 gap-2">
+              </div>
+            </AdminCardBody>
+          </AdminCard>
+          <AdminCard>
+            <AdminCardHeader
+              title="Nadawca wiadomosci e-mail"
+              description="Podpis i adres reply-to dla automatycznych wiadomosci."
+            />
+            <AdminCardBody>
+              <div className="grid md:grid-cols-2 gap-2">
             <label className="text-xs space-y-1">
               <span className="text-muted-foreground">Nazwa nadawcy e-mail</span>
               <input
@@ -281,17 +296,21 @@ export default function AdminAppSettingsSection() {
                 className="w-full bg-surface border border-border rounded px-3 py-2 text-sm"
               />
             </label>
+              </div>
+            </AdminCardBody>
+          </AdminCard>
+          <div className="flex items-center gap-2">
+            <button
+              type="submit"
+              className="bg-primary text-black rounded px-3 py-2 text-sm disabled:opacity-50"
+              disabled={mutation.isPending}
+            >
+              {mutation.isPending ? 'Zapisywanie...' : 'Zapisz ustawienia'}
+            </button>
+            {message ? <p className="text-xs text-muted-foreground">{message}</p> : null}
           </div>
-        </div>
-        <button
-          type="submit"
-          className="bg-primary text-black rounded px-3 py-2 text-sm disabled:opacity-50"
-          disabled={mutation.isPending}
-        >
-          {mutation.isPending ? 'Zapisywanie...' : 'Zapisz ustawienia'}
-        </button>
-        {message ? <p className="text-xs text-muted-foreground">{message}</p> : null}
-      </form>
-    </section>
+        </form>
+      </AdminPanelBody>
+    </AdminPanel>
   )
 }

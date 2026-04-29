@@ -16,6 +16,7 @@ import {
 } from '../api/issuer-profiles.api'
 import { apiNipCompanyLookup } from '../../../shared/api/nip-lookup.api'
 import { useAuth } from '../../auth/AuthProvider'
+import { AdminCard, AdminCardBody, AdminCardHeader, AdminPanel, AdminPanelBody, AdminPanelHeader } from './AdminSurface'
 
 const emptyForm = (): CreateIssuerProfileInput & { profileKey?: string } => ({
   profileKey: '',
@@ -168,12 +169,12 @@ export default function AdminIssuerProfilesSection() {
   if (!hasPermission('admin.users.read')) return null
 
   return (
-    <section className="bg-card border border-border rounded-lg p-3">
-      <h2 className="text-sm font-semibold mb-1">Profile firmy (wystawca dokumentów)</h2>
-      <p className="text-xs text-muted-foreground mb-3">
-        Wspólne źródło danych dla oferty i przyszłych formularzy. Domyślny profil trafia do nowych draftów oferty.
-        Edycja wymaga uprawnienia administratora.
-      </p>
+    <AdminPanel>
+      <AdminPanelHeader
+        title="Profile firmy (wystawca dokumentow)"
+        description="Wspolne zrodlo danych dla oferty i dokumentow. Domyslny profil trafia do nowych ofert."
+      />
+      <AdminPanelBody>
 
       {listQuery.isLoading && <div className="text-sm text-muted-foreground">Ładowanie profili…</div>}
       {listQuery.isError && (
@@ -249,9 +250,11 @@ export default function AdminIssuerProfilesSection() {
       )}
 
       {canManage && editing != null && (
-        <form onSubmit={submit} className="border border-primary/40 rounded-lg p-3 space-y-2 mt-3 bg-surface-2/30">
-          <div className="text-sm font-semibold">{editing === 'new' ? 'Nowy profil' : 'Edycja profilu'}</div>
-          {formError && <div className="text-xs text-red-600">{formError}</div>}
+        <AdminCard className="mt-3 border-primary/40">
+          <AdminCardHeader title={editing === 'new' ? 'Nowy profil' : 'Edycja profilu'} />
+          <AdminCardBody>
+            <form onSubmit={submit} className="space-y-2">
+            {formError && <div className="text-xs text-red-600">{formError}</div>}
           {editing === 'new' && (
             <label className="block text-xs">
               Klucz (opcjonalny, unikalny)
@@ -348,7 +351,9 @@ export default function AdminIssuerProfilesSection() {
               Anuluj
             </button>
           </div>
-        </form>
+            </form>
+          </AdminCardBody>
+        </AdminCard>
       )}
 
       <ConfirmationModal
@@ -363,6 +368,7 @@ export default function AdminIssuerProfilesSection() {
         onClose={() => setDeleteTarget(null)}
         onConfirm={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
       />
-    </section>
+      </AdminPanelBody>
+    </AdminPanel>
   )
 }
