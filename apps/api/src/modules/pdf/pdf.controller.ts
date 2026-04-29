@@ -66,19 +66,25 @@ export class PdfController {
     draftPayload: OfferDocumentDraft
     branding: { accentColorHex: string | null; logoUrl: string | null }
     projectContact: { name?: string | null; phone?: string | null; email?: string | null } | null
+    offerIssuerDetailsVariant: 'DEFAULT' | 'ADDRESS_NIP'
   } {
     const requested = (draftPayload as any).toinenMusicMode === true
 
-    if (!requested) return { draftPayload, branding, projectContact }
+    if (!requested) return { draftPayload, branding, projectContact, offerIssuerDetailsVariant: 'DEFAULT' }
     if (!this.isToinenMusicModeAllowed(appSettings)) {
       // If company disables the mode, ignore even if draft contains it.
-      return { draftPayload: { ...(draftPayload as any), toinenMusicMode: false }, branding, projectContact }
+      return {
+        draftPayload: { ...(draftPayload as any), toinenMusicMode: false },
+        branding,
+        projectContact,
+        offerIssuerDetailsVariant: 'DEFAULT',
+      }
     }
 
     const issuer = {
       profileKey: 'TOINEN_MUSIC',
-      companyName: 'Toinen Music',
-      address: 'Mariusz Nowicki\nul. Czerska 8/10\n00-732 Warszawa',
+      companyName: 'Toinen Music Mariusz Nowicki',
+      address: 'ul. Czerska 8/10\n00-732 Warszawa',
       nip: '8121780604',
       email: 'pawel@toinenmusic.com',
       phone: '508067687',
@@ -95,13 +101,14 @@ export class PdfController {
       draftPayload: nextDraft,
       branding: {
         accentColorHex: '#81B29F',
-        logoUrl: 'http://toinenmusic.pl/wp-content/themes/toinen-wp/img/logo.svg',
+        logoUrl: 'https://toinenmusic.pl/wp-content/themes/toinen-wp/img/logo.svg',
       },
       projectContact: {
         name: 'Paweł Szumny',
         phone: '508067687',
         email: 'pawel@toinenmusic.com',
       },
+      offerIssuerDetailsVariant: 'ADDRESS_NIP',
     }
   }
 
@@ -174,9 +181,12 @@ export class PdfController {
       const response = await fetch(url, { signal: controller.signal })
       if (!response.ok) return null
       const contentType = response.headers.get('content-type') || ''
-      if (!contentType.toLowerCase().startsWith('image/')) return null
+      const ct = contentType.toLowerCase()
+      const isSvg = ct.includes('svg') || /\.svg(\?|#|$)/i.test(url)
+      if (!ct.startsWith('image/') && !isSvg) return null
       const bytes = Buffer.from(await response.arrayBuffer())
-      return `data:${contentType};base64,${bytes.toString('base64')}`
+      const asType = isSvg ? 'image/svg+xml' : contentType
+      return `data:${asType};base64,${bytes.toString('base64')}`
     } catch {
       return null
     } finally {
@@ -214,7 +224,8 @@ export class PdfController {
           ? String((draftPayload as any).projectContactId ?? '').trim() || null
           : null
       let projectContact = this.pickProjectContact(appSettings, preferredContactId)
-      ;({ draftPayload, branding, projectContact } = this.applyToinenMusicModeIfEnabled(
+      let offerIssuerDetailsVariant: 'DEFAULT' | 'ADDRESS_NIP' = 'DEFAULT'
+      ;({ draftPayload, branding, projectContact, offerIssuerDetailsVariant } = this.applyToinenMusicModeIfEnabled(
         appSettings,
         draftPayload,
         branding,
@@ -229,6 +240,7 @@ export class PdfController {
         projectContact,
         accentColorHex: branding.accentColorHex,
         logoUrl: branding.logoUrl,
+        issuerDetailsVariant: offerIssuerDetailsVariant,
       })
       const pdfBuffer = await this.renderPdf(html)
       res.setHeader('Content-Type', 'application/pdf')
@@ -280,7 +292,8 @@ export class PdfController {
           ? String((draftPayload as any).projectContactId ?? '').trim() || null
           : null
       let projectContact = this.pickProjectContact(appSettings, preferredContactId)
-      ;({ draftPayload, branding, projectContact } = this.applyToinenMusicModeIfEnabled(
+      let offerIssuerDetailsVariant: 'DEFAULT' | 'ADDRESS_NIP' = 'DEFAULT'
+      ;({ draftPayload, branding, projectContact, offerIssuerDetailsVariant } = this.applyToinenMusicModeIfEnabled(
         appSettings,
         draftPayload,
         branding,
@@ -378,6 +391,7 @@ export class PdfController {
         projectContact,
         accentColorHex: branding.accentColorHex,
         logoUrl: branding.logoUrl,
+        issuerDetailsVariant: offerIssuerDetailsVariant,
       })
       const pdfBuffer = await this.renderPdf(html)
 

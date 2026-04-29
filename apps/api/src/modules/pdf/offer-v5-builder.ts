@@ -149,6 +149,12 @@ export type BuildOfferHtmlV5Options = {
   projectContact?: { name?: string | null; phone?: string | null; email?: string | null } | null
   accentColorHex?: string | null
   logoUrl?: string | null
+  /**
+   * Layout wariantu „Oferta składa” (kolumna lewa w PDF) dla wystawcy.
+   * DEFAULT: NIP + adres + email (+ tel)
+   * ADDRESS_NIP: adres + NIP (bez maila/tel)
+   */
+  issuerDetailsVariant?: 'DEFAULT' | 'ADDRESS_NIP'
 }
 
 export function buildOfferHtmlV5(
@@ -179,14 +185,20 @@ export function buildOfferHtmlV5(
   const headerMeta = `Warszawa, ${fmtPlDate(issuedDate)} &nbsp;·&nbsp; Ważna ${validityDays} dni od daty wystawienia`
 
   const companyDetails = issuer
-    ? [
-        `NIP: ${escapeHtml(companyNip)}`,
-        escapeHtmlWithBreaks(companyAddress),
-        escapeHtml(companyEmail),
-        companyPhone ? `+48 ${escapeHtml(String(companyPhone).replace(/\s/g, ' '))}` : null,
-      ]
-        .filter(Boolean)
-        .join('<br>\n          ')
+    ? (() => {
+        const variant = options?.issuerDetailsVariant ?? 'DEFAULT'
+        if (variant === 'ADDRESS_NIP') {
+          return [escapeHtmlWithBreaks(companyAddress), `NIP: ${escapeHtml(companyNip)}`].join('<br>\n          ')
+        }
+        return [
+          `NIP: ${escapeHtml(companyNip)}`,
+          escapeHtmlWithBreaks(companyAddress),
+          escapeHtml(companyEmail),
+          companyPhone ? `+48 ${escapeHtml(String(companyPhone).replace(/\s/g, ' '))}` : null,
+        ]
+          .filter(Boolean)
+          .join('<br>\n          ')
+      })()
     : [
         `NIP: ${COMPANY.nip}`,
         COMPANY.address,
