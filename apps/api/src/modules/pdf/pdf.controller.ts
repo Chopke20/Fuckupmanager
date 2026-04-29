@@ -51,6 +51,58 @@ function getOfferNumberDisplay(order: OrderWithRelations, nextVersion?: number):
   })
 }
 
+function svgToDataUri(svg: string): string {
+  const trimmed = svg.trim()
+  const base64 = Buffer.from(trimmed, 'utf8').toString('base64')
+  return `data:image/svg+xml;base64,${base64}`
+}
+
+const TOINEN_LOGO_SVG = `<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 18.0.0, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+\t viewBox="0 0 519.4 200.6" enable-background="new 0 0 519.4 200.6" xml:space="preserve">
+<g id="Layer_1">
+\t<g>
+\t\t<polygon points="14.1,23.4 65.6,23.4 65.6,42.1 48.6,42.1 48.6,97.9 30.1,97.9 30.1,42.1 14.1,42.1 \t\t"/>
+\t\t<path d="M106.1,22.9c-21.5,0-38.9,17.4-38.9,38.9c0,21.5,17.4,38.9,38.9,38.9S145,83.2,145,61.7C145,40.3,127.5,22.9,106.1,22.9z
+\t\t\t M106.1,84.5C95,84.5,86,74.6,86,62.4s9-22.1,20.1-22.1s20.1,9.9,20.1,22.1S117.2,84.5,106.1,84.5z"/>
+\t\t<rect x="152.4" y="24.6" width="19.6" height="75.5"/>
+\t\t<polygon fill="#5FB29E" points="143.7,182.2 126.8,182.2 155.1,110.5 172,110.5 \t\t"/>
+\t\t<polygon fill="#5FB29E" points="112.3,182.2 95.4,182.2 123.7,110.5 140.6,110.5 \t\t"/>
+\t\t<rect x="430.3" y="107.7" width="19.6" height="75.5"/>
+\t\t<path d="M225.8,23.4c-12.7,0-19.8,4.8-23.7,9.4v-8.2h-19.6v75.5h19.6c0,0,0-36.1,0-40.8s1-19.1,15.1-19.5
+\t\t\tc12.5-0.3,12.5,11.2,12.5,11.2v49.1h19.6V51C249.4,51,251.8,23.4,225.8,23.4z"/>
+\t\t<path d="M388,23.4c-12.7,0-19.8,4.8-23.7,9.4v-8.2h-19.6v75.5h19.6c0,0,0-36.1,0-40.8s1-19.1,15.1-19.5C392,39.5,392,51,392,51
+\t\t\tv49.1h19.6V51C411.6,51,414,23.4,388,23.4z"/>
+\t\t<path d="M225.7,108.7c-12.2,0-19,4.6-22.7,9v-7.8h-18.9v72.4H203v-39.1c0,0,1-18.7,14.5-18.7c12.1,0,12,10.7,12,10.7v47.1h18.9
+\t\t\tv-47.1C248.4,135.1,250.7,108.7,225.7,108.7z"/>
+\t\t<path d="M229.6,138.6v43.6h18.9v-39.1c0,0,1-18.4,14.5-18.7c12-0.3,12,10.7,12,10.7v47.1h18.9v-47.1c0,0,1-26.5-22.7-26.5
+\t\t\tc-12.2,0-19,4.6-22.7,9"/>
+\t\t<g>
+\t\t\t<path d="M335.2,61.8c0-21.8-17.4-39.5-39-39.5c-21.5,0-39,17.7-39,39.5c0,21.8,17.4,39.5,39,39.5c16.5,0,26.6-7.1,33.7-16.3
+\t\t\t\tl-15.1-7.9c-4.3,5-9.3,8.2-18.7,8.2c-9.7,0-19.4-7.5-21.8-17.6H318h17.2 M296.9,39.1c10.2,0,16.7,5.6,20.6,14.1h-41.1
+\t\t\t\tC280.2,44.8,286.7,39.1,296.9,39.1z"/>
+\t\t</g>
+\t\t<g>
+\t\t\t<path d="M493.5,124.7c3.7,0,7.2,1.1,10.2,3.1v-18.9c-3.3-0.9-6.7-1.4-10.2-1.4c-21.2,0-38.4,17.2-38.4,38.4
+\t\t\t\tc0,21.2,17.2,38.4,38.4,38.4c3.5,0,7-0.5,10.2-1.4v-17.7c-3,2-6.5,3.1-10.2,3.1c-11,0-19.9-9.8-19.9-21.8
+\t\t\t\tC473.6,134.5,482.5,124.7,493.5,124.7z"/>
+\t\t</g>
+\t\t<path d="M349.8,110.3v38.3v1.4c0,0.9,0,2.2,0,4.2c0,12.6-10.9,13.3-12.8,13.2c-2,0.1-12.8-0.6-12.8-13.2c0-2,0-3.3,0-4.2v-1.4
+\t\t\tv-38.3h-18v46.4c0,0-0.1,27.8,30.8,27.8s30.8-27.8,30.8-27.8v-46.4H349.8z"/>
+\t\t<path d="M399.7,168.5c4.9,0,14.5-4.9,5.2-11.7s-26.5-9.1-27.9-26.1c-1.4-17,12.1-20.9,15.7-21.5c8.6-1.5,18.4-1.3,29.9,10.3
+\t\t\tl-10.9,10.9c0,0-5.6-6.2-10.8-6.2s-6.7,2.6-6.7,2.6s-3.6,3.9,2.6,7.5c5.8,3.3,21.4,6.6,27.1,21c5,12.4-5.6,29.1-24.2,29.1
+\t\t\tc-17.5,0-25.8-12.3-25.8-12.3l11.1-12.4C385.1,159.6,391.2,168.5,399.7,168.5z"/>
+\t\t<path fill="#E30613" d="M427.6,153.6"/>
+\t</g>
+</g>
+<g id="Layer_2">
+</g>
+</svg>`
+
+const TOINEN_LOGO_DATA_URI = svgToDataUri(TOINEN_LOGO_SVG)
+
 export class PdfController {
   private isToinenMusicModeAllowed(appSettings: unknown): boolean {
     const s = appSettings as { enableToinenMusicMode?: boolean | null } | null
@@ -101,7 +153,7 @@ export class PdfController {
       draftPayload: nextDraft,
       branding: {
         accentColorHex: '#81B29F',
-        logoUrl: 'https://toinenmusic.pl/wp-content/themes/toinen-wp/img/logo.svg',
+        logoUrl: TOINEN_LOGO_DATA_URI,
       },
       projectContact: {
         name: 'Paweł Szumny',
