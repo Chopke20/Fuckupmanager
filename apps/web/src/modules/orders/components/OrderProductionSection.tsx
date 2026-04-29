@@ -113,18 +113,18 @@ export default function OrderProductionSection({
       </datalist>
       <div className="border border-border rounded overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm table-fixed">
             <thead>
               <tr className="bg-surface-2 border-b border-border">
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-8">#</th>
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground min-w-[200px]">Nazwa</th>
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground">Stawka</th>
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground">Jedn.</th>
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground">Rabat %</th>
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground">Etap</th>
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground">Wartość netto</th>
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground">Podwyk.</th>
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground">Widoczny</th>
+                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-10">#</th>
+                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-[28rem] min-w-[22rem]">Nazwa</th>
+                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-24">Stawka</th>
+                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-16">Jedn.</th>
+                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-16">Rabat</th>
+                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-40">Etap</th>
+                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-28">Netto</th>
+                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-16">Podw.</th>
+                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-20">Oferta</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-20">Akcje</th>
               </tr>
             </thead>
@@ -133,8 +133,8 @@ export default function OrderProductionSection({
                 const stageIds = parseStageIds(item)
                 return (
                   <tr key={item.id || index} className="border-b border-border/50 hover:bg-surface-2/50">
-                    <td className="py-1 px-2 text-muted-foreground">{index + 1}</td>
-                    <td className="py-1 px-2 min-w-[200px]">
+                    <td className="py-1 px-2 text-muted-foreground whitespace-nowrap">{index + 1}</td>
+                    <td className="py-1 px-2">
                       <input
                         type="text"
                         list="production-datalist"
@@ -153,7 +153,7 @@ export default function OrderProductionSection({
                         placeholder="Nazwa lub wybierz z listy"
                       />
                     </td>
-                    <td className="py-1 px-2">
+                    <td className="py-1 px-2 whitespace-nowrap">
                       <input
                         type="number"
                         min={0}
@@ -163,7 +163,7 @@ export default function OrderProductionSection({
                         onChange={(e) => updateItem(index, { rateValue: parseFloat(e.target.value) || 0 })}
                       />
                     </td>
-                    <td className="py-1 px-2">
+                    <td className="py-1 px-2 whitespace-nowrap">
                       <input
                         type="number"
                         min={1}
@@ -172,7 +172,7 @@ export default function OrderProductionSection({
                         onChange={(e) => updateItem(index, { units: parseFloat(e.target.value) || 1 })}
                       />
                     </td>
-                    <td className="py-1 px-2">
+                    <td className="py-1 px-2 whitespace-nowrap">
                       <input
                         type="number"
                         min={0}
@@ -199,10 +199,10 @@ export default function OrderProductionSection({
                         ))}
                       </select>
                     </td>
-                    <td className="py-1 px-2 font-medium text-right text-xs">
+                    <td className="py-1 px-2 font-medium text-right text-xs whitespace-nowrap">
                       {calculateItemTotal(item).toFixed(2)} PLN
                     </td>
-                    <td className="py-1 px-2">
+                    <td className="py-1 px-2 whitespace-nowrap">
                       <input
                         type="checkbox"
                         checked={!!item.isSubcontractor}
@@ -210,7 +210,7 @@ export default function OrderProductionSection({
                         title="Podwykonawca"
                       />
                     </td>
-                    <td className="py-1 px-2">
+                    <td className="py-1 px-2 whitespace-nowrap">
                       <button
                         type="button"
                         onClick={() => updateItem(index, { visibleInOffer: !item.visibleInOffer })}
@@ -220,7 +220,7 @@ export default function OrderProductionSection({
                         {item.visibleInOffer !== false ? <Eye size={16} /> : <EyeOff size={16} />}
                       </button>
                     </td>
-                    <td className="py-1 px-2">
+                    <td className="py-1 px-2 whitespace-nowrap">
                       <button
                         type="button"
                         onClick={() => removeItem(index)}

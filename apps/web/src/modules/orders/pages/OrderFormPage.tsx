@@ -740,7 +740,7 @@ export default function OrderFormPage() {
             )}
 
             <div className="p-3">
-              <div className="max-w-6xl mx-auto">
+              <div className="max-w-7xl 2xl:max-w-[1600px] mx-auto">
                 {/* Sekcja nagłówka - 2 kolumny */}
                 <section id="header" className="scroll-mt-24 mb-6">
                   <h2 className="text-lg font-bold flex items-center gap-2 mb-3">

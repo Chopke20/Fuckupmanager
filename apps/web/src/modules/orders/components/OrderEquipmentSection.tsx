@@ -259,15 +259,15 @@ export default function OrderEquipmentSection({
       {/* Tabela jak harmonogram – spójny wygląd, nazwa ma miejsce */}
       <div className="border border-border rounded overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm table-fixed">
             <thead>
               <tr className="bg-surface-2 border-b border-border">
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-8">#</th>
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground min-w-[200px]">Nazwa</th>
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground">Kategoria</th>
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground">Ilość</th>
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground">Cena jdn.</th>
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground align-top min-w-[6.5rem]">
+                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-10">#</th>
+                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-[28rem] min-w-[22rem]">Nazwa</th>
+                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-32">Kategoria</th>
+                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-16">Ilość</th>
+                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-24">Cena</th>
+                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground align-top w-24">
                   <div className="flex flex-col gap-1">
                     <div className="flex flex-wrap items-center gap-x-0.5 gap-y-0.5 font-normal">
                       <span className="font-medium text-muted-foreground">Dni</span>
@@ -295,11 +295,11 @@ export default function OrderEquipmentSection({
                     </span>
                   </div>
                 </th>
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground">Rabat %</th>
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground">Wartość netto</th>
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground" title="Wynajem – bez marży">Rental</th>
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground">Dostępność</th>
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground">Widoczny</th>
+                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-16">Rabat</th>
+                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-28">Netto</th>
+                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-16" title="Wynajem – bez marży">Rental</th>
+                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-36">Dostępność</th>
+                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-20">Oferta</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-20">Akcje</th>
               </tr>
             </thead>
@@ -311,10 +311,10 @@ export default function OrderEquipmentSection({
 
                 return (
                   <tr key={item.id || index} className="border-b border-border hover:bg-surface-2/50 transition-colors">
-                    <td className="py-1.5 px-3">
+                    <td className="py-1.5 px-2 whitespace-nowrap">
                       <div className="text-sm text-muted-foreground">{index + 1}</div>
                     </td>
-                    <td className="py-1.5 px-3">
+                    <td className="py-1.5 px-2">
                       <div>
                         <input
                           list="equipment-datalist"
@@ -338,7 +338,7 @@ export default function OrderEquipmentSection({
                         />
                       </div>
                     </td>
-                    <td className="py-1.5 px-3">
+                    <td className="py-1.5 px-2">
                       {item.equipmentId ? (
                         <span className="inline-flex px-2 py-1 text-xs rounded bg-surface border border-border">
                           {normalizeCategoryName(item.category || 'Inne')}
@@ -347,7 +347,7 @@ export default function OrderEquipmentSection({
                         <input
                           list="order-equipment-category-datalist"
                           type="text"
-                          className="w-full min-w-[7.5rem] max-w-[14rem] px-2 py-1 text-xs bg-background border border-border rounded"
+                          className="w-full px-2 py-1 text-xs bg-background border border-border rounded"
                           value={item.category ?? 'Inne'}
                           onChange={(e) => updateItem(index, { category: e.target.value })}
                           onBlur={(e) => {
@@ -359,7 +359,7 @@ export default function OrderEquipmentSection({
                         />
                       )}
                     </td>
-                    <td className="py-1 px-2">
+                    <td className="py-1 px-2 whitespace-nowrap">
                       <input
                         type="number"
                         min="1"
@@ -368,7 +368,7 @@ export default function OrderEquipmentSection({
                         onChange={(e) => updateItem(index, { quantity: parseInt(e.target.value) || 1 })}
                       />
                     </td>
-                    <td className="py-1 px-2">
+                    <td className="py-1 px-2 whitespace-nowrap">
                       <input
                         type="number"
                         min="0"
@@ -378,7 +378,7 @@ export default function OrderEquipmentSection({
                         onChange={(e) => updateItem(index, { unitPrice: parseFloat(e.target.value) || 0 })}
                       />
                     </td>
-                    <td className="py-1 px-2">
+                    <td className="py-1 px-2 whitespace-nowrap">
                       <input
                         type="number"
                         min="1"
@@ -387,7 +387,7 @@ export default function OrderEquipmentSection({
                         onChange={(e) => updateItem(index, { days: parseInt(e.target.value) || 1 })}
                       />
                     </td>
-                    <td className="py-1 px-2">
+                    <td className="py-1 px-2 whitespace-nowrap">
                       <input
                         type="number"
                         min="0"
@@ -397,10 +397,10 @@ export default function OrderEquipmentSection({
                         onChange={(e) => updateItem(index, { discount: parseFloat(e.target.value) || 0 })}
                       />
                     </td>
-                    <td className="py-1 px-2 font-medium text-right text-xs">
+                    <td className="py-1 px-2 font-medium text-right text-xs whitespace-nowrap">
                       {calculateItemTotal(item).toFixed(2)} PLN
                     </td>
-                    <td className="py-1 px-2">
+                    <td className="py-1 px-2 whitespace-nowrap">
                       <input
                         type="checkbox"
                         checked={!!item.isRental}
@@ -438,7 +438,7 @@ export default function OrderEquipmentSection({
                         <Info size={14} />
                       </button>
                     </td>
-                    <td className="py-1 px-2">
+                    <td className="py-1 px-2 whitespace-nowrap">
                       <button
                         type="button"
                         onClick={() => updateItem(index, { visibleInOffer: !item.visibleInOffer })}
@@ -448,7 +448,7 @@ export default function OrderEquipmentSection({
                         {item.visibleInOffer !== false ? <Eye size={16} /> : <EyeOff size={16} />}
                       </button>
                     </td>
-                    <td className="py-1 px-2">
+                    <td className="py-1 px-2 whitespace-nowrap">
                       <div className="flex items-center gap-1">
                         <button
                           type="button"
