@@ -6,23 +6,24 @@
   :root {
     --background: 0 0% 0%;
     --foreground: 0 0% 100%;
-    --card: 0 0% 5%;
+    /* Wyższy kontrast "boksów" w całej aplikacji */
+    --card: 0 0% 8%;
     --card-foreground: 0 0% 100%;
-    --popover: 0 0% 5%;
+    --popover: 0 0% 8%;
     --popover-foreground: 0 0% 100%;
     --primary: 145 100% 50%;
     --primary-hover: 145 100% 40%;
     --primary-foreground: 0 0% 0%;
-    --secondary: 0 0% 8%;
+    --secondary: 0 0% 10%;
     --secondary-foreground: 0 0% 100%;
     --muted: 0 0% 40%;
     --muted-foreground: 0 0% 60%;
-    --accent: 0 0% 8%;
+    --accent: 0 0% 10%;
     --accent-foreground: 0 0% 100%;
     --destructive: 0 100% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 12%;
-    --input: 0 0% 12%;
+    --border: 0 0% 18%;
+    --input: 0 0% 18%;
     --ring: 145 100% 50%;
     --primary-rgb: 0 255 136;
   }

@@ -12,9 +12,10 @@ export default {
         // Lamastage.pl — ciemny, profesjonalny event
         background: '#080808',
         foreground: '#ffffff',
-        surface: '#111111',
-        'surface-2': '#1a1a1a',
-        border: '#222222',
+        // Podbity kontrast "boksów" (karty/sekcje/tabele)
+        surface: '#141414',
+        'surface-2': '#1f1f1f',
+        border: '#343434',
         primary: 'hsl(var(--primary) / <alpha-value>)',
         'primary-hover': 'hsl(var(--primary-hover) / <alpha-value>)',
         muted: '#666666',
