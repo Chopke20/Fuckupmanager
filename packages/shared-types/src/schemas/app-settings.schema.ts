@@ -34,6 +34,8 @@ export const AppSettingsSchema = z.object({
   emailSenderName: z.string().trim().max(160).nullable().optional(),
   emailFooterText: NullableTrimmed,
   replyToEmail: z.string().trim().email().nullable().optional(),
+  /** Controls visibility of one-off, hardcoded offer PDF mode. */
+  enableToinenMusicMode: z.boolean().optional().nullable(),
 })
 
 export const AppSettingsPublicSchema = z.object({

@@ -49,6 +49,11 @@ export const OfferIssuerSchema = z.object({
 export const OfferDocumentDraftSchema = z.object({
   offerValidityDays: z.number().int().min(1).max(180),
   /**
+   * Tryb specjalny sporadycznych ofert „white-label” (np. partner/agency mode).
+   * Jest tylko flagą w drafcie — backend decyduje czy jest dozwolona (AppSettings).
+   */
+  toinenMusicMode: z.boolean().optional(),
+  /**
    * Wybrany opiekun projektu (dla tego dokumentu/oferty). Gdy null/undefined, PDF użyje domyślnego
    * opiekuna ustawionego w App Settings (Admin).
    */

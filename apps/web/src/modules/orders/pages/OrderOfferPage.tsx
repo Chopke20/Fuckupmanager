@@ -20,6 +20,7 @@ function parseFilenameFromContentDisposition(header: string | undefined, fallbac
 
 type OfferDraft = {
   offerValidityDays: number;
+  toinenMusicMode?: boolean;
   /** Preferowane: nowy wybór z listy opiekunów w Admin. */
   projectContactId?: string | null;
   /** Legacy (stare dane) — trzymane dla kompatybilności. */
@@ -117,6 +118,11 @@ export default function OrderOfferPage() {
         email: typeof c?.email === 'string' ? c.email : '',
       }))
       .filter((c) => c.id && c.name);
+  }, [appSettingsQuery.data]);
+
+  const enableToinenMusicMode = useMemo(() => {
+    const raw = (appSettingsQuery.data as any)?.enableToinenMusicMode;
+    return raw === true;
   }, [appSettingsQuery.data]);
 
   useEffect(() => {
@@ -959,6 +965,16 @@ export default function OrderOfferPage() {
                 </div>
               )}
             </div>
+            {enableToinenMusicMode ? (
+              <label className="text-sm md:col-span-2 flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={Boolean(draft.toinenMusicMode)}
+                  onChange={(e) => setDraft((prev) => (prev ? { ...prev, toinenMusicMode: e.target.checked } : prev))}
+                />
+                <span>Toinen Music mode (PDF)</span>
+              </label>
+            ) : null}
             <label className="text-sm">
               Waluta
               <select

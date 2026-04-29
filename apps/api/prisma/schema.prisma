@@ -428,6 +428,7 @@ model AppSettings {
   emailSenderName    String?
   emailFooterText    String?
   replyToEmail       String?
+  enableToinenMusicMode Boolean @default(false)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

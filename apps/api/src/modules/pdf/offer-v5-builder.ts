@@ -58,6 +58,10 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;')
 }
 
+function escapeHtmlWithBreaks(s: string): string {
+  return escapeHtml(s).replace(/\r?\n/g, '<br>\n          ')
+}
+
 function normalizeHexColor(value?: string | null): string | null {
   if (!value) return null
   const trimmed = value.trim()
@@ -177,7 +181,7 @@ export function buildOfferHtmlV5(
   const companyDetails = issuer
     ? [
         `NIP: ${escapeHtml(companyNip)}`,
-        escapeHtml(companyAddress),
+        escapeHtmlWithBreaks(companyAddress),
         escapeHtml(companyEmail),
         companyPhone ? `+48 ${escapeHtml(String(companyPhone).replace(/\s/g, ' '))}` : null,
       ]
@@ -195,7 +199,7 @@ export function buildOfferHtmlV5(
   const clientDetails = client
     ? [
         client.nip ? `NIP: ${escapeHtml(client.nip)}` : null,
-        client.address ? escapeHtml(client.address) : null,
+        client.address ? escapeHtmlWithBreaks(client.address) : null,
         [client.contactName, client.email].filter(Boolean).join(' &nbsp;·&nbsp; ') || null,
         client.phone ? `+48 ${client.phone}` : null,
       ]
@@ -494,7 +498,7 @@ export function buildOfferHtmlV5(
   const footerRightCore = issuer
     ? `<span class="footer__label">Dane rejestrowe</span>
       ${escapeHtml(companyName)}<br>
-      ${escapeHtml(companyAddress)}<br>
+      ${escapeHtmlWithBreaks(companyAddress)}<br>
       NIP: ${escapeHtml(companyNip)}`
     : `<span class="footer__label">Dane rejestrowe</span>
       ${COMPANY.name}<br>

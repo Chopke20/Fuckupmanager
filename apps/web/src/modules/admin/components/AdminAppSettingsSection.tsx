@@ -23,6 +23,7 @@ const EMPTY_SETTINGS: AppSettings = {
   emailSenderName: null,
   emailFooterText: null,
   replyToEmail: null,
+  enableToinenMusicMode: false,
 }
 
 export default function AdminAppSettingsSection() {
@@ -236,6 +237,32 @@ export default function AdminAppSettingsSection() {
               </select>
             </label>
               </div>
+            </AdminCardBody>
+          </AdminCard>
+
+          <AdminCard>
+            <AdminCardHeader
+              title="Tryby specjalne dokumentow"
+              description="Sporadyczne, hardcoded tryby (white-label) widoczne tylko w ofertach PDF."
+            />
+            <AdminCardBody>
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={Boolean((draft as any).enableToinenMusicMode)}
+                  onChange={(e) =>
+                    setDraft((prev) => ({ ...prev, enableToinenMusicMode: e.target.checked } as any))
+                  }
+                />
+                <div>
+                  <div className="font-medium">Pokaż „Toinen Music mode” w dokumencie oferty</div>
+                  <div className="text-xs text-muted-foreground">
+                    Gdy włączone, w edycji oferty pojawi się checkbox, który podmieni kolor/Logo i dane w PDF (tylko dla tej jednej
+                    oferty). Dane są hardcoded w kodzie.
+                  </div>
+                </div>
+              </label>
             </AdminCardBody>
           </AdminCard>
         {/* Siedziba magazynu + opiekunowie projektu są w Admin → Dokumenty i komunikacja → Transport. */}

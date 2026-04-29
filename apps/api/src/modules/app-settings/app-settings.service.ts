@@ -39,6 +39,7 @@ function defaultSettingsForCompany(companyCode: string) {
     emailSenderName: null,
     emailFooterText: null,
     replyToEmail: null,
+    enableToinenMusicMode: false,
   }
 }
 
@@ -99,6 +100,7 @@ export async function getCurrentCompanyAppSettings() {
     emailSenderName: row.emailSenderName,
     emailFooterText: row.emailFooterText,
     replyToEmail: row.replyToEmail,
+    enableToinenMusicMode: (row as { enableToinenMusicMode?: boolean | null }).enableToinenMusicMode ?? false,
   })
 }
 
@@ -158,6 +160,10 @@ export async function updateCurrentCompanyAppSettings(payload: unknown) {
       emailSenderName: trimOrNull(data.emailSenderName),
       emailFooterText: trimOrNull(data.emailFooterText),
       replyToEmail: trimOrNull(data.replyToEmail),
+      enableToinenMusicMode:
+        typeof (data as { enableToinenMusicMode?: unknown }).enableToinenMusicMode === 'boolean'
+          ? (data as { enableToinenMusicMode: boolean }).enableToinenMusicMode
+          : undefined,
     },
   })
   return AppSettingsSchema.parse({
@@ -191,6 +197,7 @@ export async function updateCurrentCompanyAppSettings(payload: unknown) {
     emailSenderName: updated.emailSenderName,
     emailFooterText: updated.emailFooterText,
     replyToEmail: updated.replyToEmail,
+    enableToinenMusicMode: (updated as { enableToinenMusicMode?: boolean | null }).enableToinenMusicMode ?? false,
   })
 }
 

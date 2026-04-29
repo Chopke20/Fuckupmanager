@@ -2,7 +2,7 @@ import { Request, Response } from 'express'
 import { prisma } from '../../prisma/client'
 import puppeteer from 'puppeteer'
 import { ZodError } from 'zod'
-import { OrderOfferSnapshotSchema, type OrderOfferSnapshot } from '@lama-stage/shared-types'
+import { OrderOfferSnapshotSchema, type OfferDocumentDraft, type OrderOfferSnapshot } from '@lama-stage/shared-types'
 import { buildOfferHtmlV5, type OrderLike } from './offer-v5-builder'
 import { buildWarehousePdfHtml } from './warehouse-pdf-builder'
 import {
@@ -52,6 +52,59 @@ function getOfferNumberDisplay(order: OrderWithRelations, nextVersion?: number):
 }
 
 export class PdfController {
+  private isToinenMusicModeAllowed(appSettings: unknown): boolean {
+    const s = appSettings as { enableToinenMusicMode?: boolean | null } | null
+    return s?.enableToinenMusicMode === true
+  }
+
+  private applyToinenMusicModeIfEnabled(
+    appSettings: unknown,
+    draftPayload: OfferDocumentDraft,
+    branding: { accentColorHex: string | null; logoUrl: string | null },
+    projectContact: { name?: string | null; phone?: string | null; email?: string | null } | null
+  ): {
+    draftPayload: OfferDocumentDraft
+    branding: { accentColorHex: string | null; logoUrl: string | null }
+    projectContact: { name?: string | null; phone?: string | null; email?: string | null } | null
+  } {
+    const requested = (draftPayload as any).toinenMusicMode === true
+
+    if (!requested) return { draftPayload, branding, projectContact }
+    if (!this.isToinenMusicModeAllowed(appSettings)) {
+      // If company disables the mode, ignore even if draft contains it.
+      return { draftPayload: { ...(draftPayload as any), toinenMusicMode: false }, branding, projectContact }
+    }
+
+    const issuer = {
+      profileKey: 'TOINEN_MUSIC',
+      companyName: 'Toinen Music',
+      address: 'Mariusz Nowicki\nul. Czerska 8/10\n00-732 Warszawa',
+      nip: '8121780604',
+      email: 'pawel@toinenmusic.com',
+      phone: '508067687',
+    }
+    const nextDraft: OfferDocumentDraft = {
+      ...(draftPayload as any),
+      issuer,
+      projectContactId: null,
+      projectContactKey: null,
+      toinenMusicMode: true,
+    }
+
+    return {
+      draftPayload: nextDraft,
+      branding: {
+        accentColorHex: '#81B29F',
+        logoUrl: 'http://toinenmusic.pl/wp-content/themes/toinen-wp/img/logo.svg',
+      },
+      projectContact: {
+        name: 'Paweł Szumny',
+        phone: '508067687',
+        email: 'pawel@toinenmusic.com',
+      },
+    }
+  }
+
   private pickProjectContact(
     appSettings: unknown,
     preferredContactId?: string | null,
@@ -150,17 +203,23 @@ export class PdfController {
       if (!order.client) {
         return res.status(400).json({ error: 'Zlecenie nie ma przypisanego klienta — brak danych do oferty' })
       }
-      const draftPayload = await loadOfferDraftPayload(prisma, orderId, order)
+      let draftPayload = await loadOfferDraftPayload(prisma, orderId, order)
       const nextVer = (order.offerVersion ?? 0) + 1
       const offerNumberDisplay = getOfferNumberDisplay(order, nextVer)
       const generatedAt = new Date().toISOString()
       const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
-      const branding = await this.resolvePdfBranding(appSettings)
+      let branding = await this.resolvePdfBranding(appSettings)
       const preferredContactId =
         (draftPayload && typeof draftPayload === 'object' && 'projectContactId' in (draftPayload as any))
           ? String((draftPayload as any).projectContactId ?? '').trim() || null
           : null
-      const projectContact = this.pickProjectContact(appSettings, preferredContactId)
+      let projectContact = this.pickProjectContact(appSettings, preferredContactId)
+      ;({ draftPayload, branding, projectContact } = this.applyToinenMusicModeIfEnabled(
+        appSettings,
+        draftPayload,
+        branding,
+        projectContact,
+      ))
       const snapshot = buildOrderOfferSnapshotFromOrder(order, draftPayload, {
         generatedAt,
         documentNumber: offerNumberDisplay,
@@ -212,15 +271,21 @@ export class PdfController {
         })
       }
 
-      const draftPayload = await loadOfferDraftPayload(prisma, orderId, order)
+      let draftPayload = await loadOfferDraftPayload(prisma, orderId, order)
       const generatedAt = new Date().toISOString()
       const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
-      const branding = await this.resolvePdfBranding(appSettings)
+      let branding = await this.resolvePdfBranding(appSettings)
       const preferredContactId =
         (draftPayload && typeof draftPayload === 'object' && 'projectContactId' in (draftPayload as any))
           ? String((draftPayload as any).projectContactId ?? '').trim() || null
           : null
-      const projectContact = this.pickProjectContact(appSettings, preferredContactId)
+      let projectContact = this.pickProjectContact(appSettings, preferredContactId)
+      ;({ draftPayload, branding, projectContact } = this.applyToinenMusicModeIfEnabled(
+        appSettings,
+        draftPayload,
+        branding,
+        projectContact,
+      ))
       const newVersion = (order.offerVersion ?? 0) + 1
       const candidateOfferNumber = buildDocumentNumber({
         documentType: 'OFFER',
