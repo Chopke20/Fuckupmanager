@@ -3,6 +3,7 @@ import { useFormContext } from 'react-hook-form'
 import { GripVertical, Plus, Trash2 } from 'lucide-react'
 import { Order, OrderStage } from '@lama-stage/shared-types'
 import { dateInputToISO, isoToDateInput, daysBetween } from '../../../shared/utils/dateHelpers'
+import { randomClientUuid } from '../../../shared/utils/uuid'
 
 interface OrderScheduleSectionProps {
   /** Data rozpoczęcia zlecenia – pierwsza proponowana data przy dodawaniu etapu */
@@ -29,7 +30,7 @@ export default function OrderScheduleSection({ orderDateFrom, onChange }: OrderS
         ? new Date(orderDateFrom).toISOString()
         : new Date().toISOString()
     const newStage: Partial<OrderStage> = {
-      id: `temp-${Date.now()}`,
+      id: randomClientUuid(),
       orderId: '',
       type: 'CUSTOM',
       label: '',

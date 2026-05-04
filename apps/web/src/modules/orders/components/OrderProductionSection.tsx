@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Trash2, Eye, EyeOff, Plus } from 'lucide-react'
 import { OrderProductionItem, OrderStage } from '@lama-stage/shared-types'
 import { useEquipment } from '../../equipment/hooks/useEquipment'
+import { randomClientUuid } from '../../../shared/utils/uuid'
 
 interface OrderProductionSectionProps {
   items: Partial<OrderProductionItem>[]
@@ -44,7 +45,7 @@ export default function OrderProductionSection({
   }, [resources])
   const addEmptyRow = () => {
     const newItem: Partial<OrderProductionItem> = {
-      id: `temp-${Date.now()}`,
+      id: randomClientUuid(),
       orderId: '',
       name: '',
       description: '',

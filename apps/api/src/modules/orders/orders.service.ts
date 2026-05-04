@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto'
 import { Prisma } from '@prisma/client'
 import { CreateOrderSchema, UpdateOrderSchema, CreateOrderEquipmentItemSchema, CreateOrderStageSchema, CreateOrderProductionItemSchema } from '@lama-stage/shared-types'
 import { z } from 'zod'
@@ -31,6 +32,13 @@ export interface EquipmentAvailability {
 }
 
 export class OrdersService {
+  private static readonly UUID_V4_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+  private isUuid(value: unknown): value is string {
+    return typeof value === 'string' && OrdersService.UUID_V4_RE.test(value)
+  }
+
   private normalizeOrderDates<T extends { dateFrom?: Date | string | null; dateTo?: Date | string | null; startDate?: Date | string | null; endDate?: Date | string | null }>(order: T): T {
     return {
       ...order,
@@ -287,7 +295,7 @@ export class OrdersService {
 
     const orderYear = this.getOrderYear();
 
-    const created = await prisma.$transaction(async (tx) => {
+    const createdId = await prisma.$transaction(async (tx) => {
       const seq = await tx.orderYearSequence.upsert({
         where: { year: orderYear },
         create: { year: orderYear, lastNumber: 1 },
@@ -304,7 +312,8 @@ export class OrdersService {
       const stageRows = Array.isArray(stages) ? stages : []
       if (stageRows.length > 0) {
         await tx.orderStage.createMany({
-          data: stageRows.map((s: z.infer<typeof CreateOrderStageSchema>, idx: number) => ({
+          data: stageRows.map((s: z.infer<typeof CreateOrderStageSchema> & { id?: string }, idx: number) => ({
+            id: this.isUuid(s.id) ? s.id : randomUUID(),
             orderId: order.id,
             type: s.type ?? 'CUSTOM',
             label: s.label ?? null,
@@ -316,9 +325,24 @@ export class OrdersService {
           })),
         })
       }
-      return order
+      return order.id
     })
-    return this.normalizeOrderDates(created)
+    const full = await prisma.order.findUnique({
+      where: { id: createdId },
+      include: orderDetailInclude,
+    })
+    if (!full) {
+      throw new Error('Order create succeeded but order could not be reloaded')
+    }
+    const normalized = this.normalizeOrderDates(full) as OrderDetail
+    if (Array.isArray(normalized.productionItems)) {
+      normalized.productionItems = normalized.productionItems.map((p) => ({
+        ...p,
+        rateValue: Number(p.rateValue),
+        units: Number(p.units),
+      }))
+    }
+    return normalized
   }
 
   async updateOrder(id: string, orderData: z.infer<typeof UpdateOrderSchema>) {
