@@ -270,6 +270,10 @@ model OrderEquipmentItem {
   isRental       Boolean @default(false)
   sortOrder      Int     @default(0)
 
+  /// Opcjonalnie: ile „sztuk” (np. szt./dni) liczy się jako koszt rentalu × stawka — jeśli oba NULL, od marży odejmowany jest cały netto pozycji.
+  marginRentalUnits        Float?
+  marginRentalUnitCostNet  Float?
+
   // Individual reservation dates for this equipment item
   dateFrom    DateTime?
   dateTo      DateTime?
@@ -299,6 +303,10 @@ model OrderProductionItem {
   isSubcontractor Boolean @default(false)
   visibleInOffer  Boolean @default(true)
   sortOrder       Int     @default(0)
+
+  /// Opcjonalnie: ile jednostek × koszt netto / jedn. dla podwykonawcy — jeśli oba NULL, od marży odejmowany jest cały netto pozycji.
+  marginSubcontractorUnits       Float?
+  marginSubcontractorUnitCostNet Float?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

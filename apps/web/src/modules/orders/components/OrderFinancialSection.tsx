@@ -1,11 +1,21 @@
+import { useMemo, useState } from 'react'
+import { X, SlidersHorizontal } from 'lucide-react'
 import { Order, OrderEquipmentItem, OrderProductionItem } from '@lama-stage/shared-types'
-import { calculateOrderFinancialSummary } from '../utils/orderFinancialSummary'
+import {
+  calculateOrderFinancialSummary,
+  computeEquipmentLineNet,
+  computeProductionLineNet,
+  computeRentalMarginDeduction,
+  computeSubcontractorMarginDeduction,
+} from '../utils/orderFinancialSummary'
 
 interface OrderFinancialSectionProps {
   order: Partial<Order>
   equipmentItems: Partial<OrderEquipmentItem>[]
   productionItems: Partial<OrderProductionItem>[]
   onChange: (updates: Partial<Order>) => void
+  onEquipmentMarginPatch: (index: number, patch: Partial<OrderEquipmentItem>) => void
+  onProductionMarginPatch: (index: number, patch: Partial<OrderProductionItem>) => void
 }
 
 export default function OrderFinancialSection({
@@ -13,11 +23,50 @@ export default function OrderFinancialSection({
   equipmentItems = [],
   productionItems = [],
   onChange,
+  onEquipmentMarginPatch,
+  onProductionMarginPatch,
 }: OrderFinancialSectionProps) {
   const summary = calculateOrderFinancialSummary(order, equipmentItems, productionItems)
+  const [marginModalOpen, setMarginModalOpen] = useState(false)
 
   const handleChange = (field: keyof Order, value: any) => {
     onChange({ [field]: value })
+  }
+
+  const marginRows = useMemo(() => {
+    const rental = equipmentItems
+      .map((item, index) => ({ kind: 'equipment' as const, item, index }))
+      .filter(({ item }) => item.isRental)
+    const sub = productionItems
+      .map((item, index) => ({ kind: 'production' as const, item, index }))
+      .filter(({ item }) => item.isSubcontractor)
+    return [...rental, ...sub]
+  }, [equipmentItems, productionItems])
+
+  const normalizeEquipmentMarginRow = (index: number) => {
+    const item = equipmentItems[index]
+    if (!item?.isRental) return
+    const u = item.marginRentalUnits
+    const c = item.marginRentalUnitCostNet
+    const uOk = u != null && Number.isFinite(Number(u)) && Number(u) > 0
+    const cOk = c != null && Number.isFinite(Number(c)) && Number(c) >= 0
+    if (uOk && cOk) return
+    if (u != null || c != null) {
+      onEquipmentMarginPatch(index, { marginRentalUnits: null, marginRentalUnitCostNet: null })
+    }
+  }
+
+  const normalizeProductionMarginRow = (index: number) => {
+    const item = productionItems[index]
+    if (!item?.isSubcontractor) return
+    const u = item.marginSubcontractorUnits
+    const c = item.marginSubcontractorUnitCostNet
+    const uOk = u != null && Number.isFinite(Number(u)) && Number(u) > 0
+    const cOk = c != null && Number.isFinite(Number(c)) && Number(c) >= 0
+    if (uOk && cOk) return
+    if (u != null || c != null) {
+      onProductionMarginPatch(index, { marginSubcontractorUnits: null, marginSubcontractorUnitCostNet: null })
+    }
   }
 
   return (
@@ -75,22 +124,38 @@ export default function OrderFinancialSection({
                 <span className="text-sm font-medium">%</span>
               </div>
             </div>
-<div>
-                <label className="block text-xs font-medium mb-1">Stawka VAT</label>
-                <select
-                  className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded"
-                  value={order.vatRate ?? 23}
-                  onChange={(e) => handleChange('vatRate', parseInt(e.target.value) || 0)}
-                >
-                  <option value="23">23%</option>
-                  <option value="0">0% (kontrahent UE)</option>
-                </select>
-              </div>
+            <div>
+              <label className="block text-xs font-medium mb-1">Stawka VAT</label>
+              <select
+                className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded"
+                value={order.vatRate ?? 23}
+                onChange={(e) => handleChange('vatRate', parseInt(e.target.value) || 0)}
+              >
+                <option value="23">23%</option>
+                <option value="0">0% (kontrahent UE)</option>
+              </select>
+            </div>
           </div>
         </div>
 
         <div className="border border-border rounded-lg p-3 bg-surface-2">
-          <h4 className="font-semibold mb-2">Zysk</h4>
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <h4 className="font-semibold">Zysk</h4>
+            <button
+              type="button"
+              disabled={marginRows.length === 0}
+              title={
+                marginRows.length === 0
+                  ? 'Brak pozycji z rental lub podwykonawcą'
+                  : 'Ustal koszt pod rental / podwykonawcę (opcjonalnie)'
+              }
+              onClick={() => setMarginModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded border border-border bg-background hover:bg-surface-2 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+            >
+              <SlidersHorizontal size={14} />
+              Koszty marży
+            </button>
+          </div>
           <div className="space-y-1.5 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Koszt podwykonawców</span>
@@ -125,6 +190,179 @@ export default function OrderFinancialSection({
           />
         </div>
       </div>
+
+      {marginModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setMarginModalOpen(false)
+          }}
+        >
+          <div
+            className="bg-surface border border-border rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="margin-cost-dialog-title"
+          >
+            <div className="flex items-center justify-between p-3 border-b border-border shrink-0">
+              <h2 id="margin-cost-dialog-title" className="text-lg font-bold">
+                Koszty marży (rental / podwykonawca)
+              </h2>
+              <button
+                type="button"
+                onClick={() => setMarginModalOpen(false)}
+                className="p-1 rounded hover:bg-surface-2"
+                aria-label="Zamknij"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto text-sm space-y-3">
+              <p className="text-muted-foreground">
+                Pozycje z włączonym <strong>rental</strong> (sprzęt) lub <strong>podwykonawcą</strong> (produkcja / transport).
+                Jeśli wypełnisz <strong>ilość</strong> i <strong>koszt netto / jedn.</strong>, od zysku odejmowane jest <strong>ilość × koszt</strong>.
+                Gdy oba pola są puste, od marży odejmowany jest <strong>cały netto pozycji</strong> (jak dotąd).
+              </p>
+              <div className="overflow-x-auto border border-border rounded-lg">
+                <table className="w-full text-xs min-w-[720px]">
+                  <thead>
+                    <tr className="bg-surface-2 border-b border-border text-left">
+                      <th className="py-2 px-2 font-medium text-muted-foreground w-28">Typ</th>
+                      <th className="py-2 px-2 font-medium text-muted-foreground">Nazwa</th>
+                      <th className="py-2 px-2 font-medium text-muted-foreground whitespace-nowrap">Netto poz.</th>
+                      <th className="py-2 px-2 font-medium text-muted-foreground">Ilość (koszt)</th>
+                      <th className="py-2 px-2 font-medium text-muted-foreground">Koszt netto / jedn.</th>
+                      <th className="py-2 px-2 font-medium text-muted-foreground whitespace-nowrap">Od marży</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {marginRows.map((row) => {
+                      if (row.kind === 'equipment') {
+                        const { item, index } = row
+                        const lineNet = computeEquipmentLineNet(item)
+                        const ded = computeRentalMarginDeduction(item)
+                        return (
+                          <tr key={`eq-${index}`} className="border-b border-border/60">
+                            <td className="py-2 px-2 whitespace-nowrap">Rental</td>
+                            <td className="py-2 px-2">{item.name || '—'}</td>
+                            <td className="py-2 px-2 tabular-nums whitespace-nowrap">{lineNet.toFixed(2)} PLN</td>
+                            <td className="py-2 px-2">
+                              <input
+                                type="number"
+                                min={0}
+                                step={0.01}
+                                className="w-full min-w-[5rem] px-2 py-1 bg-background border border-border rounded tabular-nums"
+                                placeholder="—"
+                                value={item.marginRentalUnits ?? ''}
+                                onChange={(e) => {
+                                  const raw = e.target.value
+                                  if (raw === '') {
+                                    onEquipmentMarginPatch(index, { marginRentalUnits: null })
+                                    return
+                                  }
+                                  const v = parseFloat(raw)
+                                  if (!Number.isNaN(v)) onEquipmentMarginPatch(index, { marginRentalUnits: v })
+                                }}
+                                onBlur={() => normalizeEquipmentMarginRow(index)}
+                              />
+                            </td>
+                            <td className="py-2 px-2">
+                              <input
+                                type="number"
+                                min={0}
+                                step={0.01}
+                                className="w-full min-w-[5rem] px-2 py-1 bg-background border border-border rounded tabular-nums"
+                                placeholder="—"
+                                value={item.marginRentalUnitCostNet ?? ''}
+                                onChange={(e) => {
+                                  const raw = e.target.value
+                                  if (raw === '') {
+                                    onEquipmentMarginPatch(index, { marginRentalUnitCostNet: null })
+                                    return
+                                  }
+                                  const v = parseFloat(raw)
+                                  if (!Number.isNaN(v)) onEquipmentMarginPatch(index, { marginRentalUnitCostNet: v })
+                                }}
+                                onBlur={() => normalizeEquipmentMarginRow(index)}
+                              />
+                            </td>
+                            <td className="py-2 px-2 tabular-nums font-medium whitespace-nowrap">{ded.toFixed(2)} PLN</td>
+                          </tr>
+                        )
+                      }
+                      const { item, index } = row
+                      const lineNet = computeProductionLineNet(item)
+                      const ded = computeSubcontractorMarginDeduction(item)
+                      return (
+                        <tr key={`pr-${index}`} className="border-b border-border/60">
+                          <td className="py-2 px-2 whitespace-nowrap">Podwykonawca</td>
+                          <td className="py-2 px-2">
+                            {item.name || '—'}
+                            {item.isTransport ? (
+                              <span className="ml-1 text-muted-foreground">(transport)</span>
+                            ) : null}
+                          </td>
+                          <td className="py-2 px-2 tabular-nums whitespace-nowrap">{lineNet.toFixed(2)} PLN</td>
+                          <td className="py-2 px-2">
+                            <input
+                              type="number"
+                              min={0}
+                              step={0.01}
+                              className="w-full min-w-[5rem] px-2 py-1 bg-background border border-border rounded tabular-nums"
+                              placeholder="—"
+                              value={item.marginSubcontractorUnits ?? ''}
+                              onChange={(e) => {
+                                const raw = e.target.value
+                                if (raw === '') {
+                                  onProductionMarginPatch(index, { marginSubcontractorUnits: null })
+                                  return
+                                }
+                                const v = parseFloat(raw)
+                                if (!Number.isNaN(v)) onProductionMarginPatch(index, { marginSubcontractorUnits: v })
+                              }}
+                              onBlur={() => normalizeProductionMarginRow(index)}
+                            />
+                          </td>
+                          <td className="py-2 px-2">
+                            <input
+                              type="number"
+                              min={0}
+                              step={0.01}
+                              className="w-full min-w-[5rem] px-2 py-1 bg-background border border-border rounded tabular-nums"
+                              placeholder="—"
+                              value={item.marginSubcontractorUnitCostNet ?? ''}
+                              onChange={(e) => {
+                                const raw = e.target.value
+                                if (raw === '') {
+                                  onProductionMarginPatch(index, { marginSubcontractorUnitCostNet: null })
+                                  return
+                                }
+                                const v = parseFloat(raw)
+                                if (!Number.isNaN(v)) onProductionMarginPatch(index, { marginSubcontractorUnitCostNet: v })
+                              }}
+                              onBlur={() => normalizeProductionMarginRow(index)}
+                            />
+                          </td>
+                          <td className="py-2 px-2 tabular-nums font-medium whitespace-nowrap">{ded.toFixed(2)} PLN</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="p-3 border-t border-border flex justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => setMarginModalOpen(false)}
+                className="px-4 py-2 text-sm font-medium rounded border-2 border-primary text-primary hover:bg-primary/10"
+              >
+                Zamknij
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

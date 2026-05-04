@@ -65,6 +65,9 @@ export const OrderEquipmentItemSchema = z.object({
   visibleInOffer: z.boolean().default(true),
   isRental: z.boolean().default(false), // wynajem – bez marży (koszt = przychód)
   sortOrder: z.number().int().default(0),
+  /** Opcjonalny koszt marży: ilość × koszt netto / jedn.; oba puste = cały netto pozycji jak dotąd */
+  marginRentalUnits: z.number().nonnegative().nullable().optional(),
+  marginRentalUnitCostNet: z.number().nonnegative().nullable().optional(),
   // Individual reservation dates for equipment availability checks
   dateFrom: z.string().datetime().optional(),
   dateTo: z.string().datetime().optional(),
@@ -114,6 +117,9 @@ export const OrderProductionItemSchema = z.object({
   isSubcontractor: z.boolean().default(false),
   visibleInOffer: z.boolean().default(true),
   sortOrder: z.number().int().default(0),
+  /** Opcjonalny koszt marży podwykonawcy: jednostki × koszt netto / jedn.; oba puste = cały netto pozycji */
+  marginSubcontractorUnits: z.number().nonnegative().nullable().optional(),
+  marginSubcontractorUnitCostNet: z.number().nonnegative().nullable().optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });

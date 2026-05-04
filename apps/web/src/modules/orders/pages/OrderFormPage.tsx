@@ -71,7 +71,13 @@ function mapApiOrderToFormValues(o: any): Partial<Order> {
           sortOrder: toNum(s?.sortOrder, 0),
         }))
       : [],
-    equipmentItems: Array.isArray(o.equipmentItems) ? o.equipmentItems : [],
+    equipmentItems: Array.isArray(o.equipmentItems)
+      ? o.equipmentItems.map((e: any) => ({
+          ...e,
+          marginRentalUnits: e.marginRentalUnits != null ? Number(e.marginRentalUnits) : undefined,
+          marginRentalUnitCostNet: e.marginRentalUnitCostNet != null ? Number(e.marginRentalUnitCostNet) : undefined,
+        }))
+      : [],
     productionItems: Array.isArray(o.productionItems)
       ? o.productionItems.map((p: any) => {
           const rateVal = p?.rateValue ?? p?.rate_value;
@@ -92,6 +98,9 @@ function mapApiOrderToFormValues(o: any): Partial<Order> {
             isSubcontractor: !!p?.isSubcontractor,
             visibleInOffer: p?.visibleInOffer !== false,
             sortOrder: toNum(p?.sortOrder, 0),
+            marginSubcontractorUnits: p.marginSubcontractorUnits != null ? Number(p.marginSubcontractorUnits) : undefined,
+            marginSubcontractorUnitCostNet:
+              p.marginSubcontractorUnitCostNet != null ? Number(p.marginSubcontractorUnitCostNet) : undefined,
           };
         })
       : [],
@@ -312,6 +321,26 @@ export default function OrderFormPage() {
     setValue('productionItems', [...existingProduction, ...items], { shouldDirty: true });
   }, [setValue, watch]);
 
+  const patchEquipmentMargin = useCallback(
+    (index: number, patch: Partial<OrderEquipmentItem>) => {
+      const items = [...((getValues('equipmentItems') || []) as Partial<OrderEquipmentItem>[])];
+      if (!items[index]) return;
+      items[index] = { ...items[index], ...patch };
+      setValue('equipmentItems', items, { shouldDirty: true, shouldTouch: true });
+    },
+    [getValues, setValue]
+  );
+
+  const patchProductionMargin = useCallback(
+    (index: number, patch: Partial<OrderProductionItem>) => {
+      const items = [...((getValues('productionItems') || []) as Partial<OrderProductionItem>[])];
+      if (!items[index]) return;
+      items[index] = { ...items[index], ...patch };
+      setValue('productionItems', items, { shouldDirty: true, shouldTouch: true });
+    },
+    [getValues, setValue]
+  );
+
   // Pobierz aktualne dane z formularza
   const formData = watch();
   const stages = watch('stages') || [];
@@ -374,6 +403,30 @@ export default function OrderFormPage() {
         sortOrder: toNumber(stage?.sortOrder, idx),
       }))
 
+    const marginRentalPayload = (item: any) => {
+      if (!item?.isRental) return {}
+      const u = item?.marginRentalUnits
+      const c = item?.marginRentalUnitCostNet
+      const nu = Number(u)
+      const nc = Number(c)
+      if (u != null && c != null && Number.isFinite(nu) && Number.isFinite(nc) && nu > 0 && nc >= 0) {
+        return { marginRentalUnits: nu, marginRentalUnitCostNet: nc }
+      }
+      return {}
+    }
+
+    const marginSubPayload = (item: any) => {
+      if (!item?.isSubcontractor) return {}
+      const u = item?.marginSubcontractorUnits
+      const c = item?.marginSubcontractorUnitCostNet
+      const nu = Number(u)
+      const nc = Number(c)
+      if (u != null && c != null && Number.isFinite(nu) && Number.isFinite(nc) && nu > 0 && nc >= 0) {
+        return { marginSubcontractorUnits: nu, marginSubcontractorUnitCostNet: nc }
+      }
+      return {}
+    }
+
     const normalizeEquipmentItems = (list: any[] | undefined) =>
       (Array.isArray(list) ? list : [])
         .map((item, idx) => {
@@ -401,6 +454,7 @@ export default function OrderFormPage() {
             sortOrder: toNumber(item?.sortOrder, idx),
             dateFrom: toIso(item?.dateFrom),
             dateTo: toIso(item?.dateTo),
+            ...marginRentalPayload(item),
           }
         })
         .filter((row) => row.name.length > 0)
@@ -420,6 +474,7 @@ export default function OrderFormPage() {
         isSubcontractor: !!item?.isSubcontractor,
         visibleInOffer: item?.visibleInOffer !== false,
         sortOrder: toNumber(item?.sortOrder, idx),
+        ...marginSubPayload(item),
       }))
 
     const startDateIso = toIso(data.dateFrom) || new Date().toISOString()
@@ -914,6 +969,8 @@ export default function OrderFormPage() {
                     equipmentItems={equipmentItems}
                     productionItems={allProductionItems}
                     onChange={handleOrderChange}
+                    onEquipmentMarginPatch={patchEquipmentMargin}
+                    onProductionMarginPatch={patchProductionMargin}
                   />
                 </section>
 

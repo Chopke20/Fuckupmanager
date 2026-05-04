@@ -270,6 +270,8 @@ export class OrdersService {
           visibleInOffer: item.visibleInOffer ?? true,
           isRental: item.isRental ?? false,
           sortOrder: item.sortOrder ?? 0,
+          marginRentalUnits: item.marginRentalUnits ?? null,
+          marginRentalUnitCostNet: item.marginRentalUnitCostNet ?? null,
           dateFrom: item.dateFrom ? new Date(item.dateFrom) : startDate,
           dateTo: item.dateTo ? new Date(item.dateTo) : endDate,
           equipmentId: item.equipmentId ?? null,
@@ -289,6 +291,8 @@ export class OrdersService {
           isSubcontractor: item.isSubcontractor ?? false,
           visibleInOffer: item.visibleInOffer ?? true,
           sortOrder: item.sortOrder ?? idx,
+          marginSubcontractorUnits: item.marginSubcontractorUnits ?? null,
+          marginSubcontractorUnitCostNet: item.marginSubcontractorUnitCostNet ?? null,
         })) : [],
       },
     };
@@ -378,6 +382,8 @@ export class OrdersService {
                 visibleInOffer: item.visibleInOffer ?? true,
                 isRental: item.isRental ?? false,
                 sortOrder: item.sortOrder ?? 0,
+                marginRentalUnits: item.marginRentalUnits ?? null,
+                marginRentalUnitCostNet: item.marginRentalUnitCostNet ?? null,
                 dateFrom: item.dateFrom ? new Date(item.dateFrom) : startDate,
                 dateTo: item.dateTo ? new Date(item.dateTo) : endDate,
                 equipmentId: item.equipmentId ?? null,
@@ -455,6 +461,8 @@ export class OrdersService {
                 isSubcontractor: item.isSubcontractor ?? false,
                 visibleInOffer: item.visibleInOffer ?? true,
                 sortOrder: item.sortOrder ?? idx,
+                marginSubcontractorUnits: item.marginSubcontractorUnits ?? null,
+                marginSubcontractorUnitCostNet: item.marginSubcontractorUnitCostNet ?? null,
               },
             });
           } else {
@@ -473,6 +481,8 @@ export class OrdersService {
                 isSubcontractor: item.isSubcontractor ?? false,
                 visibleInOffer: item.visibleInOffer ?? true,
                 sortOrder: item.sortOrder ?? idx,
+                marginSubcontractorUnits: item.marginSubcontractorUnits ?? null,
+                marginSubcontractorUnitCostNet: item.marginSubcontractorUnitCostNet ?? null,
               },
             });
           }
