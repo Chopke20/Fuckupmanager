@@ -43,32 +43,6 @@ export default function OrderFinancialSection({
     return [...rental, ...sub]
   }, [equipmentItems, productionItems])
 
-  const normalizeEquipmentMarginRow = (index: number) => {
-    const item = equipmentItems[index]
-    if (!item?.isRental) return
-    const u = item.marginRentalUnits
-    const c = item.marginRentalUnitCostNet
-    const uOk = u != null && Number.isFinite(Number(u)) && Number(u) > 0
-    const cOk = c != null && Number.isFinite(Number(c)) && Number(c) >= 0
-    if (uOk && cOk) return
-    if (u != null || c != null) {
-      onEquipmentMarginPatch(index, { marginRentalUnits: null, marginRentalUnitCostNet: null })
-    }
-  }
-
-  const normalizeProductionMarginRow = (index: number) => {
-    const item = productionItems[index]
-    if (!item?.isSubcontractor) return
-    const u = item.marginSubcontractorUnits
-    const c = item.marginSubcontractorUnitCostNet
-    const uOk = u != null && Number.isFinite(Number(u)) && Number(u) > 0
-    const cOk = c != null && Number.isFinite(Number(c)) && Number(c) >= 0
-    if (uOk && cOk) return
-    if (u != null || c != null) {
-      onProductionMarginPatch(index, { marginSubcontractorUnits: null, marginSubcontractorUnitCostNet: null })
-    }
-  }
-
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
@@ -263,7 +237,6 @@ export default function OrderFinancialSection({
                                   const v = parseFloat(raw)
                                   if (!Number.isNaN(v)) onEquipmentMarginPatch(index, { marginRentalUnits: v })
                                 }}
-                                onBlur={() => normalizeEquipmentMarginRow(index)}
                               />
                             </td>
                             <td className="py-2 px-2">
@@ -283,7 +256,6 @@ export default function OrderFinancialSection({
                                   const v = parseFloat(raw)
                                   if (!Number.isNaN(v)) onEquipmentMarginPatch(index, { marginRentalUnitCostNet: v })
                                 }}
-                                onBlur={() => normalizeEquipmentMarginRow(index)}
                               />
                             </td>
                             <td className="py-2 px-2 tabular-nums font-medium whitespace-nowrap">{ded.toFixed(2)} PLN</td>
@@ -320,7 +292,6 @@ export default function OrderFinancialSection({
                                 const v = parseFloat(raw)
                                 if (!Number.isNaN(v)) onProductionMarginPatch(index, { marginSubcontractorUnits: v })
                               }}
-                              onBlur={() => normalizeProductionMarginRow(index)}
                             />
                           </td>
                           <td className="py-2 px-2">
@@ -340,7 +311,6 @@ export default function OrderFinancialSection({
                                 const v = parseFloat(raw)
                                 if (!Number.isNaN(v)) onProductionMarginPatch(index, { marginSubcontractorUnitCostNet: v })
                               }}
-                              onBlur={() => normalizeProductionMarginRow(index)}
                             />
                           </td>
                           <td className="py-2 px-2 tabular-nums font-medium whitespace-nowrap">{ded.toFixed(2)} PLN</td>
