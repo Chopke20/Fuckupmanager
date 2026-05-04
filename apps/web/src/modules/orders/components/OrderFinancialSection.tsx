@@ -192,11 +192,6 @@ export default function OrderFinancialSection({
               </button>
             </div>
             <div className="p-4 overflow-y-auto text-sm space-y-3">
-              <p className="text-muted-foreground">
-                Pozycje z włączonym <strong>rental</strong> (sprzęt) lub <strong>podwykonawcą</strong> (produkcja / transport).
-                Jeśli wypełnisz <strong>ilość</strong> i <strong>koszt netto / jedn.</strong>, od zysku odejmowane jest <strong>ilość × koszt</strong>.
-                Gdy oba pola są puste, od marży odejmowany jest <strong>cały netto pozycji</strong> (jak dotąd).
-              </p>
               <div className="overflow-x-auto border border-border rounded-lg">
                 <table className="w-full text-xs min-w-[720px]">
                   <thead>
