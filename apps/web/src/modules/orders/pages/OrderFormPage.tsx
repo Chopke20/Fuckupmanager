@@ -968,6 +968,7 @@ export default function OrderFormPage() {
                     order={formData}
                     equipmentItems={equipmentItems}
                     productionItems={allProductionItems}
+                    stages={stages}
                     onChange={handleOrderChange}
                     onEquipmentMarginPatch={patchEquipmentMargin}
                     onProductionMarginPatch={patchProductionMargin}

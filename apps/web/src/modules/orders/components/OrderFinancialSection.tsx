@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { X, SlidersHorizontal } from 'lucide-react'
-import { Order, OrderEquipmentItem, OrderProductionItem } from '@lama-stage/shared-types'
+import { Order, OrderEquipmentItem, OrderProductionItem, OrderStage } from '@lama-stage/shared-types'
 import {
   calculateOrderFinancialSummary,
   computeEquipmentLineNet,
@@ -13,6 +13,7 @@ interface OrderFinancialSectionProps {
   order: Partial<Order>
   equipmentItems: Partial<OrderEquipmentItem>[]
   productionItems: Partial<OrderProductionItem>[]
+  stages?: Partial<OrderStage>[]
   onChange: (updates: Partial<Order>) => void
   onEquipmentMarginPatch: (index: number, patch: Partial<OrderEquipmentItem>) => void
   onProductionMarginPatch: (index: number, patch: Partial<OrderProductionItem>) => void
@@ -22,6 +23,7 @@ export default function OrderFinancialSection({
   order,
   equipmentItems = [],
   productionItems = [],
+  stages = [],
   onChange,
   onEquipmentMarginPatch,
   onProductionMarginPatch,
@@ -42,6 +44,49 @@ export default function OrderFinancialSection({
       .filter(({ item }) => item.isSubcontractor)
     return [...rental, ...sub]
   }, [equipmentItems, productionItems])
+
+  const stageById = useMemo(() => {
+    const m = new Map<string, Partial<OrderStage>>()
+    for (const s of stages) {
+      if (s?.id) m.set(String(s.id), s)
+    }
+    return m
+  }, [stages])
+
+  const stageTypeLabelPl = (type?: string | null): string => {
+    if (!type) return '—'
+    const map: Record<string, string> = {
+      MONTAZ: 'Montaż',
+      EVENT: 'Wydarzenie',
+      DEMONTAZ: 'Demontaż',
+      CUSTOM: 'Inny',
+    }
+    return map[type] ?? String(type)
+  }
+
+  const parseStageId = (stageIds?: unknown): string | null => {
+    if (!stageIds) return null
+    if (typeof stageIds !== 'string') return null
+    try {
+      const parsed = JSON.parse(stageIds) as unknown
+      if (Array.isArray(parsed) && typeof parsed[0] === 'string') return parsed[0] ?? null
+      return null
+    } catch {
+      return null
+    }
+  }
+
+  const formatStageInfo = (stageIds?: unknown): string | null => {
+    const stageId = parseStageId(stageIds)
+    if (!stageId) return null
+    const s = stageById.get(stageId)
+    if (!s) return null
+    const dateStr = s.date ? new Date(s.date as any).toLocaleDateString('pl') : ''
+    const typeStr = stageTypeLabelPl(s.type as any)
+    const label = typeof s.label === 'string' && s.label.trim() ? s.label.trim() : ''
+    const parts = [dateStr, typeStr, label].filter(Boolean)
+    return parts.length ? parts.join(' ') : null
+  }
 
   return (
     <div className="space-y-3">
@@ -210,10 +255,25 @@ export default function OrderFinancialSection({
                         const { item, index } = row
                         const lineNet = computeEquipmentLineNet(item)
                         const ded = computeRentalMarginDeduction(item)
+                        const qty = item.quantity ?? 1
+                        const days = item.days ?? 1
                         return (
                           <tr key={`eq-${index}`} className="border-b border-border/60">
                             <td className="py-2 px-2 whitespace-nowrap">Rental</td>
-                            <td className="py-2 px-2">{item.name || '—'}</td>
+                            <td className="py-2 px-2">
+                              <div className="leading-tight">
+                                <div>{item.name || '—'}</div>
+                                <div className="text-muted-foreground">
+                                  Ilość: <span className="tabular-nums">{qty}</span>
+                                  {days != null ? (
+                                    <>
+                                      {' '}
+                                      · Dni: <span className="tabular-nums">{days}</span>
+                                    </>
+                                  ) : null}
+                                </div>
+                              </div>
+                            </td>
                             <td className="py-2 px-2 tabular-nums whitespace-nowrap">{lineNet.toFixed(2)} PLN</td>
                             <td className="py-2 px-2">
                               <input
@@ -260,14 +320,28 @@ export default function OrderFinancialSection({
                       const { item, index } = row
                       const lineNet = computeProductionLineNet(item)
                       const ded = computeSubcontractorMarginDeduction(item)
+                      const stageInfo = formatStageInfo(item.stageIds)
                       return (
                         <tr key={`pr-${index}`} className="border-b border-border/60">
                           <td className="py-2 px-2 whitespace-nowrap">Podwykonawca</td>
                           <td className="py-2 px-2">
-                            {item.name || '—'}
-                            {item.isTransport ? (
-                              <span className="ml-1 text-muted-foreground">(transport)</span>
-                            ) : null}
+                            <div className="leading-tight">
+                              <div>
+                                {item.name || '—'}
+                                {item.isTransport ? (
+                                  <span className="ml-1 text-muted-foreground">(transport)</span>
+                                ) : null}
+                              </div>
+                              <div className="text-muted-foreground">
+                                Ilość: <span className="tabular-nums">{item.units ?? 1}</span>
+                                {stageInfo ? (
+                                  <>
+                                    {' '}
+                                    · Etap: <span className="text-foreground">{stageInfo}</span>
+                                  </>
+                                ) : null}
+                              </div>
+                            </div>
                           </td>
                           <td className="py-2 px-2 tabular-nums whitespace-nowrap">{lineNet.toFixed(2)} PLN</td>
                           <td className="py-2 px-2">
