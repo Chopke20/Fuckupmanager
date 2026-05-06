@@ -232,7 +232,8 @@ export function buildOfferHtmlV5(
       : stages
           .map((stage) => {
             const dateStr = fmtPlDate(stage.date)
-            const type = stage.type ? (stageLabels[stage.type] ?? stage.type) : '—'
+            const customLabel = typeof (stage as any)?.label === 'string' ? String((stage as any).label).trim() : ''
+            const type = customLabel || (stage.type ? (stageLabels[stage.type] ?? stage.type) : '—')
             const start = stage.timeStart ?? '—'
             const end = stage.timeEnd ?? '—'
             return `<div class="schedule__item">
@@ -304,7 +305,8 @@ export function buildOfferHtmlV5(
   const stageById = new Map(
     (order.stages ?? []).map((s) => {
       const dateStr = fmtPlDate(s.date)
-      const typeLabel = s.type ? (stageTypeLabels[s.type] ?? s.type) : 'Etap'
+      const customLabel = typeof (s as any)?.label === 'string' ? String((s as any).label).trim() : ''
+      const typeLabel = customLabel || (s.type ? (stageTypeLabels[s.type] ?? s.type) : 'Etap')
       const timeLabel = [s.timeStart, s.timeEnd].filter(Boolean).join(' → ')
       return [s.id, `${typeLabel} · ${dateStr}${timeLabel ? ` · ${timeLabel}` : ''}`]
     })

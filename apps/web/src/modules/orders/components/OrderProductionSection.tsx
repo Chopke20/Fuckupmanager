@@ -4,6 +4,13 @@ import { OrderProductionItem, OrderStage } from '@lama-stage/shared-types'
 import { useEquipment } from '../../equipment/hooks/useEquipment'
 import { randomClientUuid } from '../../../shared/utils/uuid'
 
+function stageDisplayName(stage: Partial<OrderStage>) {
+  const customLabel = String(stage.label || '').trim()
+  if (customLabel) return customLabel
+  const type = String(stage.type || '').trim()
+  return type || 'Etap'
+}
+
 interface OrderProductionSectionProps {
   items: Partial<OrderProductionItem>[]
   stages: Partial<OrderStage>[]
@@ -195,7 +202,7 @@ export default function OrderProductionSection({
                         <option value="">—</option>
                         {stages.map((s) => (
                           <option key={s.id} value={s.id}>
-                            {s.date ? new Date(s.date).toLocaleDateString('pl') : ''} {s.type}
+                            {s.date ? new Date(s.date).toLocaleDateString('pl') : ''} {stageDisplayName(s)}
                           </option>
                         ))}
                       </select>

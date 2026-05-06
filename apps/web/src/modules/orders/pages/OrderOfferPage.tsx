@@ -834,8 +834,9 @@ export default function OrderOfferPage() {
               {Object.keys(productionByStage).map((stageKey) => {
                 const rows = productionByStage[stageKey] || [];
                 const stage = stageById.get(stageKey);
+                const stageName = stage?.label?.trim?.() ? stage.label.trim() : stageTypeLabelPl(stage?.type)
                 const stageLabel = stage
-                  ? `${stageTypeLabelPl(stage.type)} (${new Date(stage.date).toLocaleDateString('pl-PL')})`
+                  ? `${stageName} (${new Date(stage.date).toLocaleDateString('pl-PL')})`
                   : 'Bez etapu';
                 return (
                   <div key={stageKey} className="border border-border rounded overflow-hidden">
@@ -882,8 +883,9 @@ export default function OrderOfferPage() {
                 <tbody>
                   {transportRows.map((item: any) => {
                     const stage = stageById.get(parseStageId(item.stageIds) || '');
+                    const stageName = stage?.label?.trim?.() ? stage.label.trim() : stageTypeLabelPl(stage?.type)
                     const stageLabel = stage
-                      ? `${stageTypeLabelPl(stage.type)} (${new Date(stage.date).toLocaleDateString('pl-PL')})`
+                      ? `${stageName} (${new Date(stage.date).toLocaleDateString('pl-PL')})`
                       : 'Bez etapu';
                     const rowNet = (item.rateValue || 0) * (item.units || 1) * (1 - (item.discount || 0) / 100);
                     return (

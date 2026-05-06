@@ -69,6 +69,8 @@ function stageTypeLabel(type?: string) {
 
 function transportNameFromStage(stage?: Partial<OrderStage> | null, fallback = 'Transport') {
   if (!stage) return fallback;
+  const customLabel = String(stage.label || '').trim()
+  if (customLabel) return `Transport - ${customLabel}`
   return `Transport - ${stageTypeLabel(stage.type)}`;
 }
 
