@@ -104,7 +104,6 @@ export default function OrderScheduleSection({ orderDateFrom, onChange }: OrderS
             <tr className="bg-surface-2 border-b border-border">
               <th className="w-8 py-1.5 px-1"></th>
               <th className="text-left py-1.5 px-2 font-medium">Typ</th>
-              <th className="text-left py-1.5 px-2 font-medium">Nazwa</th>
               <th className="text-left py-1.5 px-2 font-medium">Data</th>
               <th className="text-left py-1.5 px-2 font-medium">Od</th>
               <th className="text-left py-1.5 px-2 font-medium">Do</th>
@@ -132,30 +131,26 @@ export default function OrderScheduleSection({ orderDateFrom, onChange }: OrderS
                   <GripVertical size={16} />
                 </td>
                 <td className="py-1 px-2">
-                  <select
-                    className="w-full min-w-[90px] px-2 py-1 bg-background border border-border rounded text-xs"
-                    value={stage.type || 'CUSTOM'}
-                    onChange={(e) => updateStage(index, { type: e.target.value as any })}
-                  >
-                    {stageTypes.map((t) => (
-                      <option key={t.value} value={t.value}>{t.label}</option>
-                    ))}
-                  </select>
-                </td>
-                <td className="py-1 px-2">
-                  {String(stage.type || 'CUSTOM') === 'CUSTOM' ? (
-                    <input
-                      type="text"
-                      className="w-full min-w-[140px] px-2 py-1 bg-background border border-border rounded text-xs"
-                      value={stage.label || ''}
-                      onChange={(e) => updateStage(index, { label: e.target.value })}
-                      placeholder="Wpisz własną nazwę (np. Próba, Setup)"
-                    />
-                  ) : (
-                    <div className="text-xs text-muted-foreground whitespace-nowrap">
-                      {stageTypes.find((t) => t.value === String(stage.type))?.label || String(stage.type || '')}
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2 min-w-[220px]">
+                    <select
+                      className="min-w-[90px] px-2 py-1 bg-background border border-border rounded text-xs"
+                      value={stage.type || 'CUSTOM'}
+                      onChange={(e) => updateStage(index, { type: e.target.value as any })}
+                    >
+                      {stageTypes.map((t) => (
+                        <option key={t.value} value={t.value}>{t.label}</option>
+                      ))}
+                    </select>
+                    {String(stage.type || 'CUSTOM') === 'CUSTOM' ? (
+                      <input
+                        type="text"
+                        className="flex-1 min-w-[120px] px-2 py-1 bg-background border border-border rounded text-xs"
+                        value={stage.label || ''}
+                        onChange={(e) => updateStage(index, { label: e.target.value })}
+                        placeholder="Wpisz nazwę (Inny)"
+                      />
+                    ) : null}
+                  </div>
                 </td>
                 <td className="py-1 px-2">
                   <input
@@ -208,7 +203,7 @@ export default function OrderScheduleSection({ orderDateFrom, onChange }: OrderS
           </tbody>
           <tfoot>
             <tr className="bg-surface-2 border-t border-border">
-              <td colSpan={8} className="py-1.5 px-2">
+              <td colSpan={7} className="py-1.5 px-2">
                 <button
                   type="button"
                   onClick={addStage}
