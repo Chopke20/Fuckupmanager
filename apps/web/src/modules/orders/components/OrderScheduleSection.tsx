@@ -14,6 +14,7 @@ interface OrderScheduleSectionProps {
 export default function OrderScheduleSection({ orderDateFrom, onChange }: OrderScheduleSectionProps) {
   const { watch } = useFormContext<Partial<Order>>()
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
+  const [typeDrafts, setTypeDrafts] = useState<Record<string, string>>({})
 
   const stages = watch('stages') || []
 
@@ -21,8 +22,41 @@ export default function OrderScheduleSection({ orderDateFrom, onChange }: OrderS
     { value: 'MONTAZ', label: 'Montaż' },
     { value: 'EVENT', label: 'Wydarzenie' },
     { value: 'DEMONTAZ', label: 'Demontaż' },
+    { value: 'PROBA', label: 'Próba' },
     { value: 'CUSTOM', label: 'Inny' },
   ]
+
+  const stageTypeInputDatalistId = 'order-schedule-stage-type-datalist'
+
+  const stageTypeLabel = (type?: string | null) =>
+    stageTypes.find((t) => t.value === String(type || ''))?.label || String(type || '')
+
+  const stageDisplayName = (stage: Partial<OrderStage>) => {
+    const label = String(stage.label || '').trim()
+    if (label) return label
+    const type = String(stage.type || '').trim()
+    return stageTypeLabel(type) || 'Etap'
+  }
+
+  const stageKey = (stage: any, index: number) => String(stage?.id || `i-${index}`)
+
+  const commitTypeValue = (index: number, raw: string) => {
+    const v = String(raw || '').trim()
+    if (!v) {
+      updateStage(index, { type: 'CUSTOM', label: '' })
+      return
+    }
+    const matched = stageTypes.find((t) => t.label.toLowerCase() === v.toLowerCase())
+    if (matched) {
+      if (matched.value === 'CUSTOM') {
+        updateStage(index, { type: 'CUSTOM', label: '' })
+      } else {
+        updateStage(index, { type: matched.value as any, label: '' })
+      }
+      return
+    }
+    updateStage(index, { type: 'CUSTOM', label: v })
+  }
 
   const addStage = () => {
     const proposedDate =
@@ -99,6 +133,11 @@ export default function OrderScheduleSection({ orderDateFrom, onChange }: OrderS
       </div>
 
       <div className="border border-border rounded overflow-hidden">
+        <datalist id={stageTypeInputDatalistId}>
+          {stageTypes.map((t) => (
+            <option key={t.value} value={t.label} />
+          ))}
+        </datalist>
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-surface-2 border-b border-border">
@@ -131,26 +170,31 @@ export default function OrderScheduleSection({ orderDateFrom, onChange }: OrderS
                   <GripVertical size={16} />
                 </td>
                 <td className="py-1 px-2">
-                  <div className="flex items-center gap-2 min-w-[220px]">
-                    <select
-                      className="min-w-[90px] px-2 py-1 bg-background border border-border rounded text-xs"
-                      value={stage.type || 'CUSTOM'}
-                      onChange={(e) => updateStage(index, { type: e.target.value as any })}
-                    >
-                      {stageTypes.map((t) => (
-                        <option key={t.value} value={t.value}>{t.label}</option>
-                      ))}
-                    </select>
-                    {String(stage.type || 'CUSTOM') === 'CUSTOM' ? (
-                      <input
-                        type="text"
-                        className="flex-1 min-w-[120px] px-2 py-1 bg-background border border-border rounded text-xs"
-                        value={stage.label || ''}
-                        onChange={(e) => updateStage(index, { label: e.target.value })}
-                        placeholder="Wpisz nazwę (Inny)"
-                      />
-                    ) : null}
-                  </div>
+                  <input
+                    list={stageTypeInputDatalistId}
+                    type="text"
+                    className="w-full px-2 py-0.5 text-sm bg-transparent border border-transparent hover:border-border rounded focus:border-primary focus:outline-none"
+                    value={typeDrafts[stageKey(stage, index)] ?? stageDisplayName(stage)}
+                    onFocus={() => {
+                      const key = stageKey(stage, index)
+                      setTypeDrafts((prev) => ({ ...prev, [key]: stageDisplayName(stage) }))
+                    }}
+                    onChange={(e) => {
+                      const key = stageKey(stage, index)
+                      setTypeDrafts((prev) => ({ ...prev, [key]: e.target.value }))
+                    }}
+                    onBlur={(e) => {
+                      const key = stageKey(stage, index)
+                      commitTypeValue(index, e.target.value)
+                      setTypeDrafts((prev) => {
+                        const copy = { ...prev }
+                        delete copy[key]
+                        return copy
+                      })
+                    }}
+                    placeholder="Typ (np. Montaż / Próba) lub wpisz własny"
+                    title="Wpisz typ z listy lub własną nazwę (ustawi 'Inny')."
+                  />
                 </td>
                 <td className="py-1 px-2">
                   <input

@@ -69,6 +69,7 @@ function stageTypeLabelPl(type?: string | null): string {
     MONTAZ: 'Montaż',
     EVENT: 'Wydarzenie',
     DEMONTAZ: 'Demontaż',
+    PROBA: 'Próba',
     CUSTOM: 'Inny',
   };
   return map[type] ?? type;

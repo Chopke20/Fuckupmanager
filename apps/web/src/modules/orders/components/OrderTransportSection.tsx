@@ -64,6 +64,7 @@ function stageTypeLabel(type?: string) {
   if (type === 'MONTAZ') return 'Montaż';
   if (type === 'DEMONTAZ') return 'Demontaż';
   if (type === 'EVENT') return 'Wydarzenie';
+  if (type === 'PROBA') return 'Próba';
   return 'Etap';
 }
 

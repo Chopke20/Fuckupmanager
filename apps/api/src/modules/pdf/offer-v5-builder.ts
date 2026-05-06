@@ -225,7 +225,7 @@ export function buildOfferHtmlV5(
     : ''
 
   const stages = order.stages ?? []
-  const stageLabels: Record<string, string> = { MONTAZ: 'Montaż', EVENT: 'Wydarzenie', DEMONTAZ: 'Demontaż', CUSTOM: 'Inne' }
+  const stageLabels: Record<string, string> = { MONTAZ: 'Montaż', EVENT: 'Wydarzenie', DEMONTAZ: 'Demontaż', PROBA: 'Próba', CUSTOM: 'Inne' }
   const scheduleItems =
     stages.length === 0
       ? ''
@@ -301,7 +301,7 @@ export function buildOfferHtmlV5(
   const productionOnlyItems = productionItemsAll.filter((i) => !i.isTransport)
   const transportOnlyItems = productionItemsAll.filter((i) => i.isTransport)
 
-  const stageTypeLabels: Record<string, string> = { MONTAZ: 'Montaż', EVENT: 'Wydarzenie', DEMONTAZ: 'Demontaż', CUSTOM: 'Inne' }
+  const stageTypeLabels: Record<string, string> = { MONTAZ: 'Montaż', EVENT: 'Wydarzenie', DEMONTAZ: 'Demontaż', PROBA: 'Próba', CUSTOM: 'Inne' }
   const stageById = new Map(
     (order.stages ?? []).map((s) => {
       const dateStr = fmtPlDate(s.date)

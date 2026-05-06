@@ -59,6 +59,7 @@ export default function OrderFinancialSection({
       MONTAZ: 'Montaż',
       EVENT: 'Wydarzenie',
       DEMONTAZ: 'Demontaż',
+      PROBA: 'Próba',
       CUSTOM: 'Inny',
     }
     return map[type] ?? String(type)
@@ -82,9 +83,9 @@ export default function OrderFinancialSection({
     const s = stageById.get(stageId)
     if (!s) return null
     const dateStr = s.date ? new Date(s.date as any).toLocaleDateString('pl') : ''
-    const typeStr = stageTypeLabelPl(s.type as any)
     const label = typeof s.label === 'string' && s.label.trim() ? s.label.trim() : ''
-    const parts = [dateStr, typeStr, label].filter(Boolean)
+    const typeStr = label ? '' : stageTypeLabelPl(s.type as any)
+    const parts = [dateStr, label || typeStr].filter(Boolean)
     return parts.length ? parts.join(' ') : null
   }
 

@@ -26,6 +26,7 @@ const STAGE_LABELS = {
   MONTAZ: 'Montaż',
   EVENT: 'Wydarzenie',
   DEMONTAZ: 'Demontaż',
+  PROBA: 'Próba',
   CUSTOM: 'Inny',
 }
 
