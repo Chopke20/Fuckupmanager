@@ -35,7 +35,9 @@ export default function OrderScheduleSection({ orderDateFrom, onChange }: OrderS
     const label = String(stage.label || '').trim()
     if (label) return label
     const type = String(stage.type || '').trim()
-    return stageTypeLabel(type) || 'Etap'
+    // For empty CUSTOM (new row), show empty input instead of "Inny".
+    if (!type || type === 'CUSTOM') return ''
+    return stageTypeLabel(type) || ''
   }
 
   const stageKey = (stage: any, index: number) => String(stage?.id || `i-${index}`)
