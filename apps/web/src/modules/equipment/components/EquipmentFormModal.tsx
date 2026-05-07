@@ -134,7 +134,9 @@ export default function EquipmentFormModal({
       ...formData,
       category: isResource ? 'ZASOBY' : normalizeCategoryName(formData.category),
       subcategory: isResource ? (normalizedSubcategory || undefined) : undefined,
-      pricingRule: { day1: 1.0, nextDays: formData.pricingRule?.nextDays ?? 0.5 },
+      pricingRule: isResource
+        ? { day1: 1.0, nextDays: 1.0 }
+        : { day1: 1.0, nextDays: formData.pricingRule?.nextDays ?? 0.5 },
     }
     const dataToSend = isUnlimited
       ? { ...preparedData, stockQuantity: 0, unit: 'szt.' }
@@ -383,33 +385,35 @@ export default function EquipmentFormModal({
                 </label>
               </div>
 
-              <div className="space-y-2">
-                <label className="block text-sm font-medium">Zasada wyceny wielodniowej</label>
-                <div className="flex items-center gap-3">
-                  <div>
-                    <label className="text-xs text-muted-foreground">Dzień 1</label>
-                    <div className="w-20 p-2 border border-border rounded bg-surface-2 text-sm text-center">
-                      1.0
+              {!isResource && (
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium">Zasada wyceny wielodniowej</label>
+                  <div className="flex items-center gap-3">
+                    <div>
+                      <label className="text-xs text-muted-foreground">Dzień 1</label>
+                      <div className="w-20 p-2 border border-border rounded bg-surface-2 text-sm text-center">
+                        1.0
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">Kolejne dni</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        value={formData.pricingRule?.nextDays ?? 0.5}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            pricingRule: { day1: 1.0, nextDays: parseFloat(e.target.value) },
+                          })
+                        }
+                        className="w-20 p-2 border border-border rounded bg-surface-2"
+                      />
                     </div>
                   </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground">Kolejne dni</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      value={formData.pricingRule?.nextDays ?? 0.5}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          pricingRule: { day1: 1.0, nextDays: parseFloat(e.target.value) },
-                        })
-                      }
-                      className="w-20 p-2 border border-border rounded bg-surface-2"
-                    />
-                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
 
@@ -430,6 +434,8 @@ export default function EquipmentFormModal({
                 ? 'Zapisywanie...'
                 : equipment?.id
                 ? 'Zapisz zmiany'
+                : isResource
+                ? 'Dodaj zasób'
                 : 'Dodaj sprzęt'}
             </button>
           </div>

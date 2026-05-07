@@ -156,9 +156,11 @@ export default function OrderEquipmentSection({
     return () => clearTimeout(t)
   }, [availabilityKey, orderDateFrom, orderDateTo, checkAvailability, quantityByEquipment])
 
-  const addEmptyRow = () => {
-    const newItem: Partial<OrderEquipmentItem> = {
-      id: `temp-${Date.now()}`,
+  const addEmptyRows = (count: number) => {
+    const safeCount = Math.max(1, Math.floor(count))
+    const now = Date.now()
+    const newItems: Partial<OrderEquipmentItem>[] = Array.from({ length: safeCount }, (_, idx) => ({
+      id: `temp-${now}-${idx}`,
       orderId: '',
       equipmentId: undefined,
       equipment: undefined,
@@ -172,11 +174,11 @@ export default function OrderEquipmentSection({
       pricingRule: { day1: 1.0, nextDays: 0.5 },
       visibleInOffer: true,
       isRental: false,
-      sortOrder: items.length,
+      sortOrder: items.length + idx,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-    }
-    onChange([...items, newItem])
+    }))
+    onChange([...items, ...newItems])
   }
 
   const addEquipmentFromCatalog = (eq: Equipment) => {
@@ -477,11 +479,19 @@ export default function OrderEquipmentSection({
                 <td colSpan={12} className="py-1.5 px-2">
                   <button
                     type="button"
-                    onClick={addEmptyRow}
+                    onClick={() => addEmptyRows(1)}
                     className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
                   >
                     <Plus size={14} />
                     Dodaj wiersz
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => addEmptyRows(5)}
+                    className="ml-3 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <Plus size={14} />
+                    Dodaj 5 wierszy
                   </button>
                 </td>
               </tr>
