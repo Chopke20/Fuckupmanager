@@ -3,6 +3,7 @@ import { Info, Settings } from 'lucide-react';
 import { OrderProductionItem, OrderStage } from '@lama-stage/shared-types';
 import { financeApi } from '../api/pdf.api';
 import { shouldAskForTransportRecalculation } from '../utils/transportPricing';
+import { stageToDisplayLabel } from '../utils/stageLabel';
 
 interface TransportPricingSettings {
   ranges: Array<{
@@ -60,19 +61,9 @@ function formatDateKey(dateKey?: string) {
   return `${d}.${m}.${y}`;
 }
 
-function stageTypeLabel(type?: string) {
-  if (type === 'MONTAZ') return 'Montaż';
-  if (type === 'DEMONTAZ') return 'Demontaż';
-  if (type === 'EVENT') return 'Wydarzenie';
-  if (type === 'PROBA') return 'Próba';
-  return 'Etap';
-}
-
 function transportNameFromStage(stage?: Partial<OrderStage> | null, fallback = 'Transport') {
   if (!stage) return fallback;
-  const customLabel = String(stage.label || '').trim()
-  if (customLabel) return `Transport - ${customLabel}`
-  return `Transport - ${stageTypeLabel(stage.type)}`;
+  return `Transport - ${stageToDisplayLabel(stage)}`;
 }
 
 function countOrderDays(from?: string | Date, to?: string | Date) {
@@ -151,7 +142,7 @@ function pickTransportTargets(
     key: 'MAIN',
     stageId: firstStage?.id || '',
     label: 'Transport',
-    assignment: firstStage ? `${firstStage.type || 'ETAP'} (${formatDateKey(firstStage.dateKey)})` : 'Całe zlecenie',
+    assignment: firstStage ? `${stageToDisplayLabel(firstStage)} (${formatDateKey(firstStage.dateKey)})` : 'Całe zlecenie',
     dateKey: firstStage?.dateKey,
   };
 
@@ -161,7 +152,7 @@ function pickTransportTargets(
     key: 'SECOND',
     stageId: lastStage?.id || '',
     label: 'Transport - dodatkowy dzień',
-    assignment: lastStage ? `${lastStage.type || 'ETAP'} (${formatDateKey(lastStage.dateKey)})` : 'Dodatkowy dzień',
+    assignment: lastStage ? `${stageToDisplayLabel(lastStage)} (${formatDateKey(lastStage.dateKey)})` : 'Dodatkowy dzień',
     dateKey: lastStage?.dateKey,
   };
 
@@ -263,7 +254,7 @@ export default function OrderTransportSection({
         })
         .map((s) => ({
           id: s.id,
-          label: `${s.type || 'ETAP'}${s.date ? ` (${new Date(s.date as any).toLocaleDateString('pl-PL')})` : ''}`,
+          label: `${stageToDisplayLabel(s)}${s.date ? ` (${new Date(s.date as any).toLocaleDateString('pl-PL')})` : ''}`,
         })),
     [stages]
   );
@@ -676,7 +667,7 @@ export default function OrderTransportSection({
                     }
                     const rowStage = stages.find((s) => s.id === rowStageId);
                     if (rowStage) {
-                      return `${rowStage.type || 'ETAP'}${rowStage.date ? ` (${new Date(rowStage.date as any).toLocaleDateString('pl-PL')})` : ''}`;
+                      return `${stageToDisplayLabel(rowStage)}${rowStage.date ? ` (${new Date(rowStage.date as any).toLocaleDateString('pl-PL')})` : ''}`;
                     }
                     return row?.description || targets[infoRowIndex]?.assignment || 'Własny element';
                   })()}

@@ -3,12 +3,10 @@ import { Trash2, Eye, EyeOff, Plus } from 'lucide-react'
 import { OrderProductionItem, OrderStage } from '@lama-stage/shared-types'
 import { useEquipment } from '../../equipment/hooks/useEquipment'
 import { randomClientUuid } from '../../../shared/utils/uuid'
+import { stageToDisplayLabel } from '../utils/stageLabel'
 
 function stageDisplayName(stage: Partial<OrderStage>) {
-  const customLabel = String(stage.label || '').trim()
-  if (customLabel) return customLabel
-  const type = String(stage.type || '').trim()
-  return type || 'Etap'
+  return stageToDisplayLabel(stage)
 }
 
 interface OrderProductionSectionProps {
