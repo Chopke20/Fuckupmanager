@@ -52,6 +52,9 @@ export default function OrderScheduleSection({ orderDateFrom, onChange }: OrderS
     if (matched) {
       if (matched.value === 'CUSTOM') {
         updateStage(index, { type: 'CUSTOM', label: '' })
+      } else if (matched.value === 'PROBA') {
+        // Backend enum doesn't support PROBA; persist as CUSTOM label.
+        updateStage(index, { type: 'CUSTOM', label: 'Próba' })
       } else {
         updateStage(index, { type: matched.value as any, label: '' })
       }
