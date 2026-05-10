@@ -7,6 +7,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum ExternalConfirmationStatus {
+  NOT_REQUIRED
+  PENDING
+  CONFIRMED
+  DECLINED
+}
+
 model User {
   id               String   @id @default(uuid())
   username         String?  @unique
@@ -268,6 +275,9 @@ model OrderEquipmentItem {
   pricingRule String?
   visibleInOffer Boolean @default(true)
   isRental       Boolean @default(false)
+  externalConfirmationStatus ExternalConfirmationStatus @default(NOT_REQUIRED)
+  externalConfirmationDeadline DateTime?
+  externalConfirmedAt DateTime?
   sortOrder      Int     @default(0)
 
   /// Opcjonalnie: ile „sztuk” (np. szt./dni) liczy się jako koszt rentalu × stawka — jeśli oba NULL, od marży odejmowany jest cały netto pozycji.
@@ -301,6 +311,9 @@ model OrderProductionItem {
   isTransport Boolean @default(false)
   isAutoCalculated Boolean @default(true)
   isSubcontractor Boolean @default(false)
+  externalConfirmationStatus ExternalConfirmationStatus @default(NOT_REQUIRED)
+  externalConfirmationDeadline DateTime?
+  externalConfirmedAt DateTime?
   visibleInOffer  Boolean @default(true)
   sortOrder       Int     @default(0)
 

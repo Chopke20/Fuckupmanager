@@ -47,6 +47,24 @@ export class OrdersService {
     } as T
   }
 
+  private getDefaultExternalConfirmationDeadline(targetDate: Date | string | null | undefined): Date | null {
+    if (!targetDate) return null
+    const base = new Date(targetDate)
+    if (Number.isNaN(base.getTime())) return null
+    base.setDate(base.getDate() - 7)
+    base.setHours(23, 59, 59, 999)
+    return base
+  }
+
+  private resolveExternalConfirmationStatus(
+    isExternal: boolean,
+    status: string | null | undefined
+  ): 'NOT_REQUIRED' | 'PENDING' | 'CONFIRMED' | 'DECLINED' {
+    if (!isExternal) return 'NOT_REQUIRED'
+    if (status === 'CONFIRMED' || status === 'DECLINED' || status === 'PENDING') return status
+    return 'PENDING'
+  }
+
   async getAllOrders(params?: {
     page?: number;
     limit?: number;
@@ -269,6 +287,14 @@ export class OrdersService {
           pricingRule: item.pricingRule ? JSON.stringify(item.pricingRule) : null,
           visibleInOffer: item.visibleInOffer ?? true,
           isRental: item.isRental ?? false,
+          externalConfirmationStatus: this.resolveExternalConfirmationStatus(
+            item.isRental ?? false,
+            item.externalConfirmationStatus ?? null
+          ),
+          externalConfirmationDeadline: item.externalConfirmationDeadline
+            ? new Date(item.externalConfirmationDeadline)
+            : this.getDefaultExternalConfirmationDeadline(item.dateFrom ? new Date(item.dateFrom) : startDate),
+          externalConfirmedAt: item.externalConfirmedAt ? new Date(item.externalConfirmedAt) : null,
           sortOrder: item.sortOrder ?? 0,
           marginRentalUnits: item.marginRentalUnits ?? null,
           marginRentalUnitCostNet: item.marginRentalUnitCostNet ?? null,
@@ -289,6 +315,14 @@ export class OrdersService {
           isTransport: item.isTransport ?? false,
           isAutoCalculated: item.isAutoCalculated ?? true,
           isSubcontractor: item.isSubcontractor ?? false,
+          externalConfirmationStatus: this.resolveExternalConfirmationStatus(
+            item.isSubcontractor ?? false,
+            item.externalConfirmationStatus ?? null
+          ),
+          externalConfirmationDeadline: item.externalConfirmationDeadline
+            ? new Date(item.externalConfirmationDeadline)
+            : this.getDefaultExternalConfirmationDeadline(startDate),
+          externalConfirmedAt: item.externalConfirmedAt ? new Date(item.externalConfirmedAt) : null,
           visibleInOffer: item.visibleInOffer ?? true,
           sortOrder: item.sortOrder ?? idx,
           marginSubcontractorUnits: item.marginSubcontractorUnits ?? null,
@@ -381,6 +415,14 @@ export class OrdersService {
                 pricingRule: item.pricingRule ? JSON.stringify(item.pricingRule) : null,
                 visibleInOffer: item.visibleInOffer ?? true,
                 isRental: item.isRental ?? false,
+                externalConfirmationStatus: this.resolveExternalConfirmationStatus(
+                  item.isRental ?? false,
+                  item.externalConfirmationStatus ?? null
+                ),
+                externalConfirmationDeadline: item.externalConfirmationDeadline
+                  ? new Date(item.externalConfirmationDeadline)
+                  : this.getDefaultExternalConfirmationDeadline(item.dateFrom ? new Date(item.dateFrom) : startDate),
+                externalConfirmedAt: item.externalConfirmedAt ? new Date(item.externalConfirmedAt) : null,
                 sortOrder: item.sortOrder ?? 0,
                 marginRentalUnits: item.marginRentalUnits ?? null,
                 marginRentalUnitCostNet: item.marginRentalUnitCostNet ?? null,
@@ -459,6 +501,14 @@ export class OrdersService {
                 isTransport: item.isTransport ?? false,
                 isAutoCalculated: item.isAutoCalculated ?? true,
                 isSubcontractor: item.isSubcontractor ?? false,
+                externalConfirmationStatus: this.resolveExternalConfirmationStatus(
+                  item.isSubcontractor ?? false,
+                  item.externalConfirmationStatus ?? null
+                ),
+                externalConfirmationDeadline: item.externalConfirmationDeadline
+                  ? new Date(item.externalConfirmationDeadline)
+                  : this.getDefaultExternalConfirmationDeadline(startDate),
+                externalConfirmedAt: item.externalConfirmedAt ? new Date(item.externalConfirmedAt) : null,
                 visibleInOffer: item.visibleInOffer ?? true,
                 sortOrder: item.sortOrder ?? idx,
                 marginSubcontractorUnits: item.marginSubcontractorUnits ?? null,
@@ -479,6 +529,14 @@ export class OrdersService {
                 isTransport: item.isTransport ?? false,
                 isAutoCalculated: item.isAutoCalculated ?? true,
                 isSubcontractor: item.isSubcontractor ?? false,
+                externalConfirmationStatus: this.resolveExternalConfirmationStatus(
+                  item.isSubcontractor ?? false,
+                  item.externalConfirmationStatus ?? null
+                ),
+                externalConfirmationDeadline: item.externalConfirmationDeadline
+                  ? new Date(item.externalConfirmationDeadline)
+                  : this.getDefaultExternalConfirmationDeadline(startDate),
+                externalConfirmedAt: item.externalConfirmedAt ? new Date(item.externalConfirmedAt) : null,
                 visibleInOffer: item.visibleInOffer ?? true,
                 sortOrder: item.sortOrder ?? idx,
                 marginSubcontractorUnits: item.marginSubcontractorUnits ?? null,

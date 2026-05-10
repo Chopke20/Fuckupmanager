@@ -142,27 +142,12 @@ export function useOverviewStats() {
 export function useLogisticConflicts() {
   return useQuery({
     queryKey: ['overview', 'conflicts'],
-    staleTime: Infinity,
+    staleTime: 60_000,
     queryFn: async (): Promise<LogisticConflict[]> => {
-      // TODO: podpiąć endpoint; poniżej dane orientacyjne do UI.
-      return [
-        {
-          id: '1',
-          description: 'Ten sam sprzęt (Mixer X32) w dwóch zleceniach 25.02',
-          severity: 'high' as const,
-          equipmentName: 'Mixer X32',
-          orderIds: ['order-1', 'order-2'],
-          date: '2026-02-25',
-        },
-        {
-          id: '2',
-          description: 'Przekroczona dostępność głośników L-Acoustics',
-          severity: 'medium' as const,
-          equipmentName: 'L-Acoustics K2',
-          orderIds: ['order-3', 'order-4', 'order-5'],
-          date: '2026-02-28',
-        },
-      ];
+      const body = await api.get<{ data: LogisticConflict[] }>('/orders/overview/conflicts', {
+        daysAhead: 45,
+      });
+      return Array.isArray(body?.data) ? body.data : [];
     },
   });
 }
@@ -170,31 +155,13 @@ export function useLogisticConflicts() {
 export function usePendingSubcontractorRentals() {
   return useQuery({
     queryKey: ['overview', 'pending-subcontractor-rentals'],
-    staleTime: Infinity,
+    staleTime: 60_000,
     queryFn: async (): Promise<SubcontractorRentalPendingItem[]> => {
-      // TODO: endpoint agregujący potwierdzenia podwykonawców i wynajmów przypiętych do zleceń.
-      return [
-        {
-          id: 'pdr-1',
-          description: 'Transport sceniczny — brak potwierdzenia dostępności i stawki',
-          severity: 'high' as const,
-          kind: 'subcontractor' as const,
-          orderId: '00000000-0000-4000-a000-000000000011',
-          orderName: 'Koncert — Arena 2026',
-          label: 'TransLog Sp. z o.o.',
-          date: '2026-02-20',
-        },
-        {
-          id: 'pdr-2',
-          description: 'Wynajem moving headów — zamówienie wysłane, brak akceptacji od dostawcy',
-          severity: 'medium' as const,
-          kind: 'rental' as const,
-          orderId: '00000000-0000-4000-a000-000000000022',
-          orderName: 'Event korporacyjny — MTP',
-          label: '6× LED Beam 280',
-          date: '2026-02-26',
-        },
-      ];
+      const body = await api.get<{ data: SubcontractorRentalPendingItem[] }>('/orders/overview/pending-external', {
+        daysAhead: 7,
+        hardHours: 72,
+      });
+      return Array.isArray(body?.data) ? body.data : [];
     },
   });
 }

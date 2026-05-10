@@ -23,6 +23,13 @@ export const STAGE_TYPES = [
 
 export const StageTypeSchema = z.enum(STAGE_TYPES);
 
+export const ExternalConfirmationStatusSchema = z.enum([
+  'NOT_REQUIRED',
+  'PENDING',
+  'CONFIRMED',
+  'DECLINED',
+]);
+
 export const OrderStageSchema = z.object({
   id: z.string().uuid(),
   orderId: z.string().uuid(),
@@ -64,6 +71,9 @@ export const OrderEquipmentItemSchema = z.object({
   }).optional(),
   visibleInOffer: z.boolean().default(true),
   isRental: z.boolean().default(false), // wynajem – bez marży (koszt = przychód)
+  externalConfirmationStatus: ExternalConfirmationStatusSchema.optional(),
+  externalConfirmationDeadline: z.string().datetime().nullable().optional(),
+  externalConfirmedAt: z.string().datetime().nullable().optional(),
   sortOrder: z.number().int().default(0),
   /** Opcjonalny koszt marży: ilość × koszt netto / jedn.; oba puste = cały netto pozycji jak dotąd */
   marginRentalUnits: z.number().nonnegative().nullable().optional(),
@@ -115,6 +125,9 @@ export const OrderProductionItemSchema = z.object({
   isTransport: z.boolean().default(false),
   isAutoCalculated: z.boolean().default(true),
   isSubcontractor: z.boolean().default(false),
+  externalConfirmationStatus: ExternalConfirmationStatusSchema.optional(),
+  externalConfirmationDeadline: z.string().datetime().nullable().optional(),
+  externalConfirmedAt: z.string().datetime().nullable().optional(),
   visibleInOffer: z.boolean().default(true),
   sortOrder: z.number().int().default(0),
   /** Opcjonalny koszt marży podwykonawcy: jednostki × koszt netto / jedn.; oba puste = cały netto pozycji */
@@ -231,6 +244,7 @@ export type ProductionRateType = z.infer<typeof ProductionRateTypeSchema>;
 export type StageType = z.infer<typeof StageTypeSchema>;
 export type Currency = z.infer<typeof CurrencySchema>;
 export type ProjectContactKey = z.infer<typeof ProjectContactKeySchema>;
+export type ExternalConfirmationStatus = z.infer<typeof ExternalConfirmationStatusSchema>;
 
 export const PaginatedOrdersResponseSchema = PaginatedResponseSchema(OrderSchema);
 export type PaginatedOrdersResponse = z.infer<typeof PaginatedOrdersResponseSchema>;

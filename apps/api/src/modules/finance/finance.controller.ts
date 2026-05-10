@@ -27,6 +27,86 @@ function round2(value: number) {
   return Number(value.toFixed(2))
 }
 
+function toNum(v: unknown, fallback: number): number {
+  const n = typeof v === 'number' ? v : Number(v)
+  return Number.isFinite(n) ? n : fallback
+}
+
+function computeEquipmentLineNet(item: {
+  unitPrice?: number | null
+  quantity?: number | null
+  days?: number | null
+  discount?: number | null
+  pricingRule?: string | null
+}): number {
+  const base = toNum(item.unitPrice, 0) * toNum(item.quantity, 1)
+  let day1Multiplier = 1.0
+  let nextDaysMultiplier = 0.5
+  if (item.pricingRule) {
+    try {
+      const parsed = JSON.parse(item.pricingRule) as { day1?: number; nextDays?: number }
+      day1Multiplier = toNum(parsed.day1, 1.0)
+      nextDaysMultiplier = toNum(parsed.nextDays, 0.5)
+    } catch {
+      // ignore invalid JSON
+    }
+  }
+  const firstDayValue = base * day1Multiplier
+  const days = toNum(item.days, 1)
+  const extraDaysValue = days > 1 ? (days - 1) * base * nextDaysMultiplier : 0
+  const multiDay = firstDayValue + extraDaysValue
+  return multiDay * (1 - toNum(item.discount, 0) / 100)
+}
+
+function computeProductionLineNet(item: {
+  rateValue?: number | null
+  units?: number | null
+  discount?: number | null
+}): number {
+  const base = toNum(item.rateValue, 0) * toNum(item.units, 1)
+  return base * (1 - toNum(item.discount, 0) / 100)
+}
+
+function hasCustomMarginPair(q: unknown, c: unknown): boolean {
+  const uq = toNum(q, Number.NaN)
+  const uc = toNum(c, Number.NaN)
+  return q != null && c != null && Number.isFinite(uq) && Number.isFinite(uc) && uq > 0 && uc >= 0
+}
+
+function rentalDeduction(item: {
+  isRental?: boolean | null
+  marginRentalUnits?: number | null
+  marginRentalUnitCostNet?: number | null
+  unitPrice?: number | null
+  quantity?: number | null
+  days?: number | null
+  discount?: number | null
+  pricingRule?: string | null
+}): number {
+  if (!item.isRental) return 0
+  const lineNet = computeEquipmentLineNet(item)
+  if (hasCustomMarginPair(item.marginRentalUnits, item.marginRentalUnitCostNet)) {
+    return toNum(item.marginRentalUnits, 0) * toNum(item.marginRentalUnitCostNet, 0)
+  }
+  return lineNet
+}
+
+function subcontractorDeduction(item: {
+  isSubcontractor?: boolean | null
+  marginSubcontractorUnits?: number | null
+  marginSubcontractorUnitCostNet?: number | null
+  rateValue?: number | null
+  units?: number | null
+  discount?: number | null
+}): number {
+  if (!item.isSubcontractor) return 0
+  const lineNet = computeProductionLineNet(item)
+  if (hasCustomMarginPair(item.marginSubcontractorUnits, item.marginSubcontractorUnitCostNet)) {
+    return toNum(item.marginSubcontractorUnits, 0) * toNum(item.marginSubcontractorUnitCostNet, 0)
+  }
+  return lineNet
+}
+
 function normalizeRanges(input: unknown): TransportRange[] | null {
   if (!Array.isArray(input) || input.length === 0) return null
   const rows = input
@@ -292,6 +372,113 @@ export class FinanceController {
           ranges: settings.ranges,
           longDistancePerKm: settings.longDistancePerKm,
           updatedAt: settings.updatedAt,
+        },
+      },
+    })
+  }
+
+  async getRevenueIncomeTrend(req: Request, res: Response) {
+    const monthsRaw = Number(req.query.months ?? 12)
+    const months = Number.isFinite(monthsRaw) ? Math.max(3, Math.min(24, Math.floor(monthsRaw))) : 12
+    const includeOfferSent = req.query.includeOfferSent === '1' || req.query.includeOfferSent === 'true'
+
+    const today = new Date()
+    const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1)
+    const from = new Date(currentMonthStart.getFullYear(), currentMonthStart.getMonth() - (months - 1), 1)
+    const to = new Date(currentMonthStart.getFullYear(), currentMonthStart.getMonth() + 1, 0, 23, 59, 59, 999)
+
+    const statusFilter = includeOfferSent ? ['CONFIRMED', 'COMPLETED', 'OFFER_SENT'] : ['CONFIRMED', 'COMPLETED']
+
+    const orders = await prisma.order.findMany({
+      where: {
+        isDeleted: false,
+        status: { in: statusFilter },
+        dateFrom: { gte: from, lte: to },
+      },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        dateFrom: true,
+        discountGlobal: true,
+        equipmentItems: {
+          select: {
+            unitPrice: true,
+            quantity: true,
+            days: true,
+            discount: true,
+            pricingRule: true,
+            isRental: true,
+            marginRentalUnits: true,
+            marginRentalUnitCostNet: true,
+          },
+        },
+        productionItems: {
+          select: {
+            rateValue: true,
+            units: true,
+            discount: true,
+            isSubcontractor: true,
+            marginSubcontractorUnits: true,
+            marginSubcontractorUnitCostNet: true,
+          },
+        },
+      },
+    })
+
+    const monthMap = new Map<string, { month: string; revenueNet: number; incomeNet: number; ordersCount: number }>()
+    for (let i = 0; i < months; i += 1) {
+      const d = new Date(from.getFullYear(), from.getMonth() + i, 1)
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      monthMap.set(key, { month: key, revenueNet: 0, incomeNet: 0, ordersCount: 0 })
+    }
+
+    for (const order of orders) {
+      const d = order.dateFrom
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      const bucket = monthMap.get(key)
+      if (!bucket) continue
+
+      const equipmentTotal = order.equipmentItems.reduce((sum, item) => sum + computeEquipmentLineNet(item), 0)
+      const productionTotal = order.productionItems.reduce((sum, item) => sum + computeProductionLineNet(item), 0)
+      const revenueBeforeDiscount = equipmentTotal + productionTotal
+      const discountAmount = revenueBeforeDiscount * (toNum(order.discountGlobal, 0) / 100)
+      const revenueNet = revenueBeforeDiscount - discountAmount
+      const rentalCost = order.equipmentItems.reduce((sum, item) => sum + rentalDeduction(item), 0)
+      const subcontractorCost = order.productionItems.reduce((sum, item) => sum + subcontractorDeduction(item), 0)
+      const incomeNet = revenueNet - rentalCost - subcontractorCost
+
+      bucket.revenueNet += revenueNet
+      bucket.incomeNet += incomeNet
+      bucket.ordersCount += 1
+    }
+
+    const points = Array.from(monthMap.values()).map((p) => ({
+      ...p,
+      revenueNet: round2(p.revenueNet),
+      incomeNet: round2(p.incomeNet),
+    }))
+
+    const totals = points.reduce(
+      (acc, p) => {
+        acc.revenueNet += p.revenueNet
+        acc.incomeNet += p.incomeNet
+        acc.ordersCount += p.ordersCount
+        return acc
+      },
+      { revenueNet: 0, incomeNet: 0, ordersCount: 0 }
+    )
+
+    res.json({
+      data: {
+        from: from.toISOString(),
+        to: to.toISOString(),
+        includeOfferSent,
+        points,
+        totals: {
+          revenueNet: round2(totals.revenueNet),
+          incomeNet: round2(totals.incomeNet),
+          ordersCount: totals.ordersCount,
         },
       },
     })

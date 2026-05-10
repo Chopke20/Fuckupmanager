@@ -36,8 +36,8 @@ const statRows: Array<{
   { label: 'Wszystkie zlecenia', key: 'total', icon: FileText, color: 'text-blue-500', to: '/orders' },
   { label: 'Potwierdzone', key: 'confirmed', icon: TrendingUp, color: 'text-green-500', to: '/orders?status=CONFIRMED' },
   { label: 'Oferta wysłana', key: 'offerSent', icon: TrendingUp, color: 'text-orange-500', to: '/orders?status=OFFER_SENT' },
-  { label: 'Wartość szac. (potw.)', key: 'value', icon: DollarSign, color: 'text-purple-500', to: '/finance' },
-  { label: 'Przychód (aktualny rok)', key: 'revenue', icon: DollarSign, color: 'text-emerald-500', to: '/finance' },
+  { label: 'Wartość szac. (potw.)', key: 'value', icon: DollarSign, color: 'text-purple-500', to: '/finance?metric=revenue' },
+  { label: 'Przychód (aktualny rok)', key: 'revenue', icon: DollarSign, color: 'text-emerald-500', to: '/finance?metric=income' },
 ];
 
 function cn(...parts: Array<string | false | undefined>) {

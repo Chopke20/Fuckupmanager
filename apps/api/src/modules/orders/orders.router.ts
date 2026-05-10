@@ -11,6 +11,8 @@ import {
   deleteOrderPermanent,
   checkEquipmentAvailability,
   getOrderConflicts,
+  getOverviewConflicts,
+  getOverviewPendingExternal,
 } from './orders.controller';
 import {
   listOrderDocumentExports,
@@ -27,6 +29,8 @@ const router = Router();
 router.get('/', getAllOrders);
 router.post('/availability', checkEquipmentAvailability);
 router.get('/conflicts', getOrderConflicts);
+router.get('/overview/conflicts', getOverviewConflicts);
+router.get('/overview/pending-external', getOverviewPendingExternal);
 router.get('/:id', getOrderById);
 router.get('/:id/documents/exports', listOrderDocumentExports);
 router.get('/:id/documents/exports/:exportId', getOrderDocumentExport);
