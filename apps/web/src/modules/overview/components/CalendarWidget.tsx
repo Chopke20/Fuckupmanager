@@ -57,7 +57,17 @@ interface CalendarEvent {
   }
 }
 
-export default function CalendarWidget() {
+export type CalendarWidgetProps = {
+  /** Wysokość obszaru kalendarza (widok miesięczny). */
+  calendarHeightClass?: string
+  /** Limit wpisów w komórce dnia w widoku miesiąca (+ więcej). */
+  dayMaxEvents?: number | boolean
+}
+
+export default function CalendarWidget({
+  calendarHeightClass = 'h-[640px]',
+  dayMaxEvents = 6,
+}: CalendarWidgetProps = {}) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -490,7 +500,7 @@ export default function CalendarWidget() {
         </div>
       </div>
 
-      <div className="h-[560px]">
+      <div className={calendarHeightClass}>
         <FullCalendar
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
           initialView="dayGridMonth"
@@ -505,7 +515,7 @@ export default function CalendarWidget() {
           editable={false}
           selectable={true}
           weekends={true}
-          dayMaxEvents={4}
+          dayMaxEvents={dayMaxEvents}
           height="100%"
           locale="pl"
           buttonText={{

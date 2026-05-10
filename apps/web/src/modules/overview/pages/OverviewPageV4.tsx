@@ -1,16 +1,15 @@
 import { useState } from 'react'
 import { format } from 'date-fns'
-import { pl } from 'date-fns/locale'
 import { Calendar, ChevronRight, Plus, AlertTriangle } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { useOverviewStats, useUpcomingOrders, useLogisticConflicts } from '../hooks/useOverview'
+import { useOverviewStats, useUpcomingOrders, useLogisticConflicts, orderStartDate, orderEndDate } from '../hooks/useOverview'
 import CalendarWidget from '../components/CalendarWidget'
-import { calculateOrderNetValue } from '@lama-stage/shared-types';
+import { calculateOrderNetValue } from '@lama-stage/shared-types'
 
 export default function OverviewPageV4() {
-  const { data: stats, isLoading: statsLoading } = useOverviewStats()
-  const { data: upcomingOrders, isLoading: upcomingLoading } = useUpcomingOrders(5)
-  const { data: conflicts, isLoading: conflictsLoading } = useLogisticConflicts()
+  const { data: stats, isPending: statsPending } = useOverviewStats()
+  const { data: upcomingOrders, isPending: upcomingPending } = useUpcomingOrders(5)
+  const { data: conflicts, isPending: conflictsPending } = useLogisticConflicts()
   const [showAddBlock, setShowAddBlock] = useState(false)
 
   // Najbliższe zlecenie (tylko jedno, najważniejsze)
@@ -39,21 +38,26 @@ export default function OverviewPageV4() {
         </button>
       </div>
 
-      {/* Wiersz statystyk inline */}
-      <div className="flex items-center gap-6 text-sm">
-        {statItems.map((item, index) => (
-          <div key={index} className="flex items-center gap-2">
-            <span className="text-muted-foreground">{item.label}:</span>
-            <span className="font-semibold">{item.value}</span>
-            {index < statItems.length - 1 && (
-              <span className="text-muted-foreground">·</span>
-            )}
-          </div>
-        ))}
+      <div className="flex flex-wrap items-center gap-6 text-sm">
+        {statsPending ? (
+          <span className="text-muted-foreground">Ładowanie statystyk…</span>
+        ) : (
+          statItems.map((item, index) => (
+            <div key={item.label} className="flex items-center gap-2">
+              <span className="text-muted-foreground">{item.label}:</span>
+              <span className="font-semibold">{item.value}</span>
+              {index < statItems.length - 1 && <span className="text-muted-foreground">·</span>}
+            </div>
+          ))
+        )}
       </div>
 
+      {upcomingPending && (
+        <div className="text-sm text-muted-foreground border border-border rounded p-4 bg-surface-2">Ładowanie najbliższego zlecenia…</div>
+      )}
+
       {/* Najbliższe zlecenie (tylko jedno) */}
-      {nextOrder && (
+      {!upcomingPending && nextOrder && (
         <Link
           to={`/orders/${nextOrder.id}`}
           className="border border-border rounded p-4 hover:border-primary/30 transition-colors block bg-surface-2"
@@ -68,7 +72,7 @@ export default function OverviewPageV4() {
               </div>
               <p className="text-sm text-muted-foreground mt-1">
                 {nextOrder.client?.companyName || 'Brak klienta'} •
-                {format(new Date(nextOrder.dateFrom), ' dd.MM')} - {format(new Date(nextOrder.dateTo), 'dd.MM')}
+                {format(orderStartDate(nextOrder), ' dd.MM')} - {format(orderEndDate(nextOrder), 'dd.MM')}
               </p>
             </div>
             <div className="flex items-center gap-4">
@@ -110,8 +114,11 @@ export default function OverviewPageV4() {
         </div>
       </div>
 
-      {/* Konflikty logistyczne (kompaktowe) */}
-      {conflicts && conflicts.length > 0 && (
+      {conflictsPending && (
+        <div className="text-sm text-muted-foreground border border-border rounded p-4">Ładowanie konfliktów…</div>
+      )}
+
+      {!conflictsPending && conflicts && conflicts.length > 0 && (
         <div className="border border-border rounded p-4">
           <div className="flex items-center gap-3 mb-4">
             <AlertTriangle className="text-red-500" size={20} />

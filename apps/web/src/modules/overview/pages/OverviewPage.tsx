@@ -1,9 +1,14 @@
-import { Calendar, AlertTriangle, TrendingUp, FileText, DollarSign } from 'lucide-react';
+import { Calendar, AlertTriangle, TrendingUp, FileText, DollarSign, ChevronDown, Handshake } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useOverviewStats, useLogisticConflicts, useUpcomingOrders } from '../hooks/useOverview';
-import CalendarWidget from '../components/CalendarWidget';
 import { format } from 'date-fns';
-import { pl } from 'date-fns/locale';
+import {
+  useOverviewStats,
+  useLogisticConflicts,
+  usePendingSubcontractorRentals,
+  useUpcomingOrders,
+  orderStartDate,
+} from '../hooks/useOverview';
+import CalendarWidget from '../components/CalendarWidget';
 import { calculateOrderNetValue } from '@lama-stage/shared-types';
 
 type StatKey = 'total' | 'confirmed' | 'offerSent' | 'value' | 'revenue';
@@ -22,16 +27,19 @@ const statRows: Array<{
   { label: 'Przychód (aktualny rok)', key: 'revenue', icon: DollarSign, color: 'text-emerald-500', to: '/finance' },
 ];
 
-export default function OverviewPage() {
-  const { data: stats } = useOverviewStats();
-  const { data: conflicts, isLoading: conflictsLoading } = useLogisticConflicts();
-  const { data: upcomingOrders, isLoading: upcomingLoading } = useUpcomingOrders(5);
-  // Usunięto: const { data: inProgressOrders } = useInProgressOrders();
+const overviewPanel =
+  'group bg-surface rounded-xl border border-border overflow-hidden transition-colors hover:border-border focus-within:border-primary/25';
+const overviewSummary =
+  'flex w-full cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-left select-none [&::-webkit-details-marker]:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background';
 
-  // Usunięto: const currentTime = format(new Date(), 'HH:mm');
-  const currentDate = format(new Date(), 'EEEE, d MMMM yyyy', { locale: pl });
+export default function OverviewPage() {
+  const { data: stats, isPending: statsPending } = useOverviewStats();
+  const { data: conflicts, isPending: conflictsPending } = useLogisticConflicts();
+  const { data: pendingSubRentals, isPending: pendingSubRentalsPending } = usePendingSubcontractorRentals();
+  const { data: upcomingOrders, isPending: upcomingPending } = useUpcomingOrders(5);
 
   const getStatValue = (key: StatKey): string | number => {
+    if (statsPending) return '—';
     if (key === 'total') return stats?.totalOrders ?? 0;
     if (key === 'confirmed') return stats?.confirmedOrders ?? 0;
     if (key === 'offerSent') return stats?.offerSentOrders ?? 0;
@@ -52,10 +60,14 @@ export default function OverviewPage() {
     low: 'Niski',
   };
 
-  return (
-    <div className="space-y-6 p-4"> {/* Dodano padding do głównego kontenera */}
+  const conflictCount = conflicts?.length ?? 0;
+  const pendingSubRentalCount = pendingSubRentals?.length ?? 0;
+  const upcomingCount = upcomingOrders?.length ?? 0;
 
-      {/* Kompaktowe KPI — małe kafelki (klikalne prowadzą do listy zleceń z filtrem) */}
+  const kindLabels = { subcontractor: 'Podwykonawca', rental: 'Wynajem' } as const;
+
+  return (
+    <div className="space-y-6">
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
         {statRows.map((row) => {
           const Icon = row.icon;
@@ -68,7 +80,8 @@ export default function OverviewPage() {
               </div>
             </>
           );
-          const className = "bg-surface rounded-md border border-border px-3 py-1.5 flex items-center gap-2 min-h-[2.75rem] transition-colors hover:border-primary/30";
+          const className =
+            'bg-surface rounded-md border border-border px-3 py-1.5 flex items-center gap-2 min-h-[2.75rem] transition-colors hover:border-primary/30';
           if (row.to) {
             return (
               <Link key={row.key} to={row.to} className={className}>
@@ -84,48 +97,48 @@ export default function OverviewPage() {
         })}
       </div>
 
-      {/* Główny układ: Kalendarz (szeroko) + Boczne widgety (wąsko) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4"> {/* Zmieniono grid na większy, dla precyzyjniejszego podziału */}
-
-        {/* Lewa kolumna: Kalendarz */}
-        <div className="lg:col-span-8"> {/* Kalendarz zajmuje 8/12 kolumn */}
-          <CalendarWidget />
-        </div>
-
-        {/* Prawa kolumna: Skonsolidowane widgety (Konflikty + Najbliższe zlecenia) */}
-        <div className="lg:col-span-4 space-y-4"> {/* Zajmuje 4/12 kolumn, dodano space-y */}
-
-          {/* Widget Konfliktów logistycznych (kompaktowy) */}
-          <div className="bg-surface rounded-lg border border-border p-3"> {/* Zmniejszono padding */}
-            <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle className="text-red-500" size={20} /> {/* Zmniejszono ikonę */}
-              <h2 className="text-lg font-semibold">Konflikty</h2> {/* Skrócono tytuł */}
-              {conflicts && conflicts.length > 0 && (
-                <span className="px-2 py-0.5 bg-red-500/20 text-red-500 text-xs rounded-full">
-                  {conflicts.length}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <details className={overviewPanel}>
+          <summary className={overviewSummary}>
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <AlertTriangle className="shrink-0 text-red-500" size={20} />
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold leading-tight">Konflikty logistyczne</h2>
+                <p className="text-xs text-muted-foreground truncate">Kolizje sprzętu i terminów (zwiń, żeby dać więcej miejsca kalendarzowi)</p>
+              </div>
+              {conflictsPending ? (
+                <span className="ml-auto shrink-0 text-xs text-muted-foreground">…</span>
+              ) : conflictCount > 0 ? (
+                <span className="ml-auto shrink-0 rounded-full bg-red-500/20 px-2 py-0.5 text-xs font-medium text-red-400 tabular-nums">
+                  {conflictCount}
                 </span>
+              ) : (
+                <span className="ml-auto shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted-foreground">0</span>
               )}
             </div>
-            <div className="space-y-3 max-h-64 overflow-y-auto pr-2"> {/* Dodano max-height i scroll */}
-              {conflictsLoading ? (
-                <div className="text-center py-4 text-muted-foreground">Ładowanie konfliktów...</div>
+            <ChevronDown className="shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180" size={20} />
+          </summary>
+          <div className="border-t border-border bg-surface-2/40 px-4 py-3">
+            <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
+              {conflictsPending ? (
+                <div className="py-6 text-center text-sm text-muted-foreground">Ładowanie konfliktów...</div>
               ) : conflicts && conflicts.length > 0 ? (
-                conflicts.map(conflict => (
+                conflicts.map((conflict) => (
                   <div
                     key={conflict.id}
-                    className={`p-2.5 rounded border flex items-start gap-3 ${ // Zmniejszono padding
+                    className={`flex items-start gap-3 rounded-lg border p-3 ${
                       conflict.severity === 'high'
-                        ? 'border-red-500/30 bg-red-500/5'
+                        ? 'border-red-500/30 bg-red-500/[0.07]'
                         : conflict.severity === 'medium'
-                        ? 'border-amber-500/30 bg-amber-500/5'
-                        : 'border-blue-500/30 bg-blue-500/5'
+                          ? 'border-amber-500/30 bg-amber-500/[0.07]'
+                          : 'border-blue-500/30 bg-blue-500/[0.07]'
                     }`}
                   >
-                    <div className={`mt-1 w-3 h-3 rounded-full ${severityColors[conflict.severity]}`} />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium leading-tight">{conflict.description}</p> {/* Lepsze prowadzenie linii */}
-                      <div className="flex items-center gap-2 mt-1.5 text-xs"> {/* Zmniejszono odstęp */}
-                        <span className={`px-1.5 py-0.5 rounded-full ${severityColors[conflict.severity]} text-white`}>
+                    <div className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full ${severityColors[conflict.severity]}`} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium leading-snug">{conflict.description}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                        <span className={`rounded-full px-1.5 py-0.5 font-medium text-white ${severityColors[conflict.severity]}`}>
                           {severityLabels[conflict.severity]}
                         </span>
                         <span className="text-muted-foreground">
@@ -136,63 +149,146 @@ export default function OverviewPage() {
                   </div>
                 ))
               ) : (
-                <div className="text-center py-4 text-muted-foreground">Brak konfliktów.</div>
+                <div className="py-8 text-center text-sm text-muted-foreground">Brak wykrytych konfliktów.</div>
               )}
             </div>
           </div>
+        </details>
 
-          {/* Widget Najbliższych zleceń (kompaktowy) */}
-          <div className="bg-surface rounded-lg border border-border p-3"> {/* Zmniejszono padding */}
-            <div className="flex items-center gap-2 mb-3">
-              <Calendar className="text-green-500" size={20} /> {/* Zmniejszono ikonę */}
-              <h2 className="text-lg font-semibold">Najbliższe zlecenia</h2>
+        <details className={overviewPanel}>
+          <summary className={overviewSummary}>
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <Handshake className="shrink-0 text-amber-400" size={20} />
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold leading-tight">Podwykonawcy i wynajmy</h2>
+                <p className="text-xs text-muted-foreground truncate">Do potwierdzenia — szczegóły wkrótce</p>
+              </div>
+              {pendingSubRentalsPending ? (
+                <span className="ml-auto shrink-0 text-xs text-muted-foreground">…</span>
+              ) : pendingSubRentalCount > 0 ? (
+                <span className="ml-auto shrink-0 rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-200 tabular-nums">
+                  {pendingSubRentalCount}
+                </span>
+              ) : (
+                <span className="ml-auto shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted-foreground">0</span>
+              )}
             </div>
-            <div className="space-y-3 max-h-64 overflow-y-auto pr-2"> {/* Dodano max-height i scroll */}
-              {upcomingLoading ? (
-                <div className="text-center py-4 text-muted-foreground">Ładowanie zleceń...</div>
-              ) : upcomingOrders && upcomingOrders.length > 0 ? (
-                upcomingOrders.map(order => (
+            <ChevronDown className="shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180" size={20} />
+          </summary>
+          <div className="border-t border-border bg-surface-2/40 px-4 py-3">
+            <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
+              {pendingSubRentalsPending ? (
+                <div className="py-6 text-center text-sm text-muted-foreground">Ładowanie…</div>
+              ) : pendingSubRentals && pendingSubRentals.length > 0 ? (
+                pendingSubRentals.map((item) => (
                   <Link
-                    key={order.id}
-                    to={`/orders/${order.id}`}
-                    className="p-3 bg-surface-2 rounded border border-border transition-colors hover:border-primary/30 block"
+                    key={item.id}
+                    to={`/orders/${item.orderId}`}
+                    className={`flex items-start gap-3 rounded-lg border p-3 transition-colors hover:border-primary/35 ${
+                      item.severity === 'high'
+                        ? 'border-red-500/30 bg-red-500/[0.07]'
+                        : item.severity === 'medium'
+                          ? 'border-amber-500/30 bg-amber-500/[0.07]'
+                          : 'border-blue-500/30 bg-blue-500/[0.07]'
+                    }`}
                   >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="font-medium text-sm">{order.name}</h3> {/* Zmniejszono font */}
-                        <p className="text-xs text-muted-foreground"> {/* Zmniejszono font */}
-                          {order.client?.companyName || 'Brak klienta'}
-                        </p>
+                    <div className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full ${severityColors[item.severity]}`} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium leading-snug">{item.description}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                        <span
+                          className={`rounded-full px-1.5 py-0.5 font-medium text-white ${severityColors[item.severity]}`}
+                        >
+                          {severityLabels[item.severity]}
+                        </span>
+                        <span
+                          className={`rounded-full px-1.5 py-0.5 font-medium ${
+                            item.kind === 'rental'
+                              ? 'bg-violet-500/25 text-violet-200'
+                              : 'bg-amber-500/25 text-amber-100'
+                          }`}
+                        >
+                          {kindLabels[item.kind]}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {item.orderName} • {item.label} • {item.date}
+                        </span>
                       </div>
-                      <span className="px-2 py-0.5 bg-primary/20 text-primary text-xs rounded-full whitespace-nowrap">
-                        {format(new Date(order.dateFrom), 'dd.MM')}
-                      </span>
-                    </div>
-                    <div className="mt-2 text-xs flex items-center justify-between">
-                      <span className={`px-1.5 py-0.5 rounded-full text-xs ${
-                        order.status === 'CONFIRMED'
-                          ? 'bg-green-500/20 text-green-500'
-                          : order.status === 'OFFER_SENT'
-                          ? 'bg-[#282f46] text-[#5d80dd]'
-                          : 'bg-gray-500/20 text-gray-500'
-                      }`}>
-                        {order.status === 'CONFIRMED' ? 'Potwierdzone' :
-                         order.status === 'OFFER_SENT' ? 'Oferta wysłana' : 'Szkic'}
-                      </span>
-                      <span className="text-muted-foreground text-xs">
-                        ~{calculateOrderNetValue(order).toLocaleString('pl')} PLN netto
-                      </span>
                     </div>
                   </Link>
                 ))
               ) : (
-                <div className="text-center py-4 text-muted-foreground">Brak zleceń.</div>
+                <div className="py-8 text-center text-sm text-muted-foreground">Brak pozycji do potwierdzenia.</div>
               )}
             </div>
           </div>
-        </div>
+        </details>
+
+        <details className={overviewPanel}>
+          <summary className={overviewSummary}>
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <Calendar className="shrink-0 text-green-500" size={20} />
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold leading-tight">Najbliższe zlecenia</h2>
+                <p className="text-xs text-muted-foreground truncate">Potwierdzone i oferta wysłana — kolejne 30 dni</p>
+              </div>
+              {upcomingPending ? (
+                <span className="ml-auto shrink-0 text-xs text-muted-foreground">…</span>
+              ) : upcomingCount > 0 ? (
+                <span className="ml-auto shrink-0 rounded-full bg-primary/20 px-2 py-0.5 text-xs font-medium text-primary tabular-nums">
+                  {upcomingCount}
+                </span>
+              ) : (
+                <span className="ml-auto shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted-foreground">0</span>
+              )}
+            </div>
+            <ChevronDown className="shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180" size={20} />
+          </summary>
+          <div className="border-t border-border bg-surface-2/40 px-4 py-3">
+            <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+              {upcomingPending ? (
+                <div className="py-6 text-center text-sm text-muted-foreground">Ładowanie zleceń...</div>
+              ) : upcomingOrders && upcomingOrders.length > 0 ? (
+                upcomingOrders.map((order) => (
+                  <Link
+                    key={order.id}
+                    to={`/orders/${order.id}`}
+                    className="block rounded-lg border border-border bg-surface p-3 transition-colors hover:border-primary/35"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-sm font-medium leading-snug break-words">{order.name}</h3>
+                        <p className="mt-1 text-xs text-muted-foreground">{order.client?.companyName || 'Brak klienta'}</p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-primary/20 px-2 py-0.5 text-xs text-primary whitespace-nowrap">
+                        {format(orderStartDate(order), 'dd.MM')}
+                      </span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <span
+                        className={`rounded-full px-1.5 py-0.5 ${
+                          order.status === 'CONFIRMED'
+                            ? 'bg-green-500/20 text-green-500'
+                            : order.status === 'OFFER_SENT'
+                              ? 'bg-[#282f46] text-[#5d80dd]'
+                              : 'bg-gray-500/20 text-gray-500'
+                        }`}
+                      >
+                        {order.status === 'CONFIRMED' ? 'Potwierdzone' : order.status === 'OFFER_SENT' ? 'Oferta wysłana' : 'Szkic'}
+                      </span>
+                      <span className="text-muted-foreground">~{calculateOrderNetValue(order).toLocaleString('pl')} PLN netto</span>
+                    </div>
+                  </Link>
+                ))
+              ) : (
+                <div className="py-8 text-center text-sm text-muted-foreground">Brak zleceń w tym oknie.</div>
+              )}
+            </div>
+          </div>
+        </details>
       </div>
-       {/* Usunięto sekcję "Zlecenia z ofertą wysłaną" */}
+
+      <CalendarWidget calendarHeightClass="min-h-[640px] h-[min(720px,calc(100vh-360px))]" dayMaxEvents={6} />
     </div>
   );
 }
