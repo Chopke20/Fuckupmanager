@@ -66,7 +66,7 @@ export type CalendarWidgetProps = {
 
 export default function CalendarWidget({
   calendarHeightClass = 'h-[640px]',
-  dayMaxEvents = 6,
+  dayMaxEvents = 8,
 }: CalendarWidgetProps = {}) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -482,25 +482,27 @@ export default function CalendarWidget({
 
   return (
     <div className="bg-surface rounded-xl border border-border p-3 relative">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">Kalendarz wydarzeń</h2>
-        <div className="flex items-center gap-2 text-sm">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="font-heading text-sm font-semibold tracking-tight text-foreground" role="heading" aria-level={2}>
+          Kalendarz wydarzeń
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
           <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded-full bg-[#64748b]" />
+            <div className="h-2 w-2 shrink-0 rounded-full bg-[#64748b]" />
             <span>Oferta wysłana</span>
           </div>
           <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded-full bg-[#22c55e]" />
+            <div className="h-2 w-2 shrink-0 rounded-full bg-[#22c55e]" />
             <span>Potwierdzone</span>
           </div>
           <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded-full bg-[#3b82f6]" />
+            <div className="h-2 w-2 shrink-0 rounded-full bg-[#3b82f6]" />
             <span>Zakończone</span>
           </div>
         </div>
       </div>
 
-      <div className={calendarHeightClass}>
+      <div className={`${calendarHeightClass} calendar-widget-compact min-h-0`}>
         <FullCalendar
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
           initialView="dayGridMonth"
@@ -516,6 +518,7 @@ export default function CalendarWidget({
           selectable={true}
           weekends={true}
           dayMaxEvents={dayMaxEvents}
+          eventMinHeight={14}
           height="100%"
           locale="pl"
           buttonText={{
@@ -535,20 +538,24 @@ export default function CalendarWidget({
             meridiem: false,
           }}
           eventDisplay="block"
-          eventClassNames="cursor-pointer rounded-sm"
+          eventClassNames="cursor-pointer rounded-sm [&_.fc-event-title]:leading-tight"
           eventContent={(arg) => {
             const stageLabel = arg.event.extendedProps?.stageLabel
             if (stageLabel) {
               return (
-                <div className="flex flex-col min-w-0 overflow-hidden py-0.5">
-                  <span className="font-medium truncate" title={arg.event.title}>
+                <div className="flex min-w-0 flex-col gap-0 overflow-hidden py-px leading-snug">
+                  <span className="truncate font-medium text-[10px]" title={arg.event.title}>
                     {arg.event.title}
                   </span>
-                  <span className="text-xs opacity-90 truncate">{stageLabel}</span>
+                  <span className="truncate text-[9px] opacity-90">{stageLabel}</span>
                 </div>
               )
             }
-            return <span className="truncate" title={arg.event.title}>{arg.event.title}</span>
+            return (
+              <span className="block truncate px-px py-px font-medium text-[10px] leading-tight" title={arg.event.title}>
+                {arg.event.title}
+              </span>
+            )
           }}
         />
       </div>

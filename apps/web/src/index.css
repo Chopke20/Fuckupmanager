@@ -113,3 +113,102 @@
 .compact-button {
   @apply h-8 px-3 text-sm;
 }
+
+/* Overview / CalendarWidget — mniejsza czcionka, więcej wpisów w widoku miesiąca */
+.calendar-widget-compact {
+  --fc-small-font-size: 0.65rem;
+}
+
+.calendar-widget-compact .fc {
+  font-size: 11px;
+  line-height: 1.22;
+}
+
+.calendar-widget-compact .fc-toolbar-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.calendar-widget-compact .fc-button {
+  font-size: 0.6875rem;
+  padding: 0.15rem 0.4rem !important;
+  line-height: 1.15;
+}
+
+.calendar-widget-compact .fc-toolbar-chunk > .fc-button-group {
+  gap: 0.15rem;
+}
+
+.calendar-widget-compact .fc-col-header-cell-cushion {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 0.2rem 0.25rem;
+}
+
+.calendar-widget-compact .fc-daygrid-day-frame {
+  min-height: auto;
+}
+
+.calendar-widget-compact .fc-daygrid-day-number {
+  font-size: 0.6875rem;
+  padding: 1px 3px;
+  line-height: 1;
+}
+
+.calendar-widget-compact .fc-scrollgrid-shrink-cushion {
+  font-size: 0.65rem;
+}
+
+.calendar-widget-compact .fc-daygrid-event {
+  font-size: 10px !important;
+  padding: 0 2px !important;
+  margin-top: 1px !important;
+  line-height: 1.18 !important;
+  border-radius: 2px;
+}
+
+.calendar-widget-compact .fc-daygrid-event .fc-event-title {
+  font-weight: 500 !important;
+}
+
+.calendar-widget-compact .fc-daygrid-more-link {
+  font-size: 0.625rem !important;
+  padding: 1px 2px !important;
+  margin-top: 1px !important;
+}
+
+.calendar-widget-compact .fc-daygrid-dot-event .fc-event-title {
+  font-size: inherit;
+}
+
+.calendar-widget-compact .fc-daygrid-event-harness {
+  margin-top: 1px;
+}
+
+.calendar-widget-compact .fc-timegrid-slot-label-cushion,
+.calendar-widget-compact .fc-timegrid-axis-cushion {
+  font-size: 0.65rem;
+}
+
+/* Overview — wymagana akcja (konflikty / podwykonawcy) */
+@keyframes overview-attention {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 hsl(145 100% 50% / 0.45);
+    opacity: 1;
+  }
+  50% {
+    box-shadow: 0 0 0 10px hsl(145 100% 50% / 0);
+    opacity: 0.88;
+  }
+}
+
+.overview-attention-pulse {
+  animation: overview-attention 1.35s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overview-attention-pulse {
+    animation: none;
+  }
+}
