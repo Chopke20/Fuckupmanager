@@ -114,25 +114,25 @@
   @apply h-8 px-3 text-sm;
 }
 
-/* Overview / CalendarWidget — mniejsza czcionka, więcej wpisów w widoku miesiąca */
+/* Overview / CalendarWidget — zbita typografia przy zachowaniu czytelności */
 .calendar-widget-compact {
-  --fc-small-font-size: 0.65rem;
+  --fc-small-font-size: 0.72rem;
 }
 
 .calendar-widget-compact .fc {
-  font-size: 11px;
-  line-height: 1.22;
+  font-size: 13px;
+  line-height: 1.26;
 }
 
 .calendar-widget-compact .fc-toolbar-title {
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   font-weight: 600;
 }
 
 .calendar-widget-compact .fc-button {
-  font-size: 0.6875rem;
-  padding: 0.15rem 0.4rem !important;
-  line-height: 1.15;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.45rem !important;
+  line-height: 1.2;
 }
 
 .calendar-widget-compact .fc-toolbar-chunk > .fc-button-group {
@@ -140,9 +140,9 @@
 }
 
 .calendar-widget-compact .fc-col-header-cell-cushion {
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  padding: 0.2rem 0.25rem;
+  padding: 0.25rem 0.35rem;
 }
 
 .calendar-widget-compact .fc-daygrid-day-frame {
@@ -150,20 +150,20 @@
 }
 
 .calendar-widget-compact .fc-daygrid-day-number {
-  font-size: 0.6875rem;
-  padding: 1px 3px;
-  line-height: 1;
+  font-size: 0.78rem;
+  padding: 2px 4px;
+  line-height: 1.1;
 }
 
 .calendar-widget-compact .fc-scrollgrid-shrink-cushion {
-  font-size: 0.65rem;
+  font-size: 0.72rem;
 }
 
 .calendar-widget-compact .fc-daygrid-event {
-  font-size: 10px !important;
-  padding: 0 2px !important;
-  margin-top: 1px !important;
-  line-height: 1.18 !important;
+  font-size: 12px !important;
+  padding: 1px 3px !important;
+  margin-top: 2px !important;
+  line-height: 1.22 !important;
   border-radius: 2px;
 }
 
@@ -172,9 +172,9 @@
 }
 
 .calendar-widget-compact .fc-daygrid-more-link {
-  font-size: 0.625rem !important;
-  padding: 1px 2px !important;
-  margin-top: 1px !important;
+  font-size: 0.71rem !important;
+  padding: 2px 3px !important;
+  margin-top: 2px !important;
 }
 
 .calendar-widget-compact .fc-daygrid-dot-event .fc-event-title {
@@ -187,28 +187,26 @@
 
 .calendar-widget-compact .fc-timegrid-slot-label-cushion,
 .calendar-widget-compact .fc-timegrid-axis-cushion {
-  font-size: 0.65rem;
+  font-size: 0.73rem;
 }
 
-/* Overview — wymagana akcja (konflikty / podwykonawcy) */
+/* Overview — wymaga akcji: puls tylko na liczbach, czerwona poświata */
 @keyframes overview-attention {
   0%,
   100% {
-    box-shadow: 0 0 0 0 hsl(145 100% 50% / 0.45);
-    opacity: 1;
+    box-shadow: 0 0 0 0 hsl(0 84% 60% / 0.55);
   }
   50% {
-    box-shadow: 0 0 0 10px hsl(145 100% 50% / 0);
-    opacity: 0.88;
+    box-shadow: 0 0 0 10px hsl(0 84% 60% / 0);
   }
 }
 
-.overview-attention-pulse {
+.overview-attention-pulse-count {
   animation: overview-attention 1.35s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .overview-attention-pulse {
+  .overview-attention-pulse-count {
     animation: none;
   }
 }

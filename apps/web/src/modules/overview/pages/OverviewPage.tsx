@@ -158,13 +158,11 @@ export default function OverviewPage() {
           onClick={() => toggleOverlay('conflicts')}
         >
           <div className="flex min-w-0 flex-1 items-center gap-2">
-            <span className={cn(conflictUnacked > 0 && 'overview-attention-pulse rounded-md p-0.5')}>
-              <AlertTriangle
-                className={cn('shrink-0', conflictUnacked > 0 ? 'text-red-500' : 'text-muted-foreground')}
-                size={20}
-                aria-hidden
-              />
-            </span>
+            <AlertTriangle
+              className={cn('shrink-0', conflictUnacked > 0 ? 'text-red-500' : 'text-muted-foreground')}
+              size={20}
+              aria-hidden
+            />
             <div className="min-w-0">
               <div className="text-base font-semibold leading-tight">Konflikty logistyczne</div>
               <p className="truncate text-xs text-muted-foreground">Lista nad kalendarzem — akceptacja = świadomość</p>
@@ -185,7 +183,7 @@ export default function OverviewPage() {
                 className={cn(
                   'inline-flex min-h-[22px] min-w-[26px] items-center justify-center rounded-full px-2 py-0.5 text-xs font-medium tabular-nums',
                   conflictUnacked > 0
-                    ? 'bg-red-500/25 text-red-200 overview-attention-pulse'
+                    ? 'bg-red-500/25 text-red-200 overview-attention-pulse-count'
                     : 'bg-surface-2 text-muted-foreground'
                 )}
               >
@@ -205,13 +203,11 @@ export default function OverviewPage() {
           onClick={() => toggleOverlay('subs')}
         >
           <div className="flex min-w-0 flex-1 items-center gap-2">
-            <span className={cn(subUnacked > 0 && 'overview-attention-pulse rounded-md p-0.5')}>
-              <Handshake
-                className={cn('shrink-0', subUnacked > 0 ? 'text-amber-400' : 'text-muted-foreground')}
-                size={20}
-                aria-hidden
-              />
-            </span>
+            <Handshake
+              className={cn('shrink-0', subUnacked > 0 ? 'text-amber-400' : 'text-muted-foreground')}
+              size={20}
+              aria-hidden
+            />
             <div className="min-w-0">
               <div className="text-base font-semibold leading-tight">Podwykonawcy i wynajmy</div>
               <p className="truncate text-xs text-muted-foreground">Do przejęcia informacyjnie</p>
@@ -231,7 +227,7 @@ export default function OverviewPage() {
               <span
                 className={cn(
                   'inline-flex min-h-[22px] min-w-[26px] items-center justify-center rounded-full px-2 py-0.5 text-xs font-medium tabular-nums',
-                  subUnacked > 0 ? 'bg-amber-500/25 text-amber-100 overview-attention-pulse' : 'bg-surface-2 text-muted-foreground'
+                  subUnacked > 0 ? 'bg-amber-500/25 text-amber-100 overview-attention-pulse-count' : 'bg-surface-2 text-muted-foreground'
                 )}
               >
                 {subUnacked}

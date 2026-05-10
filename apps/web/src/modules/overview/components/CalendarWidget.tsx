@@ -486,7 +486,7 @@ export default function CalendarWidget({
         <div className="font-heading text-sm font-semibold tracking-tight text-foreground" role="heading" aria-level={2}>
           Kalendarz wydarzeń
         </div>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
           <div className="flex items-center gap-1">
             <div className="h-2 w-2 shrink-0 rounded-full bg-[#64748b]" />
             <span>Oferta wysłana</span>
@@ -544,15 +544,15 @@ export default function CalendarWidget({
             if (stageLabel) {
               return (
                 <div className="flex min-w-0 flex-col gap-0 overflow-hidden py-px leading-snug">
-                  <span className="truncate font-medium text-[10px]" title={arg.event.title}>
+                  <span className="truncate font-medium text-[11px]" title={arg.event.title}>
                     {arg.event.title}
                   </span>
-                  <span className="truncate text-[9px] opacity-90">{stageLabel}</span>
+                  <span className="truncate text-[10px] opacity-90">{stageLabel}</span>
                 </div>
               )
             }
             return (
-              <span className="block truncate px-px py-px font-medium text-[10px] leading-tight" title={arg.event.title}>
+              <span className="block truncate px-px py-px font-medium text-[11px] leading-snug" title={arg.event.title}>
                 {arg.event.title}
               </span>
             )
