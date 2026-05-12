@@ -1,4 +1,4 @@
-import { Plus, Search, Pencil, FileText, Trash2 } from 'lucide-react'
+import { Plus, Search, Pencil, FileText, Trash2, ChevronRight } from 'lucide-react'
 import { useOrders, useDeleteOrder, useUpdateOrder } from '../hooks/useOrders'
 import { Link, useSearchParams } from 'react-router-dom'
 import { format } from 'date-fns'
@@ -34,6 +34,7 @@ export default function OrdersPage() {
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(10)
   const [searchTerm, setSearchTerm] = useState('')
+  const [openStatusOrderId, setOpenStatusOrderId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<Order['status'] | 'all'>(() =>
     statusFromUrl && VALID_STATUSES.includes(statusFromUrl as any) ? (statusFromUrl as Order['status']) : 'all'
   )
@@ -98,10 +99,22 @@ export default function OrdersPage() {
   const handleStatusChange = async (orderId: string, status: Order['status']) => {
     try {
       await updateMutation.mutateAsync({ id: orderId, data: { status } })
+      setOpenStatusOrderId(null)
     } catch {
       // Błąd jest obsługiwany globalnie przez interceptor API.
     }
   }
+
+  useEffect(() => {
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null
+      if (!target) return
+      if (target.closest('[data-status-menu-root="true"]')) return
+      setOpenStatusOrderId(null)
+    }
+    window.addEventListener('mousedown', onPointerDown)
+    return () => window.removeEventListener('mousedown', onPointerDown)
+  }, [])
 
 
   if (isLoading) {
@@ -216,24 +229,34 @@ export default function OrdersPage() {
                         </div>
                       </td>
                       <td className="py-2 px-3">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`px-2 py-0.5 text-xs rounded-full ${(statusColors as Record<string, string>)[order.status] || 'bg-gray-500/20 text-gray-500'}`}
+                        <div className="relative inline-block" data-status-menu-root="true">
+                          <button
+                            type="button"
+                            onClick={() => setOpenStatusOrderId((prev) => (prev === order.id ? null : order.id))}
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full border border-transparent hover:border-border transition-colors ${(statusColors as Record<string, string>)[order.status] || 'bg-gray-500/20 text-gray-500'}`}
                           >
                             {(statusLabels as Record<string, string>)[order.status] || order.status}
-                          </span>
-                          <select
-                            value={order.status}
-                            disabled={updateMutation.isPending}
-                            onChange={(e) => handleStatusChange(order.id, e.target.value as Order['status'])}
-                            className="px-2 py-1 bg-background border border-border rounded text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:opacity-60"
-                          >
-                            {ORDER_STATUSES.map((s) => (
-                              <option key={s} value={s}>
-                                {statusLabels[s]}
-                              </option>
-                            ))}
-                          </select>
+                            <ChevronRight size={12} className={`${openStatusOrderId === order.id ? 'rotate-90' : ''} transition-transform`} />
+                          </button>
+                          {openStatusOrderId === order.id && (
+                            <div className="absolute left-full top-1/2 z-30 ml-2 -translate-y-1/2 min-w-[170px] rounded-md border border-border bg-surface shadow-xl p-1">
+                              {ORDER_STATUSES.map((s) => (
+                                <button
+                                  key={s}
+                                  type="button"
+                                  disabled={updateMutation.isPending || s === order.status}
+                                  onClick={() => handleStatusChange(order.id, s)}
+                                  className={`w-full text-left px-2 py-1 text-xs rounded transition-colors ${
+                                    s === order.status
+                                      ? 'bg-primary/15 text-primary'
+                                      : 'hover:bg-surface-2 text-foreground'
+                                  } disabled:opacity-60 disabled:cursor-not-allowed`}
+                                >
+                                  {statusLabels[s]}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td className="py-2 px-3">

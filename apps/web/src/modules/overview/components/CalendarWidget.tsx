@@ -581,9 +581,15 @@ export default function CalendarWidget({
           >
             <div className="px-2 py-1.5 text-xs text-muted-foreground">{eventMenu.event.title}</div>
             {eventMenu.event.extendedProps.kind === 'order' && eventMenu.event.extendedProps.orderId && (
-              <div className="border-t border-border my-1 pt-1">
-                <div className="px-2 py-1 text-[11px] uppercase tracking-wide text-muted-foreground">Zmień status</div>
-                <div className="grid grid-cols-2 gap-1 px-1 pb-1">
+              <div className="relative group/status-menu">
+                <button
+                  type="button"
+                  className="w-full text-left px-2 py-1.5 text-sm hover:bg-surface-2 rounded flex items-center justify-between gap-2"
+                >
+                  <span>Zmień status</span>
+                  <span className="text-muted-foreground">▸</span>
+                </button>
+                <div className="hidden group-hover/status-menu:block absolute left-full top-0 ml-1 min-w-[170px] rounded-md border border-border bg-surface shadow-xl p-1 z-50">
                   {orderStatusOptions.map((status) => {
                     const orderId = eventMenu.event.extendedProps.orderId as string
                     const current = orderById.get(orderId)?.status
@@ -593,10 +599,10 @@ export default function CalendarWidget({
                         key={status}
                         type="button"
                         disabled={updateOrderMutation.isPending || isActive}
-                        className={`px-2 py-1 text-xs rounded border transition-colors text-left ${
+                        className={`w-full text-left px-2 py-1 text-xs rounded transition-colors ${
                           isActive
-                            ? 'border-primary/60 bg-primary/15 text-primary'
-                            : 'border-border hover:bg-surface-2 text-foreground'
+                            ? 'bg-primary/15 text-primary'
+                            : 'hover:bg-surface-2 text-foreground'
                         } disabled:opacity-60 disabled:cursor-not-allowed`}
                         onClick={async () => {
                           try {
