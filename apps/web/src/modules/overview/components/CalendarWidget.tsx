@@ -8,10 +8,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react'
-import { useOrders, useDeleteOrder } from '../../orders/hooks/useOrders'
+import { useOrders, useDeleteOrder, useUpdateOrder } from '../../orders/hooks/useOrders'
 import { useEquipment } from '../../equipment/hooks/useEquipment'
 import { api } from '../../../shared/api/client'
-import type { Order, OrderStage } from '@lama-stage/shared-types'
+import { ORDER_STATUSES, type Order, type OrderStage } from '@lama-stage/shared-types'
 
 type CalendarNoteEvent = {
   id: string
@@ -74,6 +74,7 @@ export default function CalendarWidget({
   const { data: paginatedOrders } = useOrders({ page: 1, limit: 500 })
   const { data: equipmentPaginated } = useEquipment({ page: 1, limit: 500 })
   const deleteOrderMutation = useDeleteOrder()
+  const updateOrderMutation = useUpdateOrder()
 
   const [eventMenu, setEventMenu] = useState<{ x: number; y: number; event: CalendarEvent } | null>(null)
   const [dayMenu, setDayMenu] = useState<{ x: number; y: number; date: string } | null>(null)
@@ -107,6 +108,7 @@ export default function CalendarWidget({
   const [noteError, setNoteError] = useState<string | null>(null)
 
   const orders = paginatedOrders?.data ?? []
+  const orderById = useMemo(() => new Map(orders.map((o) => [o.id, o])), [orders])
   const equipment = (equipmentPaginated?.data ?? []).filter((eq) => eq.category !== 'ZASOBY')
   const equipmentFiltered = useMemo(() => {
     if (!equipmentSearch.trim()) return equipment.slice(0, 50)
@@ -116,6 +118,16 @@ export default function CalendarWidget({
       .slice(0, 50)
   }, [equipment, equipmentSearch])
   const selectedEquipment = equipment.find((eq) => eq.id === reservationForm.equipmentId)
+
+  const orderStatusOptions = ORDER_STATUSES.filter((s) => s !== 'ARCHIVED')
+  const statusLabel: Record<(typeof ORDER_STATUSES)[number], string> = {
+    DRAFT: 'Szkic',
+    OFFER_SENT: 'Oferta wysłana',
+    CONFIRMED: 'Potwierdzone',
+    COMPLETED: 'Zakończone',
+    CANCELLED: 'Anulowane',
+    ARCHIVED: 'Zarchiwizowane',
+  }
 
   useEffect(() => {
     const equipmentId = reservationForm.equipmentId
@@ -568,6 +580,40 @@ export default function CalendarWidget({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-2 py-1.5 text-xs text-muted-foreground">{eventMenu.event.title}</div>
+            {eventMenu.event.extendedProps.kind === 'order' && eventMenu.event.extendedProps.orderId && (
+              <div className="border-t border-border my-1 pt-1">
+                <div className="px-2 py-1 text-[11px] uppercase tracking-wide text-muted-foreground">Zmień status</div>
+                <div className="grid grid-cols-2 gap-1 px-1 pb-1">
+                  {orderStatusOptions.map((status) => {
+                    const orderId = eventMenu.event.extendedProps.orderId as string
+                    const current = orderById.get(orderId)?.status
+                    const isActive = current === status
+                    return (
+                      <button
+                        key={status}
+                        type="button"
+                        disabled={updateOrderMutation.isPending || isActive}
+                        className={`px-2 py-1 text-xs rounded border transition-colors text-left ${
+                          isActive
+                            ? 'border-primary/60 bg-primary/15 text-primary'
+                            : 'border-border hover:bg-surface-2 text-foreground'
+                        } disabled:opacity-60 disabled:cursor-not-allowed`}
+                        onClick={async () => {
+                          try {
+                            await updateOrderMutation.mutateAsync({ id: orderId, data: { status } })
+                            closeMenus()
+                          } catch {
+                            // Błąd jest obsługiwany globalnie przez interceptor API.
+                          }
+                        }}
+                      >
+                        {statusLabel[status]}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
             <button
               className="w-full text-left px-2 py-1.5 text-sm hover:bg-surface-2 rounded flex items-center gap-2"
               onClick={() => {

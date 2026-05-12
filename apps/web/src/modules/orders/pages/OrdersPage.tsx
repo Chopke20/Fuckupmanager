@@ -1,5 +1,5 @@
 import { Plus, Search, Pencil, FileText, Trash2 } from 'lucide-react'
-import { useOrders, useDeleteOrder } from '../hooks/useOrders'
+import { useOrders, useDeleteOrder, useUpdateOrder } from '../hooks/useOrders'
 import { Link, useSearchParams } from 'react-router-dom'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
@@ -61,6 +61,7 @@ export default function OrdersPage() {
     status: statusFilter,
   })
   const deleteMutation = useDeleteOrder()
+  const updateMutation = useUpdateOrder()
 
   const ordersRaw = paginatedOrders?.data ?? []
   const meta = paginatedOrders?.meta
@@ -91,6 +92,14 @@ export default function OrdersPage() {
   const handleDelete = async (id: string) => {
     if (confirm('Czy na pewno chcesz usunąć to zlecenie? Zlecenie trafi do kosza.')) {
       await deleteMutation.mutateAsync(id)
+    }
+  }
+
+  const handleStatusChange = async (orderId: string, status: Order['status']) => {
+    try {
+      await updateMutation.mutateAsync({ id: orderId, data: { status } })
+    } catch {
+      // Błąd jest obsługiwany globalnie przez interceptor API.
     }
   }
 
@@ -207,11 +216,25 @@ export default function OrdersPage() {
                         </div>
                       </td>
                       <td className="py-2 px-3">
-                        <span
-                          className={`px-2 py-0.5 text-xs rounded-full ${(statusColors as Record<string, string>)[order.status] || 'bg-gray-500/20 text-gray-500'}`}
-                        >
-                          {(statusLabels as Record<string, string>)[order.status] || order.status}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`px-2 py-0.5 text-xs rounded-full ${(statusColors as Record<string, string>)[order.status] || 'bg-gray-500/20 text-gray-500'}`}
+                          >
+                            {(statusLabels as Record<string, string>)[order.status] || order.status}
+                          </span>
+                          <select
+                            value={order.status}
+                            disabled={updateMutation.isPending}
+                            onChange={(e) => handleStatusChange(order.id, e.target.value as Order['status'])}
+                            className="px-2 py-1 bg-background border border-border rounded text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:opacity-60"
+                          >
+                            {ORDER_STATUSES.map((s) => (
+                              <option key={s} value={s}>
+                                {statusLabels[s]}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </td>
                       <td className="py-2 px-3">
                         <div className="font-medium">
