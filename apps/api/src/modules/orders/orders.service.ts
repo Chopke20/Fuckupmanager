@@ -383,6 +383,125 @@ export class OrdersService {
     return normalized
   }
 
+  async duplicateOrder(id: string): Promise<OrderDetail> {
+    const source = await prisma.order.findFirst({
+      where: { id, isDeleted: false },
+      include: orderDetailInclude,
+    })
+    if (!source) {
+      throw new Error('ORDER_NOT_FOUND')
+    }
+
+    const stageIdMap = new Map<string, string>()
+    const stages = (source.stages ?? []).map((stage, idx) => {
+      const nextId = randomUUID()
+      stageIdMap.set(stage.id, nextId)
+      return {
+        id: nextId,
+        type: stage.type as 'MONTAZ' | 'EVENT' | 'DEMONTAZ' | 'CUSTOM',
+        label: stage.label ?? undefined,
+        date: stage.date,
+        timeStart: stage.timeStart ?? undefined,
+        timeEnd: stage.timeEnd ?? undefined,
+        notes: stage.notes ?? undefined,
+        sortOrder: stage.sortOrder ?? idx,
+      }
+    })
+
+    const remapStageIds = (raw: string | null | undefined): string | undefined => {
+      if (!raw) return undefined
+      try {
+        const parsed = JSON.parse(raw) as unknown
+        if (!Array.isArray(parsed)) return undefined
+        const mapped = parsed
+          .map((value) => (typeof value === 'string' ? stageIdMap.get(value) ?? value : null))
+          .filter((value): value is string => typeof value === 'string' && value.length > 0)
+        return mapped.length > 0 ? JSON.stringify(mapped) : undefined
+      } catch {
+        return undefined
+      }
+    }
+
+    const parsePricingRule = (raw: string | null | undefined): { day1: number; nextDays: number } | undefined => {
+      if (!raw) return undefined
+      try {
+        const parsed = JSON.parse(raw) as unknown
+        if (!parsed || typeof parsed !== 'object') return undefined
+        const obj = parsed as Record<string, unknown>
+        const day1 = Number(obj.day1)
+        const nextDays = Number(obj.nextDays)
+        if (!Number.isFinite(day1) || !Number.isFinite(nextDays)) return undefined
+        return { day1, nextDays }
+      } catch {
+        return undefined
+      }
+    }
+
+    const duplicated = await this.createOrder({
+      name: `${source.name} (kopia)`,
+      description: source.description ?? undefined,
+      notes: source.notes ?? undefined,
+      status: 'DRAFT',
+      venue: source.venue ?? undefined,
+      venuePlaceId: source.venuePlaceId ?? undefined,
+      startDate: source.startDate,
+      endDate: source.endDate,
+      clientId: source.clientId,
+      discountGlobal: source.discountGlobal,
+      vatRate: source.vatRate as 0 | 23,
+      offerValidityDays: source.offerValidityDays ?? 14,
+      projectContactKey: source.projectContactKey as 'RAFAL' | 'MICHAL' | undefined,
+      currency: source.currency === 'EUR' ? 'EUR' : 'PLN',
+      exchangeRateEur: source.exchangeRateEur ?? undefined,
+      isRecurring: false,
+      recurringConfig: undefined,
+      parentOrderId: undefined,
+      stages,
+      equipmentItems: (source.equipmentItems ?? []).map((item, idx) => ({
+        name: item.name,
+        description: item.description ?? undefined,
+        category: item.category ?? 'Inne',
+        quantity: item.quantity ?? 1,
+        unitPrice: item.unitPrice ?? 0,
+        days: item.days ?? 1,
+        discount: item.discount ?? 0,
+        pricingRule: parsePricingRule(item.pricingRule),
+        visibleInOffer: item.visibleInOffer ?? true,
+        isRental: item.isRental ?? false,
+        externalConfirmationStatus: undefined,
+        externalConfirmationDeadline: undefined,
+        externalConfirmedAt: undefined,
+        sortOrder: item.sortOrder ?? idx,
+        marginRentalUnits: item.marginRentalUnits ?? undefined,
+        marginRentalUnitCostNet: item.marginRentalUnitCostNet ?? undefined,
+        dateFrom: (item.dateFrom ?? source.startDate).toISOString(),
+        dateTo: (item.dateTo ?? source.endDate).toISOString(),
+        equipmentId: item.equipmentId ?? undefined,
+      })),
+      productionItems: (source.productionItems ?? []).map((item, idx) => ({
+        name: item.name,
+        description: item.description ?? undefined,
+        rateType: (item.rateType as 'DAILY' | 'HOURLY' | 'FLAT') ?? 'FLAT',
+        rateValue: Number(item.rateValue ?? 0),
+        units: Number(item.units ?? 1),
+        discount: item.discount ?? 0,
+        stageIds: remapStageIds(item.stageIds),
+        isTransport: item.isTransport ?? false,
+        isAutoCalculated: item.isAutoCalculated ?? true,
+        isSubcontractor: item.isSubcontractor ?? false,
+        externalConfirmationStatus: undefined,
+        externalConfirmationDeadline: undefined,
+        externalConfirmedAt: undefined,
+        visibleInOffer: item.visibleInOffer ?? true,
+        sortOrder: item.sortOrder ?? idx,
+        marginSubcontractorUnits: item.marginSubcontractorUnits ?? undefined,
+        marginSubcontractorUnitCostNet: item.marginSubcontractorUnitCostNet ?? undefined,
+      })),
+    })
+
+    return duplicated
+  }
+
   async updateOrder(id: string, orderData: z.infer<typeof UpdateOrderSchema>) {
     const { clientId, equipmentItems, parentOrderId, startDate, endDate, stages: stagesInput, productionItems: productionItemsInput, ...rest } = orderData;
     const stages = Array.isArray(stagesInput) ? stagesInput : [];

@@ -140,6 +140,9 @@ export const orderApi = {
   create: (data: CreateOrderDto) =>
     axios.post<{ data?: Order }>(API_BASE, data).then(res => res.data?.data ?? res.data),
 
+  duplicate: (id: string) =>
+    axios.post<{ data?: Order }>(`${API_BASE}/${id}/duplicate`).then(res => res.data?.data ?? res.data),
+
   update: (id: string, data: UpdateOrderDto) => {
     const body = JSON.parse(JSON.stringify(data)) as UpdateOrderDto;
     return axios.put<{ data?: Order }>(`${API_BASE}/${id}`, body).then(res => res.data?.data ?? res.data);

@@ -55,6 +55,20 @@ export const createOrder = (req: Request, res: Response, next: NextFunction) => 
   }
 };
 
+export const duplicateOrder = (req: Request, res: Response, next: NextFunction) => {
+  const { id } = req.params;
+  if (!id) return next(new AppError('Missing ID', 400));
+
+  ordersService.duplicateOrder(id)
+    .then(order => res.status(201).json({ success: true, data: order }))
+    .catch((error: unknown) => {
+      if (error instanceof Error && error.message === 'ORDER_NOT_FOUND') {
+        return res.status(404).json({ error: { message: 'Zlecenie nie zostało znalezione', code: 'NOT_FOUND' } });
+      }
+      next(error);
+    });
+};
+
 export const updateOrder = (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;

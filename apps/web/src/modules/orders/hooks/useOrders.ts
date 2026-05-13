@@ -44,6 +44,16 @@ export const useCreateOrder = () => {
   });
 };
 
+export const useDuplicateOrder = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: orderApi.duplicate,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: orderKeys.all });
+    },
+  });
+};
+
 export const useUpdateOrder = () => {
   const queryClient = useQueryClient();
   return useMutation({

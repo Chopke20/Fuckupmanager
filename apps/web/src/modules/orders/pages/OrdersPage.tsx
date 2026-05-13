@@ -1,6 +1,6 @@
-import { Plus, Search, Pencil, FileText, Trash2, ChevronRight } from 'lucide-react'
-import { useOrders, useDeleteOrder, useUpdateOrder } from '../hooks/useOrders'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Plus, Search, Pencil, FileText, Trash2, ChevronRight, Copy } from 'lucide-react'
+import { useOrders, useDeleteOrder, useUpdateOrder, useDuplicateOrder } from '../hooks/useOrders'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { useState, useMemo, useEffect } from 'react'
@@ -29,6 +29,7 @@ const statusLabels: Record<typeof ORDER_STATUSES[number], string> = {
 const VALID_STATUSES: Array<Order['status'] | 'all'> = ['all', 'DRAFT', 'OFFER_SENT', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'ARCHIVED']
 
 export default function OrdersPage() {
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const statusFromUrl = searchParams.get('status')
   const [page, setPage] = useState(1)
@@ -63,6 +64,7 @@ export default function OrdersPage() {
   })
   const deleteMutation = useDeleteOrder()
   const updateMutation = useUpdateOrder()
+  const duplicateMutation = useDuplicateOrder()
 
   const ordersRaw = paginatedOrders?.data ?? []
   const meta = paginatedOrders?.meta
@@ -102,6 +104,14 @@ export default function OrdersPage() {
       setOpenStatusOrderId(null)
     } catch {
       // Błąd jest obsługiwany globalnie przez interceptor API.
+    }
+  }
+
+  const handleDuplicate = async (orderId: string) => {
+    if (!confirm('Utworzyć kopię tego zlecenia?')) return
+    const duplicated = await duplicateMutation.mutateAsync(orderId)
+    if (duplicated?.id) {
+      navigate(`/orders/${duplicated.id}`)
     }
   }
 
@@ -276,6 +286,14 @@ export default function OrdersPage() {
                           >
                             <Pencil size={16} className="text-primary" />
                           </Link>
+                          <button
+                            onClick={() => handleDuplicate(order.id)}
+                            disabled={duplicateMutation.isPending}
+                            className="p-1 hover:bg-surface-3 rounded transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                            title="Duplikuj"
+                          >
+                            <Copy size={16} className="text-muted-foreground" />
+                          </button>
                           <button
                             className="p-1 hover:bg-surface-3 rounded transition-colors"
                             title="Generuj ofertę"

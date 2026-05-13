@@ -5,6 +5,7 @@ import {
   getAllOrders,
   getOrderById,
   createOrder,
+  duplicateOrder,
   updateOrder,
   deleteOrder,
   restoreOrder,
@@ -31,6 +32,7 @@ router.post('/availability', checkEquipmentAvailability);
 router.get('/conflicts', getOrderConflicts);
 router.get('/overview/conflicts', getOverviewConflicts);
 router.get('/overview/pending-external', getOverviewPendingExternal);
+router.post('/:id/duplicate', duplicateOrder);
 router.get('/:id', getOrderById);
 router.get('/:id/documents/exports', listOrderDocumentExports);
 router.get('/:id/documents/exports/:exportId', getOrderDocumentExport);
