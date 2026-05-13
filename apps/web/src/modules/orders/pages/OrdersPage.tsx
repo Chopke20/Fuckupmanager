@@ -1,4 +1,4 @@
-import { Plus, Search, Pencil, FileText, Trash2, ChevronRight, Copy } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, ChevronRight, Copy } from 'lucide-react'
 import { useOrders, useDeleteOrder, useUpdateOrder, useDuplicateOrder } from '../hooks/useOrders'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { format } from 'date-fns'
@@ -78,7 +78,21 @@ export default function OrdersPage() {
   const orders = useMemo(() => {
     const list = [...ordersRaw]
     const mult = sortDir === 'asc' ? 1 : -1
+    const compareOrderNumber = (a: Order, b: Order) => {
+      const ay = (a as any).orderYear as number | null | undefined
+      const an = (a as any).orderNumber as number | null | undefined
+      const by = (b as any).orderYear as number | null | undefined
+      const bn = (b as any).orderNumber as number | null | undefined
+      const aMissing = ay == null || an == null
+      const bMissing = by == null || bn == null
+      if (aMissing && bMissing) return 0
+      if (aMissing) return 1
+      if (bMissing) return -1
+      if (ay !== by) return (ay as number) - (by as number)
+      return (an as number) - (bn as number)
+    }
     list.sort((a, b) => {
+      if (sortBy === 'orderNumber') return mult * compareOrderNumber(a, b)
       if (sortBy === 'name') return mult * (a.name || '').localeCompare(b.name || '')
       if (sortBy === 'client') return mult * (a.client?.companyName || '').localeCompare(b.client?.companyName || '')
       if (sortBy === 'dateFrom') {
@@ -198,7 +212,7 @@ export default function OrdersPage() {
             <table className="w-full">
               <thead>
                 <tr className="bg-surface-2 border-b border-border">
-                  <th className="text-left py-2 px-3 font-medium text-sm w-24">Numer</th>
+                  <SortableTh label="Numer" sortKey="orderNumber" currentSort={sortBy} currentDir={sortDir} onSort={toggleSort} className="w-24" />
                   <SortableTh label="Nazwa zlecenia" sortKey="name" currentSort={sortBy} currentDir={sortDir} onSort={toggleSort} />
                   <SortableTh label="Klient" sortKey="client" currentSort={sortBy} currentDir={sortDir} onSort={toggleSort} />
                   <SortableTh label="Data" sortKey="dateFrom" currentSort={sortBy} currentDir={sortDir} onSort={toggleSort} />
@@ -293,12 +307,6 @@ export default function OrdersPage() {
                             title="Duplikuj"
                           >
                             <Copy size={16} className="text-muted-foreground" />
-                          </button>
-                          <button
-                            className="p-1 hover:bg-surface-3 rounded transition-colors"
-                            title="Generuj ofertę"
-                          >
-                            <FileText size={16} className="text-muted-foreground" />
                           </button>
                           <button
                             onClick={() => handleDelete(order.id)}
