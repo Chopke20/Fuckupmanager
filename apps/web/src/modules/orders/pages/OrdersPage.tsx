@@ -1,4 +1,4 @@
-import { Plus, Search, Pencil, Trash2, ChevronRight, Copy } from 'lucide-react'
+import { Plus, Search, Trash2, ChevronRight, Copy } from 'lucide-react'
 import { useOrders, useDeleteOrder, useUpdateOrder, useDuplicateOrder } from '../hooks/useOrders'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { format } from 'date-fns'
@@ -69,11 +69,13 @@ export default function OrdersPage() {
   const ordersRaw = paginatedOrders?.data ?? []
   const meta = paginatedOrders?.meta
 
-  const [sortBy, setSortBy] = useState<string>('dateFrom')
+  const [sortBy, setSortBy] = useState<string>('orderNumber')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const toggleSort = (key: string) => {
     setSortBy(key)
-    setSortDir((d) => (sortBy === key ? (d === 'asc' ? 'desc' : 'asc') : key === 'dateFrom' ? 'desc' : 'asc'))
+    setSortDir((d) =>
+      sortBy === key ? (d === 'asc' ? 'desc' : 'asc') : key === 'dateFrom' || key === 'orderNumber' ? 'desc' : 'asc'
+    )
   }
   const orders = useMemo(() => {
     const list = [...ordersRaw]
@@ -232,7 +234,12 @@ export default function OrdersPage() {
                       </td>
                       <td className="py-2 px-3">
                         <div>
-                          <div className="font-medium">{order.name}</div>
+                          <Link
+                            to={`/orders/${order.id}`}
+                            className="font-medium text-primary hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded-sm"
+                          >
+                            {order.name}
+                          </Link>
                           <div className="text-xs text-muted-foreground mt-0.5">
                             {order.venue || 'Brak miejsca'}
                           </div>
@@ -293,13 +300,6 @@ export default function OrdersPage() {
                       </td>
                       <td className="py-2 px-3">
                         <div className="flex items-center gap-1.5">
-                          <Link
-                            to={`/orders/${order.id}`}
-                            className="p-1 hover:bg-surface-3 rounded transition-colors"
-                            title="Edytuj"
-                          >
-                            <Pencil size={16} className="text-primary" />
-                          </Link>
                           <button
                             onClick={() => handleDuplicate(order.id)}
                             disabled={duplicateMutation.isPending}
