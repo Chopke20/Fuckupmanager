@@ -54,6 +54,76 @@ export class OrdersService {
     return this.isUuid(value) ? value : null
   }
 
+  private mapEquipmentItemCreate(
+    item: z.infer<typeof CreateOrderEquipmentItemSchema>,
+    orderId: string,
+    startDate: Date,
+    endDate: Date,
+  ): Prisma.OrderEquipmentItemUncheckedCreateInput {
+    return {
+      orderId,
+      name: item.name,
+      description: item.description ?? null,
+      category: item.category ?? 'Inne',
+      quantity: item.quantity ?? 1,
+      unitPrice: item.unitPrice ?? 0,
+      days: item.days ?? 1,
+      discount: item.discount ?? 0,
+      pricingRule: item.pricingRule ? JSON.stringify(item.pricingRule) : null,
+      visibleInOffer: item.visibleInOffer ?? true,
+      isRental: item.isRental ?? false,
+      externalConfirmationStatus: this.resolveExternalConfirmationStatus(
+        item.isRental ?? false,
+        item.externalConfirmationStatus ?? null,
+      ),
+      externalConfirmationDeadline: item.externalConfirmationDeadline
+        ? new Date(item.externalConfirmationDeadline)
+        : this.getDefaultExternalConfirmationDeadline(item.dateFrom ? new Date(item.dateFrom) : startDate),
+      externalConfirmedAt: item.externalConfirmedAt ? new Date(item.externalConfirmedAt) : null,
+      sortOrder: item.sortOrder ?? 0,
+      marginRentalUnits: item.marginRentalUnits ?? null,
+      marginRentalUnitCostNet: item.marginRentalUnitCostNet ?? null,
+      dateFrom: item.dateFrom ? new Date(item.dateFrom) : startDate,
+      dateTo: item.dateTo ? new Date(item.dateTo) : endDate,
+      equipmentId: item.equipmentId ?? null,
+      offerBlockId: this.resolveOfferBlockId(item.offerBlockId),
+    }
+  }
+
+  private mapProductionItemCreate(
+    item: z.infer<typeof CreateOrderProductionItemSchema>,
+    orderId: string,
+    startDate: Date,
+    idx: number,
+  ): Prisma.OrderProductionItemUncheckedCreateInput {
+    return {
+      orderId,
+      name: item.name,
+      description: item.description ?? null,
+      rateType: item.rateType ?? 'FLAT',
+      rateValue: item.rateValue ?? 0,
+      units: item.units ?? 1,
+      discount: item.discount ?? 0,
+      stageIds: item.stageIds ?? null,
+      isTransport: item.isTransport ?? false,
+      isAutoCalculated: item.isAutoCalculated ?? true,
+      isSubcontractor: item.isSubcontractor ?? false,
+      externalConfirmationStatus: this.resolveExternalConfirmationStatus(
+        item.isSubcontractor ?? false,
+        item.externalConfirmationStatus ?? null,
+      ),
+      externalConfirmationDeadline: item.externalConfirmationDeadline
+        ? new Date(item.externalConfirmationDeadline)
+        : this.getDefaultExternalConfirmationDeadline(startDate),
+      externalConfirmedAt: item.externalConfirmedAt ? new Date(item.externalConfirmedAt) : null,
+      visibleInOffer: item.visibleInOffer ?? true,
+      sortOrder: item.sortOrder ?? idx,
+      marginSubcontractorUnits: item.marginSubcontractorUnits ?? null,
+      marginSubcontractorUnitCostNet: item.marginSubcontractorUnitCostNet ?? null,
+      offerBlockId: this.resolveOfferBlockId(item.offerBlockId),
+    }
+  }
+
   private assertOfferBlocksValid(
     offerBlocks: z.infer<typeof UpdateOrderOfferBlockItemSchema>[] | undefined,
     equipmentItems: Array<{ offerBlockId?: string | null }> | undefined,
@@ -344,6 +414,11 @@ export class OrdersService {
     const blockRows = Array.isArray(offerBlocks) ? offerBlocks : []
     this.assertOfferBlocksValid(blockRows, equipmentItems, productionItems)
 
+    const equipmentRows = Array.isArray(equipmentItems) ? equipmentItems : []
+    const productionRows = Array.isArray(productionItems) ? productionItems : []
+    const rangeStart = startDate ? new Date(startDate) : new Date()
+    const rangeEnd = endDate ? new Date(endDate) : rangeStart
+
     const data: Prisma.OrderUncheckedCreateInput = {
       ...rest,
       dateFrom: startDate,
@@ -356,62 +431,6 @@ export class OrdersService {
       projectContactKey: projectContactKey ?? null,
       currency: currency ?? 'PLN',
       exchangeRateEur: exchangeRateEur ?? null,
-      equipmentItems: {
-        create: equipmentItems ? equipmentItems.map((item: z.infer<typeof CreateOrderEquipmentItemSchema>) => ({
-          name: item.name,
-          description: item.description ?? null,
-          category: item.category ?? 'Inne',
-          quantity: item.quantity ?? 1,
-          unitPrice: item.unitPrice ?? 0,
-          days: item.days ?? 1,
-          discount: item.discount ?? 0,
-          pricingRule: item.pricingRule ? JSON.stringify(item.pricingRule) : null,
-          visibleInOffer: item.visibleInOffer ?? true,
-          isRental: item.isRental ?? false,
-          externalConfirmationStatus: this.resolveExternalConfirmationStatus(
-            item.isRental ?? false,
-            item.externalConfirmationStatus ?? null
-          ),
-          externalConfirmationDeadline: item.externalConfirmationDeadline
-            ? new Date(item.externalConfirmationDeadline)
-            : this.getDefaultExternalConfirmationDeadline(item.dateFrom ? new Date(item.dateFrom) : startDate),
-          externalConfirmedAt: item.externalConfirmedAt ? new Date(item.externalConfirmedAt) : null,
-          sortOrder: item.sortOrder ?? 0,
-          marginRentalUnits: item.marginRentalUnits ?? null,
-          marginRentalUnitCostNet: item.marginRentalUnitCostNet ?? null,
-          dateFrom: item.dateFrom ? new Date(item.dateFrom) : startDate,
-          dateTo: item.dateTo ? new Date(item.dateTo) : endDate,
-          equipmentId: item.equipmentId ?? null,
-          offerBlockId: this.resolveOfferBlockId(item.offerBlockId),
-        })) : [],
-      },
-      productionItems: {
-        create: productionItems ? productionItems.map((item: z.infer<typeof CreateOrderProductionItemSchema>, idx: number) => ({
-          name: item.name,
-          description: item.description ?? null,
-          rateType: item.rateType ?? 'FLAT',
-          rateValue: item.rateValue ?? 0,
-          units: item.units ?? 1,
-          discount: item.discount ?? 0,
-          stageIds: item.stageIds ?? null,
-          isTransport: item.isTransport ?? false,
-          isAutoCalculated: item.isAutoCalculated ?? true,
-          isSubcontractor: item.isSubcontractor ?? false,
-          externalConfirmationStatus: this.resolveExternalConfirmationStatus(
-            item.isSubcontractor ?? false,
-            item.externalConfirmationStatus ?? null
-          ),
-          externalConfirmationDeadline: item.externalConfirmationDeadline
-            ? new Date(item.externalConfirmationDeadline)
-            : this.getDefaultExternalConfirmationDeadline(startDate),
-          externalConfirmedAt: item.externalConfirmedAt ? new Date(item.externalConfirmedAt) : null,
-          visibleInOffer: item.visibleInOffer ?? true,
-          sortOrder: item.sortOrder ?? idx,
-          marginSubcontractorUnits: item.marginSubcontractorUnits ?? null,
-          marginSubcontractorUnitCostNet: item.marginSubcontractorUnitCostNet ?? null,
-          offerBlockId: this.resolveOfferBlockId(item.offerBlockId),
-        })) : [],
-      },
     };
 
     const orderYear = this.getOrderYear();
@@ -448,6 +467,20 @@ export class OrdersService {
       }
       if (blockRows.length > 0) {
         await this.syncOfferBlocks(tx, order.id, blockRows)
+      }
+      if (equipmentRows.length > 0) {
+        await tx.orderEquipmentItem.createMany({
+          data: equipmentRows.map((item) =>
+            this.mapEquipmentItemCreate(item, order.id, rangeStart, rangeEnd),
+          ),
+        })
+      }
+      if (productionRows.length > 0) {
+        await tx.orderProductionItem.createMany({
+          data: productionRows.map((item, idx) =>
+            this.mapProductionItemCreate(item, order.id, rangeStart, idx),
+          ),
+        })
       }
       return order.id
     })
@@ -638,33 +671,16 @@ export class OrdersService {
         ? {
             equipmentItems: {
               deleteMany: {},
-              create: equipmentItems.map((item: z.infer<typeof CreateOrderEquipmentItemSchema>) => ({
-                name: item.name,
-                description: item.description ?? null,
-                category: item.category ?? 'Inne',
-                quantity: item.quantity ?? 1,
-                unitPrice: item.unitPrice ?? 0,
-                days: item.days ?? 1,
-                discount: item.discount ?? 0,
-                pricingRule: item.pricingRule ? JSON.stringify(item.pricingRule) : null,
-                visibleInOffer: item.visibleInOffer ?? true,
-                isRental: item.isRental ?? false,
-                externalConfirmationStatus: this.resolveExternalConfirmationStatus(
-                  item.isRental ?? false,
-                  item.externalConfirmationStatus ?? null
-                ),
-                externalConfirmationDeadline: item.externalConfirmationDeadline
-                  ? new Date(item.externalConfirmationDeadline)
-                  : this.getDefaultExternalConfirmationDeadline(item.dateFrom ? new Date(item.dateFrom) : startDate),
-                externalConfirmedAt: item.externalConfirmedAt ? new Date(item.externalConfirmedAt) : null,
-                sortOrder: item.sortOrder ?? 0,
-                marginRentalUnits: item.marginRentalUnits ?? null,
-                marginRentalUnitCostNet: item.marginRentalUnitCostNet ?? null,
-                dateFrom: item.dateFrom ? new Date(item.dateFrom) : startDate,
-                dateTo: item.dateTo ? new Date(item.dateTo) : endDate,
-                equipmentId: item.equipmentId ?? null,
-                offerBlockId: this.resolveOfferBlockId(item.offerBlockId),
-              })),
+              create: equipmentItems.map((item: z.infer<typeof CreateOrderEquipmentItemSchema>) => {
+                const row = this.mapEquipmentItemCreate(
+                  item,
+                  id,
+                  startDate ? new Date(startDate) : new Date(),
+                  endDate ? new Date(endDate) : startDate ? new Date(startDate) : new Date(),
+                )
+                const { orderId: _oid, ...withoutOrderId } = row
+                return withoutOrderId
+              }),
             },
           }
         : {}),
@@ -672,11 +688,11 @@ export class OrdersService {
     };
 
     const updated = await prisma.$transaction(async (tx) => {
-      const order = await tx.order.update({ where: { id }, data });
-
       if (offerBlocks !== undefined) {
         await this.syncOfferBlocks(tx, id, offerBlocks)
       }
+
+      const order = await tx.order.update({ where: { id }, data });
 
       if (stagesInput !== undefined) {
         const currentStages = await tx.orderStage.findMany({ where: { orderId: id }, orderBy: { sortOrder: 'asc' } });

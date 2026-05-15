@@ -91,11 +91,23 @@ export const errorMiddleware = (
       })
     }
     if (err.code === 'P2003') {
+      const field = typeof err.meta?.field_name === 'string' ? err.meta.field_name : ''
+      const isOfferBlock =
+        field.includes('offerBlockId') || field.includes('order_offer_blocks')
+      const isClient = field.includes('clientId')
+      let message =
+        'Błąd spójności danych — powiązany rekord nie istnieje w bazie (np. klient, blok oferty lub sprzęt). Odśwież formularz i spróbuj ponownie.'
+      if (isOfferBlock) {
+        message =
+          'Nie udało się zapisać bloku oferty — odśwież stronę i spróbuj ponownie. Jeśli problem wraca, sprawdź migracje bazy (order_offer_blocks).'
+      } else if (isClient) {
+        message = 'Wybrany klient nie istnieje w bazie — wybierz klienta ponownie lub odśwież listę klientów.'
+      }
       return res.status(400).json({
         error: {
-          message:
-            'Błąd spójności danych (np. konto zapraszającego nie istnieje w bazie). Zaloguj się ponownie lub uruchom migracje Prisma.',
+          message,
           code: 'FOREIGN_KEY_VIOLATION',
+          ...(process.env.NODE_ENV !== 'production' && field ? { field } : {}),
         },
         requestId,
       })
