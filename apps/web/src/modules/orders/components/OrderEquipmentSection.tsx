@@ -1,11 +1,19 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Trash2, Eye, EyeOff, Copy, AlertCircle, CheckCircle2, XCircle, X, Plus, Info } from 'lucide-react'
-import { OrderEquipmentItem, Equipment } from '@lama-stage/shared-types'
+import { OrderEquipmentItem, Equipment, ORDER_LINE_DESCRIPTION_MAX_LENGTH, clampOrderLineDescription } from '@lama-stage/shared-types'
 import { useEquipment } from '../../equipment/hooks/useEquipment'
 import { orderApi, EquipmentAvailabilityItem } from '../api/order.api'
+import {
+  orderLineDescriptionInputClass,
+  orderLineNameInputClass,
+  orderLineNamePlaceholder,
+} from '../utils/orderLineItemFieldStyles'
+import OrderLineBlockSelect, { type OfferBlockOption } from './OrderLineBlockSelect'
+
 interface OrderEquipmentSectionProps {
   items: Partial<OrderEquipmentItem>[]
   onChange: (items: Partial<OrderEquipmentItem>[]) => void
+  offerBlocks?: OfferBlockOption[]
   /** Jeśli edytujemy zlecenie – wyklucz je z konfliktów */
   excludeOrderId?: string
   orderDateFrom?: string
@@ -24,7 +32,9 @@ export default function OrderEquipmentSection({
   orderDateFrom,
   orderDateTo,
   orderSpanDays = 1,
+  offerBlocks = [],
 }: OrderEquipmentSectionProps) {
+  const showBlockColumn = offerBlocks.length > 0
   const normalizeCategoryName = (value: string): string => {
     const normalized = value.trim()
     const upper = normalized.toUpperCase()
@@ -301,6 +311,9 @@ export default function OrderEquipmentSection({
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-28">Netto</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-16" title="Wynajem – bez marży">Rental</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-36">Dostępność</th>
+                {showBlockColumn && (
+                  <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-28">Blok</th>
+                )}
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-20">Oferta</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-20">Akcje</th>
               </tr>
@@ -321,7 +334,8 @@ export default function OrderEquipmentSection({
                         <input
                           list="equipment-datalist"
                           type="text"
-                          className="w-full px-2 py-0.5 text-sm bg-transparent border border-transparent hover:border-border rounded focus:border-primary focus:outline-none"
+                          className={orderLineNameInputClass}
+                          placeholder={orderLineNamePlaceholder}
                           value={item.name || ''}
                           onChange={(e) => updateItem(index, { name: e.target.value })}
                           onBlur={(e) => {
@@ -333,10 +347,13 @@ export default function OrderEquipmentSection({
                         />
                         <input
                           type="text"
-                          className="w-full px-2 py-0.5 text-sm bg-transparent border border-transparent hover:border-border rounded focus:border-primary focus:outline-none text-muted-foreground mt-1"
+                          maxLength={ORDER_LINE_DESCRIPTION_MAX_LENGTH}
+                          className={orderLineDescriptionInputClass}
                           value={item.description || ''}
-                          onChange={(e) => updateItem(index, { description: e.target.value })}
-                          placeholder="Opis (opcjonalnie)"
+                          onChange={(e) =>
+                            updateItem(index, { description: clampOrderLineDescription(e.target.value) })
+                          }
+                          placeholder={`Opis w ofercie (max ${ORDER_LINE_DESCRIPTION_MAX_LENGTH} znaków)`}
                         />
                       </div>
                     </td>
@@ -440,6 +457,15 @@ export default function OrderEquipmentSection({
                         <Info size={14} />
                       </button>
                     </td>
+                    {showBlockColumn && (
+                      <td className="py-1 px-2 whitespace-nowrap">
+                        <OrderLineBlockSelect
+                          blocks={offerBlocks}
+                          value={item.offerBlockId}
+                          onChange={(offerBlockId) => updateItem(index, { offerBlockId })}
+                        />
+                      </td>
+                    )}
                     <td className="py-1 px-2 whitespace-nowrap">
                       <button
                         type="button"

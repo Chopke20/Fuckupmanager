@@ -291,6 +291,7 @@ export const createOrderDocumentExport = async (req: Request, res: Response, nex
       include: {
         client: true,
         stages: { orderBy: { sortOrder: 'asc' } },
+        offerBlocks: { orderBy: { sortOrder: 'asc' } },
         equipmentItems: {
           include: { equipment: true },
           orderBy: { sortOrder: 'asc' },

@@ -50,6 +50,7 @@ export type OrderForOfferPipeline = Prisma.OrderGetPayload<{
   include: {
     client: true
     stages: { orderBy: { sortOrder: 'asc' } }
+    offerBlocks: { orderBy: { sortOrder: 'asc' } }
     equipmentItems: {
       include: { equipment: true }
       orderBy: { sortOrder: 'asc' }
@@ -184,6 +185,7 @@ function normalizeEquipmentForSnapshot(items: OrderForOfferPipeline['equipmentIt
     visibleInOffer: e.visibleInOffer ?? true,
     isRental: e.isRental ?? false,
     sortOrder: e.sortOrder ?? 0,
+    offerBlockId: e.offerBlockId ?? undefined,
     dateFrom: e.dateFrom ? e.dateFrom.toISOString() : undefined,
     dateTo: e.dateTo ? e.dateTo.toISOString() : undefined,
     createdAt: e.createdAt.toISOString(),
@@ -207,8 +209,20 @@ function normalizeProductionForSnapshot(items: OrderForOfferPipeline['production
     isSubcontractor: p.isSubcontractor ?? false,
     visibleInOffer: p.visibleInOffer ?? true,
     sortOrder: p.sortOrder ?? 0,
+    offerBlockId: p.offerBlockId ?? undefined,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
+  }))
+}
+
+function normalizeOfferBlocksForSnapshot(blocks: OrderForOfferPipeline['offerBlocks']) {
+  return (blocks ?? []).map((b) => ({
+    id: b.id,
+    orderId: b.orderId,
+    title: b.title,
+    sortOrder: b.sortOrder ?? 0,
+    createdAt: b.createdAt.toISOString(),
+    updatedAt: b.updatedAt.toISOString(),
   }))
 }
 
@@ -255,6 +269,7 @@ export function buildOrderOfferSnapshotFromOrder(
     isRecurring: order.isRecurring,
     recurringConfig: order.recurringConfig ?? undefined,
     stages: normalizeStagesForSnapshot(order.stages),
+    offerBlocks: normalizeOfferBlocksForSnapshot(order.offerBlocks),
     equipmentItems: normalizeEquipmentForSnapshot(order.equipmentItems),
     productionItems: normalizeProductionForSnapshot(order.productionItems),
     documentDraft: frozenDraft as Record<string, unknown>,
@@ -306,6 +321,7 @@ export function orderOfferSnapshotToPdfOrderLike(snapshot: OrderOfferSnapshot): 
     projectContactKey: snapshot.projectContactKey as string | null | undefined,
     client: snapshot.client as OrderLike['client'],
     stages: snapshot.stages as OrderLike['stages'],
+    offerBlocks: ((snapshot as { offerBlocks?: OrderLike['offerBlocks'] }).offerBlocks ?? []) as OrderLike['offerBlocks'],
     equipmentItems: snapshot.equipmentItems as OrderLike['equipmentItems'],
     productionItems: snapshot.productionItems as OrderLike['productionItems'],
     offerIssuer,

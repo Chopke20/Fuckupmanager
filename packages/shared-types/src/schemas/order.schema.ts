@@ -2,6 +2,13 @@ import { z } from 'zod';
 import { ClientSchema } from './client.schema';
 import { EquipmentSchema } from './equipment.schema';
 import { PaginatedResponseSchema } from './common.schema';
+import { ORDER_LINE_DESCRIPTION_MAX_LENGTH } from '../constants/orderLineDescription';
+import { ORDER_OFFER_BLOCK_TITLE_MAX_LENGTH } from '../constants/orderOfferBlock';
+
+const orderLineDescriptionSchema = z
+  .string()
+  .max(ORDER_LINE_DESCRIPTION_MAX_LENGTH, `Opis może mieć maksymalnie ${ORDER_LINE_DESCRIPTION_MAX_LENGTH} znaków`)
+  .optional();
 
 export const ORDER_STATUSES = [
   'DRAFT',
@@ -53,13 +60,36 @@ export const CreateOrderStageSchema = OrderStageSchema.omit({
 
 export const UpdateOrderStageSchema = CreateOrderStageSchema.partial();
 
+export const OrderOfferBlockSchema = z.object({
+  id: z.string().uuid(),
+  orderId: z.string().uuid(),
+  title: z
+    .string()
+    .min(1, 'Tytuł bloku jest wymagany')
+    .max(ORDER_OFFER_BLOCK_TITLE_MAX_LENGTH, `Tytuł bloku może mieć maksymalnie ${ORDER_OFFER_BLOCK_TITLE_MAX_LENGTH} znaków`),
+  sortOrder: z.number().int().default(0),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+
+export const CreateOrderOfferBlockSchema = OrderOfferBlockSchema.omit({
+  id: true,
+  orderId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const UpdateOrderOfferBlockItemSchema = CreateOrderOfferBlockSchema.extend({
+  id: z.string().uuid(),
+});
+
 export const OrderEquipmentItemSchema = z.object({
   id: z.string().uuid(),
   orderId: z.string().uuid(),
   equipmentId: z.string().uuid().optional(),
   equipment: EquipmentSchema.optional(),
   name: z.string().min(1, 'Nazwa jest wymagana'),
-  description: z.string().optional(),
+  description: orderLineDescriptionSchema,
   category: z.string().default('Inne'),
   quantity: z.number().int().positive('Ilość musi być dodatnia'),
   unitPrice: z.number().nonnegative('Cena jednostkowa nie może być ujemna'),
@@ -75,6 +105,7 @@ export const OrderEquipmentItemSchema = z.object({
   externalConfirmationDeadline: z.string().datetime().nullable().optional(),
   externalConfirmedAt: z.string().datetime().nullable().optional(),
   sortOrder: z.number().int().default(0),
+  offerBlockId: z.string().uuid().nullable().optional(),
   /** Opcjonalny koszt marży: ilość × koszt netto / jedn.; oba puste = cały netto pozycji jak dotąd */
   marginRentalUnits: z.number().nonnegative().nullable().optional(),
   marginRentalUnitCostNet: z.number().nonnegative().nullable().optional(),
@@ -116,7 +147,7 @@ export const OrderProductionItemSchema = z.object({
   id: z.string().uuid(),
   orderId: z.string().uuid(),
   name: z.string().min(1, 'Nazwa jest wymagana'),
-  description: z.string().optional(),
+  description: orderLineDescriptionSchema,
   rateType: ProductionRateTypeSchema.default('FLAT'),
   rateValue: z.number().nonnegative('Stawka nie może być ujemna'),
   units: z.number().positive('Liczba jednostek musi być dodatnia').default(1),
@@ -130,6 +161,7 @@ export const OrderProductionItemSchema = z.object({
   externalConfirmedAt: z.string().datetime().nullable().optional(),
   visibleInOffer: z.boolean().default(true),
   sortOrder: z.number().int().default(0),
+  offerBlockId: z.string().uuid().nullable().optional(),
   /** Opcjonalny koszt marży podwykonawcy: jednostki × koszt netto / jedn.; oba puste = cały netto pozycji */
   marginSubcontractorUnits: z.number().nonnegative().nullable().optional(),
   marginSubcontractorUnitCostNet: z.number().nonnegative().nullable().optional(),
@@ -178,6 +210,7 @@ export const OrderSchema: z.ZodType<any> = z.lazy(() =>
     parentOrder: OrderSchema.optional(),
     childOrders: z.array(OrderSchema).optional(),
     stages: z.array(OrderStageSchema).default([]),
+    offerBlocks: z.array(OrderOfferBlockSchema).default([]),
     equipmentItems: z.array(OrderEquipmentItemSchema).default([]),
     productionItems: z.array(OrderProductionItemSchema).default([]),
     createdAt: z.string().datetime(),
@@ -205,6 +238,7 @@ export const CreateOrderSchema = z.object({
   recurringConfig: z.string().optional(),
   parentOrderId: z.string().uuid().optional(),
   stages: z.array(CreateOrderStageSchema).optional(),
+  offerBlocks: z.array(UpdateOrderOfferBlockItemSchema).optional(),
   equipmentItems: z.array(CreateOrderEquipmentItemSchema).optional(),
   productionItems: z.array(CreateOrderProductionItemSchema).optional(),
 });
@@ -224,6 +258,7 @@ export const UpdateOrderSchema = CreateOrderSchema.omit({
   .partial()
   .extend({
     stages: z.array(UpdateOrderStageItemSchema).optional(),
+    offerBlocks: z.array(UpdateOrderOfferBlockItemSchema).optional(),
     productionItems: z.array(UpdateOrderProductionItemItemSchema).optional(),
   });
 
@@ -232,6 +267,9 @@ export type CreateOrderDto = z.infer<typeof CreateOrderSchema>;
 export type UpdateOrderDto = z.infer<typeof UpdateOrderSchema>;
 export type OrderStatus = z.infer<typeof OrderStatusSchema>;
 export type OrderStage = z.infer<typeof OrderStageSchema>;
+export type OrderOfferBlock = z.infer<typeof OrderOfferBlockSchema>;
+export type CreateOrderOfferBlockDto = z.infer<typeof CreateOrderOfferBlockSchema>;
+export type UpdateOrderOfferBlockItemDto = z.infer<typeof UpdateOrderOfferBlockItemSchema>;
 export type CreateOrderStageDto = z.infer<typeof CreateOrderStageSchema>;
 export type UpdateOrderStageDto = z.infer<typeof UpdateOrderStageSchema>;
 export type OrderEquipmentItem = z.infer<typeof OrderEquipmentItemSchema>;

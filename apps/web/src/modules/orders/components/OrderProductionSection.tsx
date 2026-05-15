@@ -1,9 +1,20 @@
 import { useEffect } from 'react'
 import { Trash2, Eye, EyeOff, Plus } from 'lucide-react'
-import { OrderProductionItem, OrderStage } from '@lama-stage/shared-types'
+import {
+  OrderProductionItem,
+  OrderStage,
+  ORDER_LINE_DESCRIPTION_MAX_LENGTH,
+  clampOrderLineDescription,
+} from '@lama-stage/shared-types'
 import { useEquipment } from '../../equipment/hooks/useEquipment'
 import { randomClientUuid } from '../../../shared/utils/uuid'
 import { stageToDisplayLabel } from '../utils/stageLabel'
+import {
+  orderLineDescriptionInputClass,
+  orderLineNameInputClass,
+  orderLineNamePlaceholder,
+} from '../utils/orderLineItemFieldStyles'
+import OrderLineBlockSelect, { type OfferBlockOption } from './OrderLineBlockSelect'
 
 function stageDisplayName(stage: Partial<OrderStage>) {
   return stageToDisplayLabel(stage)
@@ -13,13 +24,16 @@ interface OrderProductionSectionProps {
   items: Partial<OrderProductionItem>[]
   stages: Partial<OrderStage>[]
   onChange: (items: Partial<OrderProductionItem>[]) => void
+  offerBlocks?: OfferBlockOption[]
 }
 
 export default function OrderProductionSection({
   items = [],
   stages = [],
   onChange,
+  offerBlocks = [],
 }: OrderProductionSectionProps) {
+  const showBlockColumn = offerBlocks.length > 0
   const { data: paginatedResources } = useEquipment({ category: 'ZASOBY', limit: 200, page: 1 })
   const resources = paginatedResources?.data || []
   const findResourceByName = (name: string) => {
@@ -48,8 +62,10 @@ export default function OrderProductionSection({
     if (hasChanges) onChange(nextItems)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resources])
-  const addEmptyRow = () => {
-    const newItem: Partial<OrderProductionItem> = {
+  const addEmptyRows = (count: number) => {
+    const safeCount = Math.max(1, Math.floor(count))
+    const baseSort = items.length
+    const newItems: Partial<OrderProductionItem>[] = Array.from({ length: safeCount }, (_, idx) => ({
       id: randomClientUuid(),
       orderId: '',
       name: '',
@@ -63,11 +79,11 @@ export default function OrderProductionSection({
       isAutoCalculated: false,
       isSubcontractor: false,
       visibleInOffer: true,
-      sortOrder: items.length,
+      sortOrder: baseSort + idx,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-    }
-    onChange([...items, newItem])
+    }))
+    onChange([...items, ...newItems])
   }
 
   const updateItem = (index: number, updates: Partial<OrderProductionItem>) => {
@@ -130,6 +146,9 @@ export default function OrderProductionSection({
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-40">Etap</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-28">Netto</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-16">Podw.</th>
+                {showBlockColumn && (
+                  <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-28">Blok</th>
+                )}
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-20">Oferta</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-20">Akcje</th>
               </tr>
@@ -144,7 +163,7 @@ export default function OrderProductionSection({
                       <input
                         type="text"
                         list="production-datalist"
-                        className="w-full min-w-0 px-2 py-1 text-xs bg-background border border-border rounded"
+                        className={orderLineNameInputClass}
                         value={item.name || ''}
                         onChange={(e) => updateItem(index, { name: e.target.value })}
                         onBlur={(e) => {
@@ -153,10 +172,22 @@ export default function OrderProductionSection({
                           updateItem(index, {
                             name: matched.name,
                             rateValue: Number(matched.dailyPrice) || 0,
-                            description: item.description || matched.description || '',
+                            description: clampOrderLineDescription(
+                              item.description || matched.description || ''
+                            ),
                           })
                         }}
-                        placeholder="Nazwa lub wybierz z listy"
+                        placeholder={orderLineNamePlaceholder}
+                      />
+                      <input
+                        type="text"
+                        maxLength={ORDER_LINE_DESCRIPTION_MAX_LENGTH}
+                        className={orderLineDescriptionInputClass}
+                        value={item.description || ''}
+                        onChange={(e) =>
+                          updateItem(index, { description: clampOrderLineDescription(e.target.value) })
+                        }
+                        placeholder={`Opis w ofercie (max ${ORDER_LINE_DESCRIPTION_MAX_LENGTH} znaków)`}
                       />
                     </td>
                     <td className="py-1 px-2 whitespace-nowrap">
@@ -216,6 +247,15 @@ export default function OrderProductionSection({
                         title="Podwykonawca"
                       />
                     </td>
+                    {showBlockColumn && (
+                      <td className="py-1 px-2 whitespace-nowrap">
+                        <OrderLineBlockSelect
+                          blocks={offerBlocks}
+                          value={item.offerBlockId}
+                          onChange={(offerBlockId) => updateItem(index, { offerBlockId })}
+                        />
+                      </td>
+                    )}
                     <td className="py-1 px-2 whitespace-nowrap">
                       <button
                         type="button"
@@ -245,11 +285,19 @@ export default function OrderProductionSection({
                 <td colSpan={10} className="py-1.5 px-2">
                   <button
                     type="button"
-                    onClick={addEmptyRow}
+                    onClick={() => addEmptyRows(1)}
                     className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
                   >
                     <Plus size={14} />
                     Dodaj wiersz
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => addEmptyRows(5)}
+                    className="ml-3 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <Plus size={14} />
+                    Dodaj 5 wierszy
                   </button>
                 </td>
               </tr>

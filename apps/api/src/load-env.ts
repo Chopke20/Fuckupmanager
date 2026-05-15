@@ -4,7 +4,8 @@ import dotenv from 'dotenv'
 
 /**
  * Musi być importowane przed `./app`.
- * - `override: true` dla `apps/api/.env` — nadpisuje puste/zepsute wartości z otoczenia (spawn, Windows).
+ * - `override: false` — zmienne już ustawione w otoczeniu (PM2, `dev:docker`, CI) mają pierwszeństwo;
+ *   plik `.env` uzupełnia tylko brakujące klucze.
  * - Kilka ścieżek: `__dirname` (src lub dist), potem `cwd` (np. start z roota monorepo).
  */
 const envRoot = path.resolve(__dirname, '../../..', '.env')
@@ -19,7 +20,7 @@ const apiEnvCandidates = [
 let loadedApi = false
 for (const p of apiEnvCandidates) {
   if (!fs.existsSync(p)) continue
-  dotenv.config({ path: p, override: true })
+  dotenv.config({ path: p, override: false })
   loadedApi = true
   break
 }

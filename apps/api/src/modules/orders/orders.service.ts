@@ -1,6 +1,15 @@
 import { randomUUID } from 'crypto'
 import { Prisma } from '@prisma/client'
-import { CreateOrderSchema, UpdateOrderSchema, CreateOrderEquipmentItemSchema, CreateOrderStageSchema, CreateOrderProductionItemSchema } from '@lama-stage/shared-types'
+import {
+  CreateOrderSchema,
+  UpdateOrderSchema,
+  CreateOrderEquipmentItemSchema,
+  CreateOrderStageSchema,
+  CreateOrderProductionItemSchema,
+  UpdateOrderOfferBlockItemSchema,
+  clampOrderOfferBlockTitle,
+  validateOrderOfferBlocksForSave,
+} from '@lama-stage/shared-types'
 import { z } from 'zod'
 import { EquipmentUnavailableError } from '../../shared/errors/AppError'
 
@@ -8,6 +17,7 @@ import { prisma } from '../../prisma/client'
 
 const orderDetailInclude = {
   client: true,
+  offerBlocks: { orderBy: { sortOrder: 'asc' } },
   equipmentItems: {
     include: {
       equipment: true,
@@ -37,6 +47,61 @@ export class OrdersService {
 
   private isUuid(value: unknown): value is string {
     return typeof value === 'string' && OrdersService.UUID_V4_RE.test(value)
+  }
+
+  private resolveOfferBlockId(value: unknown): string | null {
+    if (value == null || value === '') return null
+    return this.isUuid(value) ? value : null
+  }
+
+  private assertOfferBlocksValid(
+    offerBlocks: z.infer<typeof UpdateOrderOfferBlockItemSchema>[] | undefined,
+    equipmentItems: Array<{ offerBlockId?: string | null }> | undefined,
+    productionItems: Array<{ offerBlockId?: string | null }> | undefined,
+  ) {
+    const err = validateOrderOfferBlocksForSave(offerBlocks, equipmentItems, productionItems)
+    if (err) {
+      const e = new Error(err) as Error & { code?: string }
+      e.code = 'OFFER_BLOCKS_VALIDATION'
+      throw e
+    }
+  }
+
+  private async syncOfferBlocks(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+    blocks: z.infer<typeof UpdateOrderOfferBlockItemSchema>[],
+  ) {
+    const current = await tx.orderOfferBlock.findMany({ where: { orderId }, orderBy: { sortOrder: 'asc' } })
+    const currentIds = new Set(current.map((b) => b.id))
+    const payloadIds = new Set(blocks.map((b) => b.id))
+
+    for (let idx = 0; idx < blocks.length; idx++) {
+      const block = blocks[idx]!
+      const title = clampOrderOfferBlockTitle(block.title)
+      const sortOrder = block.sortOrder ?? idx
+      if (currentIds.has(block.id)) {
+        await tx.orderOfferBlock.update({
+          where: { id: block.id },
+          data: { title, sortOrder },
+        })
+      } else {
+        await tx.orderOfferBlock.create({
+          data: {
+            id: block.id,
+            orderId,
+            title,
+            sortOrder,
+          },
+        })
+      }
+    }
+
+    for (const old of current) {
+      if (!payloadIds.has(old.id)) {
+        await tx.orderOfferBlock.delete({ where: { id: old.id } })
+      }
+    }
   }
 
   private normalizeOrderDates<T extends { dateFrom?: Date | string | null; dateTo?: Date | string | null; startDate?: Date | string | null; endDate?: Date | string | null }>(order: T): T {
@@ -260,8 +325,24 @@ export class OrdersService {
   }
 
   async createOrder(orderData: z.infer<typeof CreateOrderSchema>) {
-    const { clientId, equipmentItems, parentOrderId, startDate, endDate, stages, productionItems, offerValidityDays, projectContactKey, currency, exchangeRateEur, ...rest } = orderData;
+    const {
+      clientId,
+      equipmentItems,
+      parentOrderId,
+      startDate,
+      endDate,
+      stages,
+      productionItems,
+      offerBlocks,
+      offerValidityDays,
+      projectContactKey,
+      currency,
+      exchangeRateEur,
+      ...rest
+    } = orderData;
     const defaultStageDate = startDate ? new Date(startDate) : new Date();
+    const blockRows = Array.isArray(offerBlocks) ? offerBlocks : []
+    this.assertOfferBlocksValid(blockRows, equipmentItems, productionItems)
 
     const data: Prisma.OrderUncheckedCreateInput = {
       ...rest,
@@ -301,6 +382,7 @@ export class OrdersService {
           dateFrom: item.dateFrom ? new Date(item.dateFrom) : startDate,
           dateTo: item.dateTo ? new Date(item.dateTo) : endDate,
           equipmentId: item.equipmentId ?? null,
+          offerBlockId: this.resolveOfferBlockId(item.offerBlockId),
         })) : [],
       },
       productionItems: {
@@ -327,6 +409,7 @@ export class OrdersService {
           sortOrder: item.sortOrder ?? idx,
           marginSubcontractorUnits: item.marginSubcontractorUnits ?? null,
           marginSubcontractorUnitCostNet: item.marginSubcontractorUnitCostNet ?? null,
+          offerBlockId: this.resolveOfferBlockId(item.offerBlockId),
         })) : [],
       },
     };
@@ -363,6 +446,9 @@ export class OrdersService {
           })),
         })
       }
+      if (blockRows.length > 0) {
+        await this.syncOfferBlocks(tx, order.id, blockRows)
+      }
       return order.id
     })
     const full = await prisma.order.findUnique({
@@ -391,6 +477,17 @@ export class OrdersService {
     if (!source) {
       throw new Error('ORDER_NOT_FOUND')
     }
+
+    const blockIdMap = new Map<string, string>()
+    const offerBlocks = (source.offerBlocks ?? []).map((block, idx) => {
+      const nextId = randomUUID()
+      blockIdMap.set(block.id, nextId)
+      return {
+        id: nextId,
+        title: block.title,
+        sortOrder: block.sortOrder ?? idx,
+      }
+    })
 
     const stageIdMap = new Map<string, string>()
     const stages = (source.stages ?? []).map((stage, idx) => {
@@ -457,6 +554,7 @@ export class OrdersService {
       recurringConfig: undefined,
       parentOrderId: undefined,
       stages,
+      offerBlocks,
       equipmentItems: (source.equipmentItems ?? []).map((item, idx) => ({
         name: item.name,
         description: item.description ?? undefined,
@@ -477,6 +575,7 @@ export class OrdersService {
         dateFrom: (item.dateFrom ?? source.startDate).toISOString(),
         dateTo: (item.dateTo ?? source.endDate).toISOString(),
         equipmentId: item.equipmentId ?? undefined,
+        offerBlockId: item.offerBlockId ? blockIdMap.get(item.offerBlockId) ?? undefined : undefined,
       })),
       productionItems: (source.productionItems ?? []).map((item, idx) => ({
         name: item.name,
@@ -496,6 +595,7 @@ export class OrdersService {
         sortOrder: item.sortOrder ?? idx,
         marginSubcontractorUnits: item.marginSubcontractorUnits ?? undefined,
         marginSubcontractorUnitCostNet: item.marginSubcontractorUnitCostNet ?? undefined,
+        offerBlockId: item.offerBlockId ? blockIdMap.get(item.offerBlockId) ?? undefined : undefined,
       })),
     })
 
@@ -503,10 +603,25 @@ export class OrdersService {
   }
 
   async updateOrder(id: string, orderData: z.infer<typeof UpdateOrderSchema>) {
-    const { clientId, equipmentItems, parentOrderId, startDate, endDate, stages: stagesInput, productionItems: productionItemsInput, ...rest } = orderData;
+    const {
+      clientId,
+      equipmentItems,
+      parentOrderId,
+      startDate,
+      endDate,
+      stages: stagesInput,
+      productionItems: productionItemsInput,
+      offerBlocks: offerBlocksInput,
+      ...rest
+    } = orderData;
     const stages = Array.isArray(stagesInput) ? stagesInput : [];
     const productionItems = Array.isArray(productionItemsInput) ? productionItemsInput : [];
+    const offerBlocks = Array.isArray(offerBlocksInput) ? offerBlocksInput : undefined;
     const defaultStageDate = startDate ?? new Date();
+
+    if (offerBlocks !== undefined) {
+      this.assertOfferBlocksValid(offerBlocks, equipmentItems, productionItems)
+    }
 
     type StagePayload = z.infer<typeof CreateOrderStageSchema> & { id?: string };
     type ProductionItemPayload = z.infer<typeof CreateOrderProductionItemSchema> & { id?: string };
@@ -548,6 +663,7 @@ export class OrdersService {
                 dateFrom: item.dateFrom ? new Date(item.dateFrom) : startDate,
                 dateTo: item.dateTo ? new Date(item.dateTo) : endDate,
                 equipmentId: item.equipmentId ?? null,
+                offerBlockId: this.resolveOfferBlockId(item.offerBlockId),
               })),
             },
           }
@@ -557,6 +673,10 @@ export class OrdersService {
 
     const updated = await prisma.$transaction(async (tx) => {
       const order = await tx.order.update({ where: { id }, data });
+
+      if (offerBlocks !== undefined) {
+        await this.syncOfferBlocks(tx, id, offerBlocks)
+      }
 
       if (stagesInput !== undefined) {
         const currentStages = await tx.orderStage.findMany({ where: { orderId: id }, orderBy: { sortOrder: 'asc' } });
@@ -632,6 +752,7 @@ export class OrdersService {
                 sortOrder: item.sortOrder ?? idx,
                 marginSubcontractorUnits: item.marginSubcontractorUnits ?? null,
                 marginSubcontractorUnitCostNet: item.marginSubcontractorUnitCostNet ?? null,
+                offerBlockId: this.resolveOfferBlockId(item.offerBlockId),
               },
             });
           } else {
@@ -660,6 +781,7 @@ export class OrdersService {
                 sortOrder: item.sortOrder ?? idx,
                 marginSubcontractorUnits: item.marginSubcontractorUnits ?? null,
                 marginSubcontractorUnitCostNet: item.marginSubcontractorUnitCostNet ?? null,
+                offerBlockId: this.resolveOfferBlockId(item.offerBlockId),
               },
             });
           }
@@ -673,12 +795,7 @@ export class OrdersService {
 
       const refreshed = await tx.order.findUnique({
         where: { id },
-        include: {
-          client: true,
-          equipmentItems: { include: { equipment: true } },
-          productionItems: true,
-          stages: true,
-        },
+        include: orderDetailInclude,
       });
       return refreshed ?? order;
     });

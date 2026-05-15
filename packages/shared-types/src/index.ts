@@ -15,7 +15,12 @@ export * from './schemas/app-settings.schema';
 
 // Explicitly re-export commonly used schemas
 export { CreateClientSchema, UpdateClientSchema, ClientSchema } from './schemas/client.schema';
-export { CreateOrderSchema, UpdateOrderSchema, OrderSchema } from './schemas/order.schema';
+export {
+  CreateOrderSchema,
+  UpdateOrderSchema,
+  OrderSchema,
+  UpdateOrderOfferBlockItemSchema,
+} from './schemas/order.schema';
 export { CreateEquipmentSchema, UpdateEquipmentSchema, EquipmentSchema } from './schemas/equipment.schema';
 export {
   LoginRequestSchema,
@@ -39,3 +44,14 @@ export { AuditLogSchema } from './schemas/audit.schema';
 // Utility functions for orders
 export { calculateOrderNetValue, formatOrderNetValue } from './utils/orderCalculations';
 export { formatOrderReference, buildDocumentNumber } from './utils/orderReferenceFormat';
+export {
+  ORDER_LINE_DESCRIPTION_MAX_LENGTH,
+  ORDER_LINE_DESCRIPTION_PDF_MAX_LENGTH,
+  clampOrderLineDescription,
+  truncateOrderLineDescriptionForPdf,
+} from './constants/orderLineDescription';
+export {
+  ORDER_OFFER_BLOCK_TITLE_MAX_LENGTH,
+  clampOrderOfferBlockTitle,
+} from './constants/orderOfferBlock';
+export { validateOrderOfferBlocksForSave } from './utils/orderOfferBlockValidation';

@@ -10,7 +10,21 @@ import { useClients } from '../../clients/hooks/useClients';
 import { calculateOrderFinancialSummary } from '../utils/orderFinancialSummary';
 import { formatOrderNumber } from '../utils/orderNumberFormat';
 import { daysBetween, isEndDateBeforeStartDate } from '../../../shared/utils/dateHelpers';
-import { Order, OrderStage, OrderEquipmentItem, OrderProductionItem, CreateOrderDto, UpdateOrderDto } from '@lama-stage/shared-types';
+import {
+  Order,
+  OrderStage,
+  OrderEquipmentItem,
+  OrderProductionItem,
+  OrderOfferBlock,
+  CreateOrderDto,
+  UpdateOrderDto,
+  clampOrderLineDescription,
+  clampOrderOfferBlockTitle,
+  validateOrderOfferBlocksForSave,
+} from '@lama-stage/shared-types';
+import OrderOfferBlocksSection from '../components/OrderOfferBlocksSection';
+import type { OfferBlockOption } from '../components/OrderLineBlockSelect';
+import { randomClientUuid } from '../../../shared/utils/uuid';
 import OrderHeaderSection from '../components/OrderHeaderSection';
 import OrderScheduleSection from '../components/OrderScheduleSection';
 import OrderEquipmentSection from '../components/OrderEquipmentSection';
@@ -104,6 +118,14 @@ function mapApiOrderToFormValues(o: any): Partial<Order> {
           };
         })
       : [],
+    offerBlocks: Array.isArray(o.offerBlocks)
+      ? o.offerBlocks.map((b: any, idx: number) => ({
+          id: b?.id,
+          orderId: b?.orderId,
+          title: b?.title ?? '',
+          sortOrder: typeof b?.sortOrder === 'number' ? b.sortOrder : idx,
+        }))
+      : [],
   };
 }
 
@@ -113,6 +135,9 @@ function validateOrderPayload(
     clientId?: string;
     startDate?: Date;
     endDate?: Date;
+    offerBlocks?: Array<{ id?: string; title: string }>;
+    equipmentItems?: Partial<OrderEquipmentItem>[];
+    productionItems?: Partial<OrderProductionItem>[];
   },
   isEditing: boolean,
   formEquipmentItems?: Partial<OrderEquipmentItem>[]
@@ -141,6 +166,12 @@ function validateOrderPayload(
       return 'Każda pozycja sprzętu z uzupełnionymi danymi musi mieć nazwę.';
     }
   }
+  const blockErr = validateOrderOfferBlocksForSave(
+    payload.offerBlocks,
+    payload.equipmentItems ?? formEquipmentItems,
+    payload.productionItems,
+  );
+  if (blockErr) return blockErr;
   return null;
 }
 
@@ -186,6 +217,7 @@ export default function OrderFormPage() {
       stages: [],
       equipmentItems: [],
       productionItems: [],
+      offerBlocks: [],
     },
   });
 
@@ -311,6 +343,32 @@ export default function OrderFormPage() {
     setValue('equipmentItems', items, { shouldDirty: true });
   }, [setValue]);
 
+  const handleOfferBlocksChange = useCallback(
+    (blocks: Partial<OrderOfferBlock>[]) => {
+      const ids = new Set(blocks.map((b) => b.id).filter((id): id is string => typeof id === 'string'));
+      setValue('offerBlocks', blocks, { shouldDirty: true, shouldTouch: true });
+      const clearOrphan = (offerBlockId?: string | null) =>
+        offerBlockId && !ids.has(offerBlockId) ? null : offerBlockId ?? null;
+      setValue(
+        'equipmentItems',
+        ((getValues('equipmentItems') || []) as Partial<OrderEquipmentItem>[]).map((row) => ({
+          ...row,
+          offerBlockId: clearOrphan(row.offerBlockId),
+        })),
+        { shouldDirty: true },
+      );
+      setValue(
+        'productionItems',
+        ((getValues('productionItems') || []) as Partial<OrderProductionItem>[]).map((row) => ({
+          ...row,
+          offerBlockId: clearOrphan(row.offerBlockId),
+        })),
+        { shouldDirty: true },
+      );
+    },
+    [getValues, setValue],
+  );
+
   const handleProductionChange = useCallback((items: Partial<OrderProductionItem>[]) => {
     const existingTransport = ((watch('productionItems') || []) as Partial<OrderProductionItem>[]).filter((item) => item.isTransport);
     setValue('productionItems', [...items, ...existingTransport], { shouldDirty: true });
@@ -345,6 +403,15 @@ export default function OrderFormPage() {
   const formData = watch();
   const stages = watch('stages') || [];
   const equipmentItems = watch('equipmentItems') || [];
+  const offerBlocksRaw = watch('offerBlocks') || [];
+  const offerBlockOptions: OfferBlockOption[] = useMemo(
+    () =>
+      (offerBlocksRaw as Partial<OrderOfferBlock>[]).map((b) => ({
+        id: String(b.id),
+        title: clampOrderOfferBlockTitle(b.title),
+      })),
+    [offerBlocksRaw],
+  );
   const allProductionItems = watch('productionItems') || [];
   const productionItems = useMemo(
     () => (allProductionItems as Partial<OrderProductionItem>[]).filter((item) => !item.isTransport),
@@ -442,7 +509,7 @@ export default function OrderFormPage() {
           return {
             equipmentId: item?.equipmentId || undefined,
             name,
-            description: item?.description || undefined,
+            description: clampOrderLineDescription(item?.description) || undefined,
             category: item?.category || 'Inne',
             quantity: Math.max(1, Math.round(toNumber(item?.quantity, 1))),
             unitPrice: Math.max(0, toNumber(item?.unitPrice, 0)),
@@ -452,6 +519,7 @@ export default function OrderFormPage() {
             visibleInOffer: item?.visibleInOffer !== false,
             isRental: !!item?.isRental,
             sortOrder: toNumber(item?.sortOrder, idx),
+            offerBlockId: item?.offerBlockId || undefined,
             dateFrom: toIso(item?.dateFrom),
             dateTo: toIso(item?.dateTo),
             ...marginRentalPayload(item),
@@ -459,11 +527,18 @@ export default function OrderFormPage() {
         })
         .filter((row) => row.name.length > 0)
 
+    const normalizeOfferBlocks = (list: any[] | undefined) =>
+      (Array.isArray(list) ? list : []).map((block, idx) => ({
+        id: isValidUuid(block?.id) ? block.id : randomClientUuid(),
+        title: clampOrderOfferBlockTitle(block?.title),
+        sortOrder: toNumber(block?.sortOrder, idx),
+      }))
+
     const normalizeProductionItems = (list: any[] | undefined) =>
       (Array.isArray(list) ? list : []).map((item, idx) => ({
         ...(item?.id && isValidUuid(item.id) ? { id: item.id } : {}),
         name: item?.name || 'Pozycja produkcji',
-        description: item?.description || undefined,
+        description: clampOrderLineDescription(item?.description) || undefined,
         rateType: item?.rateType || 'FLAT',
         rateValue: Math.max(0, toNumber(item?.rateValue, 0)),
         units: Math.max(0.01, toNumber(item?.units, 1)),
@@ -474,6 +549,7 @@ export default function OrderFormPage() {
         isSubcontractor: !!item?.isSubcontractor,
         visibleInOffer: item?.visibleInOffer !== false,
         sortOrder: toNumber(item?.sortOrder, idx),
+        offerBlockId: item?.offerBlockId || undefined,
         ...marginSubPayload(item),
       }))
 
@@ -502,6 +578,7 @@ export default function OrderFormPage() {
       recurringConfig: normalizeRecurringConfig(data.recurringConfig),
       parentOrderId: data.parentOrderId || undefined,
       stages: normalizeStages((data?.stages ?? []) as any[]),
+      offerBlocks: normalizeOfferBlocks(data.offerBlocks as any[]),
       equipmentItems: normalizeEquipmentItems(data.equipmentItems as any[]),
       productionItems: normalizeProductionItems(data.productionItems as any[]),
     } as CreateOrderDto
@@ -898,6 +975,13 @@ export default function OrderFormPage() {
                   />
                 </section>
 
+                <section id="offer-blocks" className="scroll-mt-24 mb-6">
+                  <OrderOfferBlocksSection
+                    blocks={(offerBlocksRaw as Partial<OrderOfferBlock>[]) ?? []}
+                    onChange={handleOfferBlocksChange}
+                  />
+                </section>
+
                 {/* Sekcja sprzętu - 2 kolumny */}
                 <section id="equipment" className="scroll-mt-24 mb-6">
                   <h2 className="text-lg font-bold flex items-center gap-2 mb-3">
@@ -912,6 +996,7 @@ export default function OrderFormPage() {
                       orderDateFrom={typeof formData.dateFrom === 'string' ? formData.dateFrom : undefined}
                       orderDateTo={typeof formData.dateTo === 'string' ? formData.dateTo : undefined}
                       orderSpanDays={orderDays}
+                      offerBlocks={offerBlockOptions}
                     />
                   </div>
                 </section>
@@ -926,6 +1011,7 @@ export default function OrderFormPage() {
                     items={productionItems}
                     stages={stages}
                     onChange={handleProductionChange}
+                    offerBlocks={offerBlockOptions}
                   />
                 </section>
 
@@ -943,6 +1029,7 @@ export default function OrderFormPage() {
                     orderDateTo={typeof formData.dateTo === 'string' ? formData.dateTo : undefined}
                     distanceKm={distanceKm}
                     onChange={handleTransportChange}
+                    offerBlocks={offerBlockOptions}
                   />
                 </section>
 

@@ -1,5 +1,5 @@
-# Lekki PostgreSQL tylko pod smoke / dev bez lokalnej bazy.
-# Uruchom: SMOKE_AUTO_DB=1 npm run smoke  (Unix) lub set SMOKE_AUTO_DB=1 && npm run smoke (cmd)
+# Lekki PostgreSQL pod smoke i lokalny dev (npm run dev:docker).
+# Smoke: SMOKE_AUTO_DB=1 npm run smoke  |  Dev: npm run dev:docker
 services:
   pg-smoke:
     image: postgres:16-alpine

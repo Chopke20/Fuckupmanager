@@ -48,6 +48,9 @@ export const createOrder = (req: Request, res: Response, next: NextFunction) => 
             details: error.details,
           });
         }
+        if (error instanceof Error && (error as Error & { code?: string }).code === 'OFFER_BLOCKS_VALIDATION') {
+          return res.status(400).json({ success: false, message: error.message });
+        }
         next(error);
       });
   } catch (error) {
@@ -85,6 +88,9 @@ export const updateOrder = (req: Request, res: Response, next: NextFunction) => 
             code: error.code,
             details: error.details,
           });
+        }
+        if (error instanceof Error && (error as Error & { code?: string }).code === 'OFFER_BLOCKS_VALIDATION') {
+          return res.status(400).json({ success: false, message: error.message });
         }
         next(error);
       });

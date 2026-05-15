@@ -25,6 +25,7 @@ async function loadOrderForPdf(orderId: string) {
     include: {
       client: true,
       stages: { orderBy: { sortOrder: 'asc' } },
+      offerBlocks: { orderBy: { sortOrder: 'asc' } },
       equipmentItems: {
         include: { equipment: true },
         orderBy: { sortOrder: 'asc' },
@@ -414,6 +415,7 @@ export class PdfController {
             include: {
               client: true,
               stages: { orderBy: { sortOrder: 'asc' } },
+              offerBlocks: { orderBy: { sortOrder: 'asc' } },
               equipmentItems: {
                 include: { equipment: true },
                 orderBy: { sortOrder: 'asc' },

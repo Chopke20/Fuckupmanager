@@ -193,11 +193,29 @@ model Order {
   updatedAt DateTime @updatedAt
 
   stages          OrderStage[]
+  offerBlocks     OrderOfferBlock[]
   equipmentItems  OrderEquipmentItem[]
   productionItems OrderProductionItem[]
 
   @@unique([orderYear, orderNumber])
   @@map("orders")
+}
+
+/// Nazwany blok oferty (sprzęt + produkcja + transport) — opcjonalny układ w PDF.
+model OrderOfferBlock {
+  id        String   @id @default(uuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  title     String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  equipmentItems  OrderEquipmentItem[]
+  productionItems OrderProductionItem[]
+
+  @@index([orderId, sortOrder])
+  @@map("order_offer_blocks")
 }
 
 model CalendarNoteEvent {
@@ -282,6 +300,9 @@ model OrderEquipmentItem {
   externalConfirmedAt DateTime?
   sortOrder      Int     @default(0)
 
+  offerBlockId String?
+  offerBlock   OrderOfferBlock? @relation(fields: [offerBlockId], references: [id], onDelete: SetNull)
+
   /// Opcjonalnie: ile „sztuk” (np. szt./dni) liczy się jako koszt rentalu × stawka — jeśli oba NULL, od marży odejmowany jest cały netto pozycji.
   marginRentalUnits        Float?
   marginRentalUnitCostNet  Float?
@@ -295,6 +316,7 @@ model OrderEquipmentItem {
 
   reservations EquipmentReservation[]
 
+  @@index([offerBlockId])
   @@map("order_equipment_items")
 }
 
@@ -319,6 +341,9 @@ model OrderProductionItem {
   visibleInOffer  Boolean @default(true)
   sortOrder       Int     @default(0)
 
+  offerBlockId String?
+  offerBlock   OrderOfferBlock? @relation(fields: [offerBlockId], references: [id], onDelete: SetNull)
+
   /// Opcjonalnie: ile jednostek × koszt netto / jedn. dla podwykonawcy — jeśli oba NULL, od marży odejmowany jest cały netto pozycji.
   marginSubcontractorUnits       Float?
   marginSubcontractorUnitCostNet Float?
@@ -326,6 +351,7 @@ model OrderProductionItem {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([offerBlockId])
   @@map("order_production_items")
 }
 

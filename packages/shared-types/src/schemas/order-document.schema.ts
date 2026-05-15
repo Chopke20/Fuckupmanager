@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { OrderEquipmentItemSchema, OrderProductionItemSchema, OrderStageSchema } from './order.schema';
+import {
+  OrderEquipmentItemSchema,
+  OrderOfferBlockSchema,
+  OrderProductionItemSchema,
+  OrderStageSchema,
+} from './order.schema';
 import { ClientSchema } from './client.schema';
 import { CurrencySchema, ProjectContactKeySchema, VatRateOfferSchema } from './order.schema';
 
@@ -28,6 +33,7 @@ export const OrderOfferSnapshotSchema = z.object({
   isRecurring: z.boolean().optional(),
   recurringConfig: z.string().optional(),
   stages: z.array(OrderStageSchema),
+  offerBlocks: z.array(OrderOfferBlockSchema).optional(),
   equipmentItems: z.array(OrderEquipmentItemSchema),
   productionItems: z.array(OrderProductionItemSchema),
   documentDraft: z.record(z.any()).optional(),

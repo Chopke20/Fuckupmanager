@@ -23,6 +23,8 @@
  */
 import fs from 'fs'
 import path from 'path'
+import { truncateOrderLineDescriptionForPdf } from '@lama-stage/shared-types'
+import { buildOfferPositionsSection } from './offer-v5-positions-builder'
 
 const COMPANY = {
   name: process.env.DEFAULT_PDF_COMPANY_NAME ?? 'Twoja firma',
@@ -60,6 +62,14 @@ function escapeHtml(s: string): string {
 
 function escapeHtmlWithBreaks(s: string): string {
   return escapeHtml(s).replace(/\r?\n/g, '<br>\n          ')
+}
+
+/** Nazwa pozycji w tabeli oferty; opcjonalny skrócony opis po myślniku (kursywa, jaśniejszy). */
+function renderOfferLineNameCell(name: string, description?: string | null): string {
+  const safeName = escapeHtml(name)
+  const desc = truncateOrderLineDescriptionForPdf(description)
+  if (!desc) return safeName
+  return `${safeName} <span class="line-desc">— ${escapeHtml(desc)}</span>`
 }
 
 function normalizeHexColor(value?: string | null): string | null {
@@ -121,14 +131,17 @@ export type OrderLike = {
     phone?: string | null
   }
   stages?: Array<{ id?: string; date: Date | string; timeStart?: string | null; timeEnd?: string | null; type?: string | null }>
+  offerBlocks?: Array<{ id: string; title: string; sortOrder?: number }>
   equipmentItems?: Array<{
     name: string
+    description?: string | null
     category?: string | null
     quantity: number
     unitPrice: number
     days?: number
     discount?: number | null
     visibleInOffer?: boolean | null
+    offerBlockId?: string | null
     equipment?: { unit?: string | null } | null
   }>
   productionItems?: Array<{
@@ -140,6 +153,7 @@ export type OrderLike = {
     stageIds?: string | null
     isTransport?: boolean | null
     visibleInOffer?: boolean | null
+    offerBlockId?: string | null
   }>
 }
 
@@ -244,187 +258,20 @@ export function buildOfferHtmlV5(
           })
           .join('\n    ')
 
-  const equipmentItems = (order.equipmentItems ?? []).filter((i) => i.visibleInOffer !== false)
-  const equipmentByCategory = equipmentItems.reduce<Record<string, typeof equipmentItems>>((acc, item) => {
-    const cat = item.category || 'Inne'
-    if (!acc[cat]) acc[cat] = []
-    acc[cat].push(item)
-    return acc
-  }, {})
-  const equipmentCategoryOrder = Object.keys(equipmentByCategory).sort((a, b) =>
-    a.localeCompare(b, 'pl', { sensitivity: 'base' })
-  )
-
-  let equipmentTotalNet = 0
-  let equipmentTotalVat = 0
-  let lp = 0
-  const equipmentTbodyRows: string[] = []
-  for (const category of equipmentCategoryOrder) {
-    const items = equipmentByCategory[category]!
-    equipmentTbodyRows.push(`<tr class="cat-row"><td colspan="9">${escapeHtml(category)}</td></tr>`)
-    for (const item of items) {
-      lp++
-      const base = item.unitPrice * item.quantity
-      const multiDay = (item.days ?? 1) > 1 ? base + ((item.days ?? 1) - 1) * base * 0.5 : base
-      const netto = multiDay * (1 - (item.discount ?? 0) / 100)
-      const vatVal = netto * (vatRate / 100)
-      const brutto = netto + vatVal
-      equipmentTotalNet += netto
-      equipmentTotalVat += vatVal
-      const discountStr = (item.discount ?? 0) > 0 ? `${item.discount}%` : '—'
-      equipmentTbodyRows.push(`
-        <tr>
-          <td class="lp">${String(lp).padStart(2, '0')}</td>
-          <td class="left">${escapeHtml(item.name)}</td>
-          <td class="center">${item.quantity}</td>
-          <td class="center dim">${item.days ?? 1}</td>
-          <td>${fmtMoney(item.unitPrice * rate, symbol)}</td>
-          <td class="center dim">${discountStr}</td>
-          <td>${fmtMoney(netto * rate, symbol)}</td>
-          <td class="dim">${fmtNum(vatVal * rate)}</td>
-          <td>${fmtMoney(brutto * rate, symbol)}</td>
-        </tr>`)
-    }
+  const moneyCtx = {
+    vatRate,
+    rate,
+    symbol,
+    fmt,
+    fmtNum,
   }
-  const equipmentTbody = equipmentTbodyRows.join('')
-  const equipmentTfoot =
-    equipmentItems.length > 0
-      ? `<tr>
-          <td colspan="6" class="sum-label">Łącznie · Sprzęt</td>
-          <td class="sum-netto">${fmt(equipmentTotalNet)}</td>
-          <td class="dim">${fmtNum(equipmentTotalVat * rate)}</td>
-          <td class="sum-brutto">${fmt(equipmentTotalNet + equipmentTotalVat)}</td>
-        </tr>`
-      : '<tr><td colspan="9" class="dim">Brak pozycji</td></tr>'
-
-  const productionItemsAll = (order.productionItems ?? []).filter((i) => i.visibleInOffer !== false)
-  const productionOnlyItems = productionItemsAll.filter((i) => !i.isTransport)
-  const transportOnlyItems = productionItemsAll.filter((i) => i.isTransport)
-
-  const stageTypeLabels: Record<string, string> = { MONTAZ: 'Montaż', EVENT: 'Wydarzenie', DEMONTAZ: 'Demontaż', PROBA: 'Próba', CUSTOM: 'Inne' }
-  const stageById = new Map(
-    (order.stages ?? []).map((s) => {
-      const dateStr = fmtPlDate(s.date)
-      const customLabel = typeof (s as any)?.label === 'string' ? String((s as any).label).trim() : ''
-      const typeLabel = customLabel || (s.type ? (stageTypeLabels[s.type] ?? s.type) : 'Etap')
-      const timeLabel = [s.timeStart, s.timeEnd].filter(Boolean).join(' → ')
-      return [s.id, `${typeLabel} · ${dateStr}${timeLabel ? ` · ${timeLabel}` : ''}`]
-    })
-  )
-
-  const groupProductionItemsByStage = (items: typeof productionItemsAll) => {
-    const groupedByStage = new Map<string, typeof productionItemsAll>()
-    const ensureStageGroup = (label: string) => {
-      if (!groupedByStage.has(label)) groupedByStage.set(label, [])
-      return groupedByStage.get(label)!
-    }
-    for (const stage of order.stages ?? []) {
-      const key = stage.id ? (stageById.get(stage.id) ?? 'Etap') : 'Etap'
-      ensureStageGroup(key)
-    }
-    for (const item of items) {
-      let targetLabel = 'Poza harmonogramem'
-      if (item.stageIds) {
-        try {
-          const ids = JSON.parse(item.stageIds) as string[]
-          const firstId = Array.isArray(ids) ? ids[0] : undefined
-          if (firstId) targetLabel = stageById.get(firstId) ?? targetLabel
-        } catch {
-          targetLabel = 'Poza harmonogramem'
-        }
-      }
-      ensureStageGroup(targetLabel).push(item)
-    }
-    return groupedByStage
-  }
-
-  const buildProductionTbodyAndTotals = (groupedByStage: ReturnType<typeof groupProductionItemsByStage>) => {
-    let lp = 0
-    let totalNet = 0
-    let totalVat = 0
-    const rows: string[] = []
-    for (const [stageLabel, list] of groupedByStage.entries()) {
-      if (!list.length) continue
-      rows.push(`<tr class="stage-row"><td colspan="8">${escapeHtml(stageLabel)}</td></tr>`)
-      for (const item of list) {
-        lp++
-        const netto = item.rateValue * item.units * (1 - (item.discount ?? 0) / 100)
-        const vatVal = netto * (vatRate / 100)
-        totalNet += netto
-        totalVat += vatVal
-        const itemDesc = item.description || '—'
-        rows.push(`
-        <tr>
-          <td class="lp">${String(lp).padStart(2, '0')}</td>
-          <td class="left">${escapeHtml(item.name)}</td>
-          <td class="left dim">${escapeHtml(itemDesc)}</td>
-          <td>${fmtMoney(item.rateValue * rate, symbol)}</td>
-          <td class="center">${item.units}</td>
-          <td>${fmtMoney(netto * rate, symbol)}</td>
-          <td class="dim">${fmtNum(vatVal * rate)}</td>
-          <td>${fmtMoney((netto + vatVal) * rate, symbol)}</td>
-        </tr>`)
-      }
-    }
-    return { tbody: rows.join(''), totalNet, totalVat }
-  }
-
-  const buildTransportTbodyAndTotals = (groupedByStage: ReturnType<typeof groupProductionItemsByStage>) => {
-    let totalNet = 0
-    let totalVat = 0
-    const rows: string[] = []
-    for (const [stageLabel, list] of groupedByStage.entries()) {
-      if (!list.length) continue
-      rows.push(`<tr class="stage-row"><td colspan="8">${escapeHtml(stageLabel)}</td></tr>`)
-      for (const item of list) {
-        const netto = item.rateValue * item.units * (1 - (item.discount ?? 0) / 100)
-        const vatVal = netto * (vatRate / 100)
-        totalNet += netto
-        totalVat += vatVal
-        const discountStr = (item.discount ?? 0) > 0 ? `${item.discount}%` : '—'
-        rows.push(`
-        <tr>
-          <td class="left">${escapeHtml(item.name)}</td>
-          <td class="center">${item.units}</td>
-          <td class="center dim">1</td>
-          <td>${fmtMoney(item.rateValue * rate, symbol)}</td>
-          <td class="center dim">${discountStr}</td>
-          <td>${fmtMoney(netto * rate, symbol)}</td>
-          <td class="dim">${fmtNum(vatVal * rate)}</td>
-          <td>${fmtMoney((netto + vatVal) * rate, symbol)}</td>
-        </tr>`)
-      }
-    }
-    return { tbody: rows.join(''), totalNet, totalVat }
-  }
-
-  const prodGrouped = groupProductionItemsByStage(productionOnlyItems)
-  const transGrouped = groupProductionItemsByStage(transportOnlyItems)
-
-  const { tbody: productionTbody, totalNet: productionTotalNet, totalVat: productionTotalVat } =
-    buildProductionTbodyAndTotals(prodGrouped)
-  const { tbody: transportTbody, totalNet: transportTotalNet, totalVat: transportTotalVat } =
-    buildTransportTbodyAndTotals(transGrouped)
-
-  const productionTfoot =
-    productionOnlyItems.length > 0
-      ? `<tr>
-          <td colspan="5" class="sum-label">Łącznie · Produkcja i obsługa techniczna</td>
-          <td class="sum-netto">${fmt(productionTotalNet)}</td>
-          <td class="dim">${fmtNum(productionTotalVat * rate)}</td>
-          <td class="sum-brutto">${fmt(productionTotalNet + productionTotalVat)}</td>
-        </tr>`
-      : '<tr><td colspan="8" class="dim">Brak pozycji</td></tr>'
-
-  const transportTfoot =
-    transportOnlyItems.length > 0
-      ? `<tr>
-          <td colspan="5" class="sum-label">Łącznie · Transport</td>
-          <td class="sum-netto">${fmt(transportTotalNet)}</td>
-          <td class="dim">${fmtNum(transportTotalVat * rate)}</td>
-          <td class="sum-brutto">${fmt(transportTotalNet + transportTotalVat)}</td>
-        </tr>`
-      : '<tr><td colspan="8" class="dim">Brak pozycji</td></tr>'
+  const { html: offerPositionsSection, totals: positionTotals } = buildOfferPositionsSection(order, moneyCtx)
+  const equipmentTotalNet = positionTotals.equipmentTotalNet
+  const equipmentTotalVat = positionTotals.equipmentTotalVat
+  const productionTotalNet = positionTotals.productionTotalNet
+  const productionTotalVat = positionTotals.productionTotalVat
+  const transportTotalNet = positionTotals.transportTotalNet
+  const transportTotalVat = positionTotals.transportTotalVat
 
   const revenueNet = equipmentTotalNet + productionTotalNet + transportTotalNet
   const discountAmount = revenueNet * ((order.discountGlobal ?? 0) / 100)
@@ -530,12 +377,7 @@ export function buildOfferHtmlV5(
     ['{{DESC_LABEL}}', descLabel],
     ['{{DESC_BODY}}', descBody],
     ['{{SCHEDULE_ITEMS}}', scheduleItems],
-    ['{{EQUIPMENT_TBODY}}', equipmentTbody],
-    ['{{EQUIPMENT_TFOOT}}', equipmentTfoot],
-    ['{{PRODUCTION_TBODY}}', productionTbody],
-    ['{{PRODUCTION_TFOOT}}', productionTfoot],
-    ['{{TRANSPORT_TBODY}}', transportTbody],
-    ['{{TRANSPORT_TFOOT}}', transportTfoot],
+    ['{{OFFER_POSITIONS_SECTION}}', offerPositionsSection],
     ['{{FIN_SUMMARY_ROWS}}', finSummaryRows],
     ['{{RECURRING_BLOCK}}', recurringBlock],
     ['{{FOOTER_LEFT}}', footerLeft],

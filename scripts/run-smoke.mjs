@@ -161,11 +161,10 @@ function npmRun(args, extraEnv) {
 }
 
 function dockerComposeUpWait() {
-  const r = spawnSync('docker', ['compose', '-f', composeFile, 'up', '-d', '--wait'], {
+  const r = spawnSync('docker', ['compose', '-f', 'docker-compose.smoke.yml', 'up', '-d', '--wait'], {
     cwd: root,
     stdio: 'inherit',
     env: process.env,
-    shell: process.platform === 'win32',
   })
   if (r.status !== 0) {
     console.error(
@@ -176,10 +175,9 @@ function dockerComposeUpWait() {
 }
 
 function dockerComposeDown() {
-  spawnSync('docker', ['compose', '-f', composeFile, 'down', '-v'], {
+  spawnSync('docker', ['compose', '-f', 'docker-compose.smoke.yml', 'down', '-v'], {
     cwd: root,
     stdio: 'inherit',
-    shell: process.platform === 'win32',
   })
 }
 
