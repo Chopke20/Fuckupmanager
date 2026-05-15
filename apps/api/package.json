@@ -4,6 +4,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
+    "db:generate": "prisma generate --schema prisma/schema.prisma",
     "dev": "ts-node-dev --respawn --prefer-ts-exts src/index.ts",
     "build": "prisma generate --schema prisma/schema.prisma && tsc && node scripts/copy-pdf-templates.cjs",
     "db:push": "prisma db push --schema prisma/schema.prisma",

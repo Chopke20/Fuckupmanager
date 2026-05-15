@@ -1,5 +1,7 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // Klient z silnikami dla Windows + typowego VPS (Debian/Ubuntu OpenSSL 3), obok „native”.
+  binaryTargets = ["native", "windows", "debian-openssl-3.0.x"]
 }
 
 datasource db {
