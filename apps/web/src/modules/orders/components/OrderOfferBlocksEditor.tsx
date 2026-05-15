@@ -194,7 +194,7 @@ export default function OrderOfferBlocksEditor({
 
           {blocks.length === 0
 
-            ? 'Opcjonalnie — bez bloków PDF jak dotychczas'
+            ? 'Opcjonalnie'
 
             : `${blocks.length} ${blocks.length === 1 ? 'blok' : 'bloki'} · transport osobno`}
 
