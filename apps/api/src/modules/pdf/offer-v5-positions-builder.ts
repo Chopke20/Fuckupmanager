@@ -343,7 +343,7 @@ function blockSummary(net: number, vat: number, ctx: PositionsMoneyContext, bloc
   return `
     <div class="fin-block fin-block--offer-block">
       <div class="fin-row">
-        <span class="fin-label">Wartość netto ${escapeHtml(title)}</span>
+        <span class="fin-label">Wartość netto - ${escapeHtml(title)}</span>
         <span class="fin-val">${ctx.fmt(net)}</span>
       </div>
       <div class="fin-row">
@@ -351,7 +351,7 @@ function blockSummary(net: number, vat: number, ctx: PositionsMoneyContext, bloc
         <span class="fin-val">${ctx.fmt(vat)}</span>
       </div>
       <div class="fin-row fin-row--brutto">
-        <span class="fin-label">Wartość brutto ${escapeHtml(title)}</span>
+        <span class="fin-label">Wartość brutto - ${escapeHtml(title)}</span>
         <span class="fin-val">${ctx.fmt(gross)}</span>
       </div>
     </div>`
