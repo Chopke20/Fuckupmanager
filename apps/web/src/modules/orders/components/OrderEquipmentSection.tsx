@@ -8,12 +8,16 @@ import {
   orderLineNameInputClass,
   orderLineNamePlaceholder,
 } from '../utils/orderLineItemFieldStyles'
+const EQUIPMENT_COL_COUNT = 12
+
 interface OrderEquipmentSectionProps {
   items: Partial<OrderEquipmentItem>[]
   onChange: (items: Partial<OrderEquipmentItem>[]) => void
   /** Nowe wiersze automatycznie przypisane do tego bloku (bez kolumny „Blok”). */
   lockedOfferBlockId?: string
   hideSectionTitle?: boolean
+  /** Węższa tabela w bloku oferty — łatwiej zobaczyć kolumnę Akcje. */
+  compactLayout?: boolean
   /** Jeśli edytujemy zlecenie – wyklucz je z konfliktów */
   excludeOrderId?: string
   orderDateFrom?: string
@@ -34,6 +38,7 @@ export default function OrderEquipmentSection({
   orderSpanDays = 1,
   lockedOfferBlockId,
   hideSectionTitle = false,
+  compactLayout = false,
 }: OrderEquipmentSectionProps) {
   const VISIBILITY_TOOLTIP =
     'Widoczna w ofercie — pozycja trafi do PDF. Ukryta — tylko w zleceniu, bez PDF dla klienta.'
@@ -282,11 +287,11 @@ export default function OrderEquipmentSection({
       {/* Tabela jak harmonogram – spójny wygląd, nazwa ma miejsce */}
       <div className="border border-border rounded overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm table-fixed">
+          <table className={`w-full text-sm ${compactLayout ? 'min-w-[960px]' : 'table-fixed min-w-[1100px]'}`}>
             <thead>
               <tr className="bg-surface-2 border-b border-border">
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-10">#</th>
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-[28rem] min-w-[22rem]">Nazwa</th>
+                <th className={`text-left py-1.5 px-2 font-medium text-muted-foreground ${compactLayout ? 'w-48 min-w-[12rem]' : 'w-[28rem] min-w-[22rem]'}`}>Nazwa</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-32">Kategoria</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-16">Ilość</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-24">Cena</th>
@@ -319,7 +324,7 @@ export default function OrderEquipmentSection({
                   </div>
                 </th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-16">Rabat</th>
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-28">Netto</th>
+                <th className="text-right py-1.5 px-2 font-medium text-muted-foreground w-28">Netto</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-16" title="Wynajem – bez marży">Rental</th>
                 <th
                   className="text-left py-1.5 px-2 font-medium text-muted-foreground w-36"
@@ -333,7 +338,7 @@ export default function OrderEquipmentSection({
                 >
                   Oferta
                 </th>
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-20">Akcje</th>
+                <th className="text-center py-1.5 px-2 font-medium text-muted-foreground w-20 sticky right-0 bg-surface-2 z-10">Akcje</th>
               </tr>
             </thead>
             <tbody>
@@ -485,8 +490,8 @@ export default function OrderEquipmentSection({
                         {item.visibleInOffer !== false ? <Eye size={16} /> : <EyeOff size={16} />}
                       </button>
                     </td>
-                    <td className="py-1 px-2 whitespace-nowrap">
-                      <div className="flex items-center gap-1">
+                    <td className="py-1 px-2 whitespace-nowrap sticky right-0 bg-background z-[1]">
+                      <div className="flex items-center justify-center gap-1">
                         <button
                           type="button"
                           onClick={() => duplicateItem(index)}
@@ -511,7 +516,7 @@ export default function OrderEquipmentSection({
             </tbody>
             <tfoot>
               <tr className="bg-surface-2 border-t border-border">
-                <td colSpan={11} className="py-1.5 px-2">
+                <td colSpan={EQUIPMENT_COL_COUNT} className="py-1.5 px-2">
                   <button
                     type="button"
                     onClick={() => addEmptyRows(1)}
@@ -537,7 +542,7 @@ export default function OrderEquipmentSection({
                 <td className="py-1.5 px-2 font-bold text-right text-sm min-w-[120px] whitespace-nowrap">
                   {totalValue.toFixed(2)} PLN
                 </td>
-                <td colSpan={3} className="py-1.5 px-2 text-sm text-right min-w-[140px] whitespace-nowrap">
+                <td colSpan={4} className="py-1.5 px-2 text-sm text-right min-w-[140px] whitespace-nowrap">
                   <span className="text-amber-500 font-semibold">
                     Rental: {rentalValue.toFixed(2)} PLN
                   </span>
@@ -573,36 +578,6 @@ export default function OrderEquipmentSection({
             <X size={18} />
           </button>
         </div>
-      )}
-
-      {/* legacy info panel removed — tooltips on Oferta / Dostępność */}
-      {false && (
-      <div className="bg-surface-2 rounded-lg border border-border p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-          <div>
-            <p className="font-medium mb-1">Wycena wielodniowa</p>
-            <p className="text-muted-foreground">
-              Dzień 1 = 100% ceny, każdy kolejny dzień = +50% ceny podstawowej
-            </p>
-          </div>
-          <div>
-            <p className="font-medium mb-1">Widoczność w ofercie</p>
-            <p className="text-muted-foreground">
-              Pozycje oznaczone jako niewidoczne nie pojawią się w PDF dla klienta
-            </p>
-          </div>
-          <div>
-            <p className="font-medium mb-1 flex items-center gap-1">
-              <CheckCircle2 className="text-green-500" size={14} />
-              Dostępność sprzętu
-            </p>
-            <p className="text-muted-foreground">
-              Sprawdzamy konflikty z innymi zleceniami w tym terminie oraz stan magazynowy (ilość na magazynie).
-              Przycisk (i) przy pozycji otwiera szczegóły – w przygotowaniu.
-            </p>
-          </div>
-        </div>
-      </div>
       )}
 
       {/* Modal szczegółów dostępności – w przygotowaniu */}

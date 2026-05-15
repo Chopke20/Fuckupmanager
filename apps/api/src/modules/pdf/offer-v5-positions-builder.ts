@@ -337,12 +337,13 @@ function buildTransportParts(
   return { html, totalNet, totalVat }
 }
 
-function blockSummary(net: number, vat: number, ctx: PositionsMoneyContext): string {
+function blockSummary(net: number, vat: number, ctx: PositionsMoneyContext, blockTitle: string): string {
   const gross = net + vat
+  const title = blockTitle.trim() || 'Blok'
   return `
     <div class="fin-block fin-block--offer-block">
       <div class="fin-row">
-        <span class="fin-label">Wartość netto bloku</span>
+        <span class="fin-label">Wartość netto ${escapeHtml(title)}</span>
         <span class="fin-val">${ctx.fmt(net)}</span>
       </div>
       <div class="fin-row">
@@ -350,7 +351,7 @@ function blockSummary(net: number, vat: number, ctx: PositionsMoneyContext): str
         <span class="fin-val">${ctx.fmt(vat)}</span>
       </div>
       <div class="fin-row fin-row--brutto">
-        <span class="fin-label">Wartość brutto bloku</span>
+        <span class="fin-label">Wartość brutto ${escapeHtml(title)}</span>
         <span class="fin-val">${ctx.fmt(gross)}</span>
       </div>
     </div>`
@@ -423,7 +424,7 @@ function buildNamedBlock(
     <div class="offer-block">
       ${sectionHeader(title.trim(), 'sec-hdr--block-title')}
       ${trio.html}
-      ${blockSummary(blockNet, blockVat, ctx)}
+      ${blockSummary(blockNet, blockVat, ctx, title)}
     </div>`
 }
 

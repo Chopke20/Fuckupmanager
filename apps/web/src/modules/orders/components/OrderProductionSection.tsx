@@ -24,7 +24,10 @@ interface OrderProductionSectionProps {
   onChange: (items: Partial<OrderProductionItem>[]) => void
   lockedOfferBlockId?: string
   hideSectionTitle?: boolean
+  compactLayout?: boolean
 }
+
+const PRODUCTION_COL_COUNT = 10
 
 const VISIBILITY_TOOLTIP =
   'Widoczna w ofercie — pozycja trafi do PDF. Ukryta — tylko w zleceniu, bez PDF dla klienta.'
@@ -35,6 +38,7 @@ export default function OrderProductionSection({
   onChange,
   lockedOfferBlockId,
   hideSectionTitle = false,
+  compactLayout = false,
 }: OrderProductionSectionProps) {
   const { data: paginatedResources } = useEquipment({ category: 'ZASOBY', limit: 200, page: 1 })
   const resources = paginatedResources?.data || []
@@ -140,16 +144,16 @@ export default function OrderProductionSection({
       </datalist>
       <div className="border border-border rounded overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm table-fixed">
+          <table className={`w-full text-sm ${compactLayout ? 'min-w-[880px]' : 'table-fixed min-w-[1000px]'}`}>
             <thead>
               <tr className="bg-surface-2 border-b border-border">
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-10">#</th>
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-[28rem] min-w-[22rem]">Nazwa</th>
+                <th className={`text-left py-1.5 px-2 font-medium text-muted-foreground ${compactLayout ? 'w-48 min-w-[12rem]' : 'w-[28rem] min-w-[22rem]'}`}>Nazwa</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-24">Stawka</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-16">Jedn.</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-16">Rabat</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-40">Etap</th>
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-28">Netto</th>
+                <th className="text-right py-1.5 px-2 font-medium text-muted-foreground w-28">Netto</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-16">Podw.</th>
                 <th
                   className="text-left py-1.5 px-2 font-medium text-muted-foreground w-20"
@@ -157,7 +161,7 @@ export default function OrderProductionSection({
                 >
                   Oferta
                 </th>
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-20">Akcje</th>
+                <th className="text-center py-1.5 px-2 font-medium text-muted-foreground w-20 sticky right-0 bg-surface-2 z-10">Akcje</th>
               </tr>
             </thead>
             <tbody>
@@ -264,7 +268,7 @@ export default function OrderProductionSection({
                         {item.visibleInOffer !== false ? <Eye size={16} /> : <EyeOff size={16} />}
                       </button>
                     </td>
-                    <td className="py-1 px-2 whitespace-nowrap">
+                    <td className="py-1 px-2 whitespace-nowrap sticky right-0 bg-background z-[1] text-center">
                       <button
                         type="button"
                         onClick={() => removeItem(index)}
@@ -280,7 +284,7 @@ export default function OrderProductionSection({
             </tbody>
             <tfoot>
               <tr className="bg-surface-2 border-t border-border">
-                <td colSpan={10} className="py-1.5 px-2">
+                <td colSpan={PRODUCTION_COL_COUNT} className="py-1.5 px-2">
                   <button
                     type="button"
                     onClick={() => addEmptyRows(1)}
