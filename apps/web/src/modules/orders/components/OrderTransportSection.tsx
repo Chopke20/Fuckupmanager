@@ -10,8 +10,6 @@ import { financeApi } from '../api/pdf.api';
 import { shouldAskForTransportRecalculation } from '../utils/transportPricing';
 import { stageToDisplayLabel } from '../utils/stageLabel';
 import { orderLineDescriptionInputClass, orderLineNameInputClass } from '../utils/orderLineItemFieldStyles';
-import OrderLineBlockSelect, { type OfferBlockOption } from './OrderLineBlockSelect';
-
 interface TransportPricingSettings {
   ranges: Array<{
     fromKm: number;
@@ -41,7 +39,6 @@ interface OrderTransportSectionProps {
   orderDateTo?: string | Date;
   distanceKm: number | null;
   onChange: (items: Partial<OrderProductionItem>[]) => void;
-  offerBlocks?: OfferBlockOption[];
 }
 
 type TransportTarget = {
@@ -205,9 +202,7 @@ export default function OrderTransportSection({
   orderDateTo,
   distanceKm,
   onChange,
-  offerBlocks = [],
 }: OrderTransportSectionProps) {
-  const showBlockColumn = offerBlocks.length > 0;
   const [settings, setSettings] = useState<TransportPricingSettings | null>(null);
   const [loadingSettings, setLoadingSettings] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
@@ -469,9 +464,6 @@ export default function OrderTransportSection({
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground">Stawka netto</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground">Ilość</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground">Wartość netto</th>
-                {showBlockColumn && (
-                  <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-28">Blok</th>
-                )}
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-[90px]">Akcje</th>
               </tr>
             </thead>
@@ -612,15 +604,6 @@ export default function OrderTransportSection({
                       />
                     </td>
                     <td className="py-1 px-2 font-medium text-right text-xs">{valueNet.toFixed(2)} PLN</td>
-                    {showBlockColumn && (
-                      <td className="py-1 px-2 whitespace-nowrap">
-                        <OrderLineBlockSelect
-                          blocks={offerBlocks}
-                          value={item.offerBlockId}
-                          onChange={(offerBlockId) => updateRow(idx, { offerBlockId })}
-                        />
-                      </td>
-                    )}
                     <td className="py-1 px-2">
                       {idx > 0 && (
                         <button

@@ -22,8 +22,7 @@ import {
   clampOrderOfferBlockTitle,
   validateOrderOfferBlocksForSave,
 } from '@lama-stage/shared-types';
-import OrderOfferBlocksSection from '../components/OrderOfferBlocksSection';
-import type { OfferBlockOption } from '../components/OrderLineBlockSelect';
+import OrderOfferBlocksEditor from '../components/OrderOfferBlocksEditor';
 import { randomClientUuid } from '../../../shared/utils/uuid';
 import OrderHeaderSection from '../components/OrderHeaderSection';
 import OrderScheduleSection from '../components/OrderScheduleSection';
@@ -111,6 +110,7 @@ function mapApiOrderToFormValues(o: any): Partial<Order> {
             isAutoCalculated: p?.isAutoCalculated !== false,
             isSubcontractor: !!p?.isSubcontractor,
             visibleInOffer: p?.visibleInOffer !== false,
+            offerBlockId: p?.offerBlockId ?? null,
             sortOrder: toNum(p?.sortOrder, 0),
             marginSubcontractorUnits: p.marginSubcontractorUnits != null ? Number(p.marginSubcontractorUnits) : undefined,
             marginSubcontractorUnitCostNet:
@@ -361,7 +361,7 @@ export default function OrderFormPage() {
         'productionItems',
         ((getValues('productionItems') || []) as Partial<OrderProductionItem>[]).map((row) => ({
           ...row,
-          offerBlockId: clearOrphan(row.offerBlockId),
+          offerBlockId: row.isTransport ? null : clearOrphan(row.offerBlockId),
         })),
         { shouldDirty: true },
       );
@@ -404,14 +404,7 @@ export default function OrderFormPage() {
   const stages = watch('stages') || [];
   const equipmentItems = watch('equipmentItems') || [];
   const offerBlocksRaw = watch('offerBlocks') || [];
-  const offerBlockOptions: OfferBlockOption[] = useMemo(
-    () =>
-      (offerBlocksRaw as Partial<OrderOfferBlock>[]).map((b) => ({
-        id: String(b.id),
-        title: clampOrderOfferBlockTitle(b.title),
-      })),
-    [offerBlocksRaw],
-  );
+  const hasOfferBlocks = (offerBlocksRaw as Partial<OrderOfferBlock>[]).length > 0;
   const allProductionItems = watch('productionItems') || [];
   const productionItems = useMemo(
     () => (allProductionItems as Partial<OrderProductionItem>[]).filter((item) => !item.isTransport),
@@ -976,44 +969,53 @@ export default function OrderFormPage() {
                 </section>
 
                 <section id="offer-blocks" className="scroll-mt-24 mb-6">
-                  <OrderOfferBlocksSection
+                  <OrderOfferBlocksEditor
                     blocks={(offerBlocksRaw as Partial<OrderOfferBlock>[]) ?? []}
-                    onChange={handleOfferBlocksChange}
-                  />
-                </section>
-
-                {/* Sekcja sprzętu - 2 kolumny */}
-                <section id="equipment" className="scroll-mt-24 mb-6">
-                  <h2 className="text-lg font-bold flex items-center gap-2 mb-3">
-                    <FileText size={24} />
-                    Wykaz sprzętu
-                  </h2>
-                  <div className="lg:col-span-2">
-                    <OrderEquipmentSection
-                      items={equipmentItems}
-                      onChange={handleEquipmentChange}
-                      excludeOrderId={id}
-                      orderDateFrom={typeof formData.dateFrom === 'string' ? formData.dateFrom : undefined}
-                      orderDateTo={typeof formData.dateTo === 'string' ? formData.dateTo : undefined}
-                      orderSpanDays={orderDays}
-                      offerBlocks={offerBlockOptions}
-                    />
-                  </div>
-                </section>
-
-                {/* Sekcja produkcji i logistyki */}
-                <section id="production" className="scroll-mt-24 mb-6">
-                  <h2 className="text-lg font-bold flex items-center gap-2 mb-3">
-                    <FileText size={24} />
-                    Produkcja i logistyka
-                  </h2>
-                  <OrderProductionSection
-                    items={productionItems}
+                    onBlocksChange={handleOfferBlocksChange}
+                    equipmentItems={equipmentItems as Partial<OrderEquipmentItem>[]}
+                    onEquipmentChange={handleEquipmentChange}
+                    productionItems={productionItems as Partial<OrderProductionItem>[]}
+                    onProductionChange={handleProductionChange}
                     stages={stages}
-                    onChange={handleProductionChange}
-                    offerBlocks={offerBlockOptions}
+                    excludeOrderId={id}
+                    orderDateFrom={typeof formData.dateFrom === 'string' ? formData.dateFrom : undefined}
+                    orderDateTo={typeof formData.dateTo === 'string' ? formData.dateTo : undefined}
+                    orderSpanDays={orderDays}
                   />
                 </section>
+
+                {!hasOfferBlocks && (
+                  <>
+                    <section id="equipment" className="scroll-mt-24 mb-6">
+                      <h2 className="text-lg font-bold flex items-center gap-2 mb-3">
+                        <FileText size={24} />
+                        Wykaz sprzętu
+                      </h2>
+                      <div className="lg:col-span-2">
+                        <OrderEquipmentSection
+                          items={equipmentItems}
+                          onChange={handleEquipmentChange}
+                          excludeOrderId={id}
+                          orderDateFrom={typeof formData.dateFrom === 'string' ? formData.dateFrom : undefined}
+                          orderDateTo={typeof formData.dateTo === 'string' ? formData.dateTo : undefined}
+                          orderSpanDays={orderDays}
+                        />
+                      </div>
+                    </section>
+
+                    <section id="production" className="scroll-mt-24 mb-6">
+                      <h2 className="text-lg font-bold flex items-center gap-2 mb-3">
+                        <FileText size={24} />
+                        Produkcja i logistyka
+                      </h2>
+                      <OrderProductionSection
+                        items={productionItems}
+                        stages={stages}
+                        onChange={handleProductionChange}
+                      />
+                    </section>
+                  </>
+                )}
 
                 {/* Sekcja transportu */}
                 <section id="transport" className="scroll-mt-24 mb-6">
@@ -1029,7 +1031,6 @@ export default function OrderFormPage() {
                     orderDateTo={typeof formData.dateTo === 'string' ? formData.dateTo : undefined}
                     distanceKm={distanceKm}
                     onChange={handleTransportChange}
-                    offerBlocks={offerBlockOptions}
                   />
                 </section>
 

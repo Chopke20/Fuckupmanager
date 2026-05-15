@@ -34,7 +34,7 @@ export function validateOrderOfferBlocksForSave(
 
   const countForBlock = (blockId: string) => {
     const eq = (equipmentItems ?? []).filter((r) => r.offerBlockId === blockId).length;
-    const prod = (productionItems ?? []).filter((r) => r.offerBlockId === blockId).length;
+    const prod = (productionItems ?? []).filter((r) => r.offerBlockId === blockId && !(r as { isTransport?: boolean }).isTransport).length;
     return eq + prod;
   };
 
@@ -42,7 +42,7 @@ export function validateOrderOfferBlocksForSave(
     const title = clampOrderOfferBlockTitle(block.title);
     const blockId = block.id!;
     if (countForBlock(blockId) < 1) {
-      return `Blok „${title}”: przypisz co najmniej jedną pozycję (sprzęt, produkcja lub transport).`;
+      return `Blok „${title}”: przypisz co najmniej jedną pozycję sprzętu lub produkcji.`;
     }
   }
 

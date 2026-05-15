@@ -14,8 +14,6 @@ import {
   orderLineNameInputClass,
   orderLineNamePlaceholder,
 } from '../utils/orderLineItemFieldStyles'
-import OrderLineBlockSelect, { type OfferBlockOption } from './OrderLineBlockSelect'
-
 function stageDisplayName(stage: Partial<OrderStage>) {
   return stageToDisplayLabel(stage)
 }
@@ -24,16 +22,20 @@ interface OrderProductionSectionProps {
   items: Partial<OrderProductionItem>[]
   stages: Partial<OrderStage>[]
   onChange: (items: Partial<OrderProductionItem>[]) => void
-  offerBlocks?: OfferBlockOption[]
+  lockedOfferBlockId?: string
+  hideSectionTitle?: boolean
 }
+
+const VISIBILITY_TOOLTIP =
+  'Widoczna w ofercie — pozycja trafi do PDF. Ukryta — tylko w zleceniu, bez PDF dla klienta.'
 
 export default function OrderProductionSection({
   items = [],
   stages = [],
   onChange,
-  offerBlocks = [],
+  lockedOfferBlockId,
+  hideSectionTitle = false,
 }: OrderProductionSectionProps) {
-  const showBlockColumn = offerBlocks.length > 0
   const { data: paginatedResources } = useEquipment({ category: 'ZASOBY', limit: 200, page: 1 })
   const resources = paginatedResources?.data || []
   const findResourceByName = (name: string) => {
@@ -80,6 +82,7 @@ export default function OrderProductionSection({
       isSubcontractor: false,
       visibleInOffer: true,
       sortOrder: baseSort + idx,
+      offerBlockId: lockedOfferBlockId ?? null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }))
@@ -123,10 +126,12 @@ export default function OrderProductionSection({
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-between items-center">
-        <h3 className="text-base font-semibold">Produkcja i logistyka</h3>
-        <span className="text-sm text-muted-foreground">{items.length} pozycji</span>
-      </div>
+      {!hideSectionTitle && (
+        <div className="flex justify-between items-center">
+          <h3 className="text-base font-semibold">Produkcja i logistyka</h3>
+          <span className="text-sm text-muted-foreground">{items.length} pozycji</span>
+        </div>
+      )}
 
       <datalist id="production-datalist">
         {resources.map((r) => (
@@ -146,10 +151,12 @@ export default function OrderProductionSection({
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-40">Etap</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-28">Netto</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-16">Podw.</th>
-                {showBlockColumn && (
-                  <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-28">Blok</th>
-                )}
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-20">Oferta</th>
+                <th
+                  className="text-left py-1.5 px-2 font-medium text-muted-foreground w-20"
+                  title={VISIBILITY_TOOLTIP}
+                >
+                  Oferta
+                </th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-20">Akcje</th>
               </tr>
             </thead>
@@ -247,21 +254,12 @@ export default function OrderProductionSection({
                         title="Podwykonawca"
                       />
                     </td>
-                    {showBlockColumn && (
-                      <td className="py-1 px-2 whitespace-nowrap">
-                        <OrderLineBlockSelect
-                          blocks={offerBlocks}
-                          value={item.offerBlockId}
-                          onChange={(offerBlockId) => updateItem(index, { offerBlockId })}
-                        />
-                      </td>
-                    )}
                     <td className="py-1 px-2 whitespace-nowrap">
                       <button
                         type="button"
                         onClick={() => updateItem(index, { visibleInOffer: !item.visibleInOffer })}
                         className={`p-1 rounded ${item.visibleInOffer !== false ? 'text-green-500' : 'text-muted-foreground'}`}
-                        title={item.visibleInOffer !== false ? 'Widoczny w ofercie' : 'Ukryty'}
+                        title={VISIBILITY_TOOLTIP}
                       >
                         {item.visibleInOffer !== false ? <Eye size={16} /> : <EyeOff size={16} />}
                       </button>

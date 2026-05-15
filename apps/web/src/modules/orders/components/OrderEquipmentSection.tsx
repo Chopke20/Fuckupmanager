@@ -8,12 +8,12 @@ import {
   orderLineNameInputClass,
   orderLineNamePlaceholder,
 } from '../utils/orderLineItemFieldStyles'
-import OrderLineBlockSelect, { type OfferBlockOption } from './OrderLineBlockSelect'
-
 interface OrderEquipmentSectionProps {
   items: Partial<OrderEquipmentItem>[]
   onChange: (items: Partial<OrderEquipmentItem>[]) => void
-  offerBlocks?: OfferBlockOption[]
+  /** Nowe wiersze automatycznie przypisane do tego bloku (bez kolumny „Blok”). */
+  lockedOfferBlockId?: string
+  hideSectionTitle?: boolean
   /** Jeśli edytujemy zlecenie – wyklucz je z konfliktów */
   excludeOrderId?: string
   orderDateFrom?: string
@@ -32,9 +32,13 @@ export default function OrderEquipmentSection({
   orderDateFrom,
   orderDateTo,
   orderSpanDays = 1,
-  offerBlocks = [],
+  lockedOfferBlockId,
+  hideSectionTitle = false,
 }: OrderEquipmentSectionProps) {
-  const showBlockColumn = offerBlocks.length > 0
+  const VISIBILITY_TOOLTIP =
+    'Widoczna w ofercie — pozycja trafi do PDF. Ukryta — tylko w zleceniu, bez PDF dla klienta.'
+  const AVAILABILITY_TOOLTIP =
+    'Konflikty terminów z innymi zleceniami i stan magazynowy. Ikona (i) — szczegóły dostępności.'
   const normalizeCategoryName = (value: string): string => {
     const normalized = value.trim()
     const upper = normalized.toUpperCase()
@@ -185,6 +189,7 @@ export default function OrderEquipmentSection({
       visibleInOffer: true,
       isRental: false,
       sortOrder: items.length + idx,
+      offerBlockId: lockedOfferBlockId ?? null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }))
@@ -208,6 +213,7 @@ export default function OrderEquipmentSection({
       visibleInOffer: eq.visibleInOffer,
       isRental: false,
       sortOrder: items.length,
+      offerBlockId: lockedOfferBlockId ?? null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }
@@ -263,10 +269,15 @@ export default function OrderEquipmentSection({
           <option key={c} value={c} />
         ))}
       </datalist>
-      <div className="flex justify-between items-center">
-        <h3 className="text-base font-semibold">Wykaz sprzętu</h3>
-        {isCheckingAvailability && <span className="text-sm text-blue-500">Sprawdzanie dostępności…</span>}
-      </div>
+      {!hideSectionTitle && (
+        <div className="flex justify-between items-center">
+          <h3 className="text-base font-semibold">Wykaz sprzętu</h3>
+          {isCheckingAvailability && <span className="text-sm text-blue-500">Sprawdzanie dostępności…</span>}
+        </div>
+      )}
+      {hideSectionTitle && isCheckingAvailability && (
+        <span className="text-sm text-blue-500">Sprawdzanie dostępności…</span>
+      )}
 
       {/* Tabela jak harmonogram – spójny wygląd, nazwa ma miejsce */}
       <div className="border border-border rounded overflow-hidden">
@@ -310,11 +321,18 @@ export default function OrderEquipmentSection({
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-16">Rabat</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-28">Netto</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-16" title="Wynajem – bez marży">Rental</th>
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-36">Dostępność</th>
-                {showBlockColumn && (
-                  <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-28">Blok</th>
-                )}
-                <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-20">Oferta</th>
+                <th
+                  className="text-left py-1.5 px-2 font-medium text-muted-foreground w-36"
+                  title={AVAILABILITY_TOOLTIP}
+                >
+                  Dostępność
+                </th>
+                <th
+                  className="text-left py-1.5 px-2 font-medium text-muted-foreground w-20"
+                  title={VISIBILITY_TOOLTIP}
+                >
+                  Oferta
+                </th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-20">Akcje</th>
               </tr>
             </thead>
@@ -452,26 +470,17 @@ export default function OrderEquipmentSection({
                         type="button"
                         onClick={() => setAvailabilityModalItem({ item, index })}
                         className="ml-1 p-0.5 rounded hover:bg-surface-2 text-muted-foreground hover:text-foreground inline-flex"
-                        title="Szczegóły dostępności"
+                        title={AVAILABILITY_TOOLTIP}
                       >
                         <Info size={14} />
                       </button>
                     </td>
-                    {showBlockColumn && (
-                      <td className="py-1 px-2 whitespace-nowrap">
-                        <OrderLineBlockSelect
-                          blocks={offerBlocks}
-                          value={item.offerBlockId}
-                          onChange={(offerBlockId) => updateItem(index, { offerBlockId })}
-                        />
-                      </td>
-                    )}
                     <td className="py-1 px-2 whitespace-nowrap">
                       <button
                         type="button"
                         onClick={() => updateItem(index, { visibleInOffer: !item.visibleInOffer })}
                         className={`p-1 rounded ${item.visibleInOffer !== false ? 'text-green-500 hover:text-green-700' : 'text-red-500 hover:text-red-700'}`}
-                        title={item.visibleInOffer !== false ? 'Widoczny w ofercie' : 'Ukryty w ofercie'}
+                        title={VISIBILITY_TOOLTIP}
                       >
                         {item.visibleInOffer !== false ? <Eye size={16} /> : <EyeOff size={16} />}
                       </button>
@@ -502,7 +511,7 @@ export default function OrderEquipmentSection({
             </tbody>
             <tfoot>
               <tr className="bg-surface-2 border-t border-border">
-                <td colSpan={12} className="py-1.5 px-2">
+                <td colSpan={11} className="py-1.5 px-2">
                   <button
                     type="button"
                     onClick={() => addEmptyRows(1)}
@@ -528,7 +537,7 @@ export default function OrderEquipmentSection({
                 <td className="py-1.5 px-2 font-bold text-right text-sm min-w-[120px] whitespace-nowrap">
                   {totalValue.toFixed(2)} PLN
                 </td>
-                <td colSpan={4} className="py-1.5 px-2 text-sm text-right min-w-[140px] whitespace-nowrap">
+                <td colSpan={3} className="py-1.5 px-2 text-sm text-right min-w-[140px] whitespace-nowrap">
                   <span className="text-amber-500 font-semibold">
                     Rental: {rentalValue.toFixed(2)} PLN
                   </span>
@@ -566,7 +575,8 @@ export default function OrderEquipmentSection({
         </div>
       )}
 
-      {/* Informacje */}
+      {/* legacy info panel removed — tooltips on Oferta / Dostępność */}
+      {false && (
       <div className="bg-surface-2 rounded-lg border border-border p-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
           <div>
@@ -593,6 +603,7 @@ export default function OrderEquipmentSection({
           </div>
         </div>
       </div>
+      )}
 
       {/* Modal szczegółów dostępności – w przygotowaniu */}
       {availabilityModalItem && (

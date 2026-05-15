@@ -356,7 +356,8 @@ function blockSummary(net: number, vat: number, ctx: PositionsMoneyContext): str
     </div>`
 }
 
-function buildTrioSection(
+/** Sprzęt + produkcja dla bloku (bez transportu — transport jest globalny). */
+function buildBlockPositionsSection(
   order: OrderLike,
   blockId: string | null,
   ctx: PositionsMoneyContext,
@@ -367,15 +368,12 @@ function buildTrioSection(
   const allProd = (order.productionItems ?? []) as VisibleProduction[]
   const eq = filterEquipment(allEq, blockId)
   const prod = filterProduction(allProd, blockId, false)
-  const trans = filterProduction(allProd, blockId, true)
 
   const parts: string[] = []
   let eqNet = 0
   let eqVat = 0
   let prodNet = 0
   let prodVat = 0
-  let transNet = 0
-  let transVat = 0
 
   if (eq.length > 0) {
     if (options.showSectionTitles) parts.push(sectionHeader('Sprzęt', 'sec-hdr--sub'))
@@ -391,15 +389,19 @@ function buildTrioSection(
     prodNet = prodPart.totalNet
     prodVat = prodPart.totalVat
   }
-  if (trans.length > 0) {
-    if (options.showSectionTitles) parts.push(sectionHeader('Transport', 'sec-hdr--sub'))
-    const transPart = buildTransportParts(order, trans, ctx, stageById)
-    parts.push(transPart.html)
-    transNet = transPart.totalNet
-    transVat = transPart.totalVat
-  }
 
-  return { html: parts.join('\n'), eqNet, eqVat, prodNet, prodVat, transNet, transVat }
+  return { html: parts.join('\n'), eqNet, eqVat, prodNet, prodVat }
+}
+
+function buildGlobalTransportSection(
+  order: OrderLike,
+  ctx: PositionsMoneyContext,
+  stageById: Map<string | undefined, string>,
+): string {
+  const transAll = filterProductionAll((order.productionItems ?? []) as VisibleProduction[], true)
+  if (transAll.length === 0) return ''
+  const parts = [sectionHeader('Transport'), buildTransportParts(order, transAll, ctx, stageById).html]
+  return parts.join('\n')
 }
 
 function buildNamedBlock(
@@ -411,12 +413,11 @@ function buildNamedBlock(
 ): string | null {
   const allEq = filterEquipment((order.equipmentItems ?? []) as VisibleEquipment[], blockId)
   const allProd = filterProduction((order.productionItems ?? []) as VisibleProduction[], blockId, false)
-  const allTrans = filterProduction((order.productionItems ?? []) as VisibleProduction[], blockId, true)
-  if (allEq.length === 0 && allProd.length === 0 && allTrans.length === 0) return null
+  if (allEq.length === 0 && allProd.length === 0) return null
 
-  const trio = buildTrioSection(order, blockId, ctx, stageById, { showSectionTitles: true })
-  const blockNet = trio.eqNet + trio.prodNet + trio.transNet
-  const blockVat = trio.eqVat + trio.prodVat + trio.transVat
+  const trio = buildBlockPositionsSection(order, blockId, ctx, stageById, { showSectionTitles: true })
+  const blockNet = trio.eqNet + trio.prodNet
+  const blockVat = trio.eqVat + trio.prodVat
 
   return `
     <div class="offer-block">
@@ -431,7 +432,7 @@ function buildUngroupedSection(
   ctx: PositionsMoneyContext,
   stageById: Map<string | undefined, string>,
 ): string {
-  return buildTrioSection(order, null, ctx, stageById, { showSectionTitles: true }).html
+  return buildBlockPositionsSection(order, null, ctx, stageById, { showSectionTitles: true }).html
 }
 
 function buildLegacyFlat(order: OrderLike, ctx: PositionsMoneyContext, stageById: Map<string | undefined, string>): string {
@@ -489,6 +490,8 @@ export function buildOfferPositionsSection(order: OrderLike, ctx: PositionsMoney
     }
     const ungrouped = buildUngroupedSection(order, ctx, stageById)
     if (ungrouped.trim()) sections.push(ungrouped)
+    const transportSection = buildGlobalTransportSection(order, ctx, stageById)
+    if (transportSection.trim()) sections.push(transportSection)
   }
 
   const totals = computeGlobalTotals(order, ctx, stageById)
