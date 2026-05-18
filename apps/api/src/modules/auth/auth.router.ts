@@ -27,12 +27,15 @@ import { createRateLimit } from './auth.rate-limit'
 
 const router = Router()
 const withAuth = [requireAuth, bindCompanyContext] as const
+const LOGIN_WINDOW_MS = 10 * 60 * 1000
+const PASSWORD_RESET_WINDOW_MS = 10 * 60 * 1000
+const ACCEPT_INVITE_WINDOW_MS = 10 * 60 * 1000
 
 router.get('/public-companies', listPublicCompaniesHandler)
-router.post('/login', createRateLimit(10, 10 * 60 * 1000), login)
-router.post('/forgot-password', createRateLimit(5, 10 * 60 * 1000), forgotPassword)
-router.post('/reset-password', resetPassword)
-router.post('/accept-invite', acceptInvite)
+router.post('/login', createRateLimit(10, LOGIN_WINDOW_MS), login)
+router.post('/forgot-password', createRateLimit(5, PASSWORD_RESET_WINDOW_MS), forgotPassword)
+router.post('/reset-password', createRateLimit(5, PASSWORD_RESET_WINDOW_MS), resetPassword)
+router.post('/accept-invite', createRateLimit(10, ACCEPT_INVITE_WINDOW_MS), acceptInvite)
 
 router.post('/logout', ...withAuth, logout)
 router.get('/me', ...withAuth, me)

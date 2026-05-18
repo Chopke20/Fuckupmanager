@@ -35,6 +35,16 @@ export type SafeUser = {
   permissions?: Permission[]
 }
 
+type SafeInvitation = {
+  id: string
+  email: string
+  role: string
+  fullName: string | null
+  expiresAt: Date
+  usedAt: Date | null
+  createdAt: Date
+}
+
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase()
 }
@@ -139,6 +149,11 @@ export class AuthService {
   }
 
   async login(companyCode: string, email: string, password: string, userAgent?: string, ipAddress?: string) {
+    const company = getCompanyByCode(companyCode)
+    if (!company) {
+      throw new AppError('Nieznana firma.', 404, 'COMPANY_NOT_FOUND')
+    }
+
     return runWithCompanyContext(companyCode, async () => {
       const normalizedEmail = normalizeEmail(email)
       const user = await prisma.user.findUnique({ where: { email: normalizedEmail } })
@@ -169,11 +184,11 @@ export class AuthService {
       })
 
       const permissions = await resolvePermissionsForRoleFromDb(user.role)
-      const withCompany = toSafeUserWithCompany(user, companyCode)
+      const withCompany = toSafeUserWithCompany(user, company.code)
       return {
         sessionToken,
         user: {
-          ...(await withDbBranding(companyCode, withCompany)),
+          ...(await withDbBranding(company.code, withCompany)),
           permissions,
         },
       }
@@ -373,8 +388,17 @@ export class AuthService {
       }),
       prisma.invitationToken.count(),
     ])
+    const data: SafeInvitation[] = items.map((item) => ({
+      id: item.id,
+      email: item.email,
+      role: item.role,
+      fullName: item.fullName,
+      expiresAt: item.expiresAt,
+      usedAt: item.usedAt,
+      createdAt: item.createdAt,
+    }))
     return {
-      data: items,
+      data,
       meta: { total, page: safePage, lastPage: Math.max(1, Math.ceil(total / safeLimit)) },
     }
   }

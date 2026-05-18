@@ -18,6 +18,7 @@ import dataportRouter from './modules/dataport/dataport.router'
 import { bindCompanyContext, requireAuth, requireModuleAccess, requirePermission } from './shared/middleware/auth.middleware'
 
 const PRODUCTION_FRONTEND_ORIGINS = ['https://fuckupmanager.lamastage.pl'] as const
+const BODY_SIZE_LIMIT = '1mb'
 
 function splitOrigins(raw: string | undefined, fallback: string): string[] {
   const s = (raw ?? fallback).trim()
@@ -53,8 +54,8 @@ export function createApp() {
   app.use(requestIdMiddleware)
 
   // Body parsing
-  app.use(express.json())
-  app.use(express.urlencoded({ extended: true }))
+  app.use(express.json({ limit: BODY_SIZE_LIMIT }))
+  app.use(express.urlencoded({ extended: true, limit: BODY_SIZE_LIMIT }))
 
   // Health check
   app.get('/health', (req, res) => {
