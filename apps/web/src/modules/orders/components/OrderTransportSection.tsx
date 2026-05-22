@@ -686,7 +686,7 @@ export default function OrderTransportSection({
               <div>
                 <div className="text-xs text-muted-foreground">Dni zlecenia</div>
                 <div>
-                  {toDateKey(orderDateFrom as any) || '—'} - {toDateKey(orderDateTo as any) || '—'} ({countOrderDays(orderDateFrom, orderDateTo)})
+                  {toDateKey(orderDateFrom as any) || '—'} - {toDateKey(orderDateTo as any) || '—'} ({orderDateFrom != null && orderDateTo != null ? daysBetween(orderDateFrom, orderDateTo) : 1})
                 </div>
               </div>
               <div>
