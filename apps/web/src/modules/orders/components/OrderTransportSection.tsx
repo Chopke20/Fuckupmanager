@@ -7,8 +7,12 @@ import {
   clampOrderLineDescription,
 } from '@lama-stage/shared-types';
 import { financeApi } from '../api/pdf.api';
+import { daysBetween } from '../../../shared/utils/dateHelpers';
 import { shouldAskForTransportRecalculation } from '../utils/transportPricing';
 import { stageToDisplayLabel } from '../utils/stageLabel';
+
+/** Opóźnienie przed przeliczeniem liczby transportów po zmianie dat zlecenia (unika chwilowego „2 dni”). */
+const ORDER_DATES_DEBOUNCE_MS = 400;
 import { orderLineDescriptionInputClass, orderLineNameInputClass } from '../utils/orderLineItemFieldStyles';
 interface TransportPricingSettings {
   ranges: Array<{
@@ -71,19 +75,6 @@ function transportNameFromStage(stage?: Partial<OrderStage> | null, fallback = '
   return `Transport - ${stageToDisplayLabel(stage)}`;
 }
 
-function countOrderDays(from?: string | Date, to?: string | Date) {
-  const fromKey = toDateKey(from as any);
-  const toKey = toDateKey(to as any);
-  if (!fromKey || !toKey) return 1;
-  const [fy, fm, fd] = fromKey.split('-').map(Number);
-  const [ty, tm, td] = toKey.split('-').map(Number);
-  if (!fy || !fm || !fd || !ty || !tm || !td) return 1;
-  const start = new Date(fy, fm - 1, fd).getTime();
-  const end = new Date(ty, tm - 1, td).getTime();
-  if (end < start) return 1;
-  return Math.max(1, Math.floor((end - start) / (24 * 60 * 60 * 1000)) + 1);
-}
-
 function pickTransportTargets(
   stages: Partial<OrderStage>[],
   orderDateFrom?: string | Date,
@@ -91,7 +82,10 @@ function pickTransportTargets(
 ): TransportTarget[] {
   const orderFromDateKey = toDateKey(orderDateFrom as any);
   const orderToDateKey = toDateKey(orderDateTo as any);
-  const orderDays = countOrderDays(orderDateFrom, orderDateTo);
+  const orderDays =
+    orderDateFrom != null && orderDateTo != null
+      ? daysBetween(orderDateFrom, orderDateTo)
+      : 1;
   const hasSecondLine = orderDays > 1;
 
   const datedStages = stages
@@ -231,7 +225,21 @@ export default function OrderTransportSection({
       .finally(() => setLoadingSettings(false));
   }, []);
 
-  const targets = useMemo(() => pickTransportTargets(stages, orderDateFrom, orderDateTo), [stages, orderDateFrom, orderDateTo]);
+  const [debouncedOrderDateFrom, setDebouncedOrderDateFrom] = useState(orderDateFrom);
+  const [debouncedOrderDateTo, setDebouncedOrderDateTo] = useState(orderDateTo);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedOrderDateFrom(orderDateFrom);
+      setDebouncedOrderDateTo(orderDateTo);
+    }, ORDER_DATES_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [orderDateFrom, orderDateTo]);
+
+  const targets = useMemo(
+    () => pickTransportTargets(stages, debouncedOrderDateFrom, debouncedOrderDateTo),
+    [stages, debouncedOrderDateFrom, debouncedOrderDateTo],
+  );
   const explanation = useMemo(() => {
     if (distanceKm == null) {
       return 'Brak odległości z Google Places. Ustaw koszt ręcznie albo wybierz miejsce z placeId.';
@@ -289,12 +297,15 @@ export default function OrderTransportSection({
       } as Partial<OrderProductionItem>;
     });
 
-    const extraRows = sourceItems.slice(activeTargets.length).map((row, extraIdx) => ({
-      ...row,
-      isTransport: true,
-      sortOrder: activeTargets.length + extraIdx,
-      updatedAt: new Date().toISOString(),
-    }));
+    const extraRows = sourceItems
+      .slice(activeTargets.length)
+      .filter((row) => row.isAutoCalculated === false)
+      .map((row, extraIdx) => ({
+        ...row,
+        isTransport: true,
+        sortOrder: activeTargets.length + extraIdx,
+        updatedAt: new Date().toISOString(),
+      }));
 
     return [...baseRows, ...extraRows];
   };
@@ -349,6 +360,11 @@ export default function OrderTransportSection({
 
     if (items.length === 0) {
       onChange(buildAutoRows([], targets));
+      return;
+    }
+
+    if (targetsLengthChanged && targets.length < prevTargetsLen) {
+      onChange(buildAutoRows(items, targets));
       return;
     }
 
