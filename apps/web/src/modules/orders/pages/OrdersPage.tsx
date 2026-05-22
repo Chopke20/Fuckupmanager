@@ -32,8 +32,6 @@ export default function OrdersPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const statusFromUrl = searchParams.get('status')
-  const [page, setPage] = useState(1)
-  const [limit, setLimit] = useState(10)
   const [searchTerm, setSearchTerm] = useState('')
   const [openStatusOrderId, setOpenStatusOrderId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<Order['status'] | 'all'>(() =>
@@ -57,8 +55,8 @@ export default function OrdersPage() {
   }
 
   const { data: paginatedOrders, isLoading, error } = useOrders({
-    page,
-    limit,
+    page: 1,
+    limit: 500,
     search: searchTerm,
     status: statusFilter,
   })
@@ -322,24 +320,15 @@ export default function OrdersPage() {
                 })}
               </tbody>
             </table>
-            <div className="p-3 flex justify-between items-center border-t border-border">
-              <span className="text-xs text-muted-foreground">Strona {meta?.page ?? 1} z {meta?.lastPage ?? 1}</span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="px-3 py-1.5 border border-border rounded text-xs hover:bg-surface-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Poprzednia
-                </button>
-                <button
-                  onClick={() => setPage((p) => p + 1)}
-                  disabled={page === meta?.lastPage}
-                  className="px-3 py-1.5 border border-border rounded text-xs hover:bg-surface-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Następna
-                </button>
-              </div>
+            <div className="p-3 border-t border-border">
+              <span className="text-xs text-muted-foreground">
+                {meta?.total != null
+                  ? `Wyświetlono ${orders.length} z ${meta.total} zleceń`
+                  : `${orders.length} zleceń`}
+                {meta?.total != null && meta.total > orders.length
+                  ? ' (maks. 500 — zawęź wyszukiwanie lub filtr statusu)'
+                  : ''}
+              </span>
             </div>
           </div>
         ) : (
