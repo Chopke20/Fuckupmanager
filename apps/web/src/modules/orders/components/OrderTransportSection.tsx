@@ -70,6 +70,14 @@ function formatDateKey(dateKey?: string) {
   return `${d}.${m}.${y}`;
 }
 
+/** Stary format: „Całe zlecenie (dd.mm.rrrr)” → zawsze „Całe zlecenie”. */
+function normalizeWholeOrderAssignmentDescription(description?: string | null): string | undefined {
+  const trimmed = (description ?? '').trim();
+  if (!trimmed) return undefined;
+  if (/^Całe zlecenie\s*\([^)]+\)$/i.test(trimmed)) return 'Całe zlecenie';
+  return trimmed;
+}
+
 function transportNameFromStage(stage?: Partial<OrderStage> | null, fallback = 'Transport') {
   if (!stage) return fallback;
   return `Transport - ${stageToDisplayLabel(stage)}`;
@@ -117,7 +125,7 @@ function pickTransportTargets(
         key: 'MAIN',
         stageId: '',
         label: 'Transport',
-        assignment: orderFromDateKey ? `Całe zlecenie (${formatDateKey(orderFromDateKey)})` : 'Całe zlecenie',
+        assignment: 'Całe zlecenie',
         dateKey: orderFromDateKey || orderToDateKey || undefined,
       },
     ];
@@ -212,6 +220,7 @@ export default function OrderTransportSection({
   const lastTargetsLengthRef = useRef<number>(0);
   /** Po pierwszym przebiegu synchronizacji nie dokładamy wierszy „dodatkowy dzień” tylko dlatego, że zlecenie jest wielodniowe — tylko przy realnej zmianie liczby celów transportu (np. harmonogram). */
   const transportSyncInitializedRef = useRef(false);
+  const legacyAssignmentNormalizedRef = useRef(false);
 
   useEffect(() => {
     setLoadingSettings(true);
@@ -254,6 +263,21 @@ export default function OrderTransportSection({
     [items]
   );
 
+  useEffect(() => {
+    if (legacyAssignmentNormalizedRef.current || items.length === 0) return;
+    legacyAssignmentNormalizedRef.current = true;
+    const next = items.map((item) => {
+      const normalized = normalizeWholeOrderAssignmentDescription(item.description);
+      if (normalized && normalized !== item.description) {
+        return { ...item, description: normalized };
+      }
+      return item;
+    });
+    if (next.some((row, i) => row.description !== items[i]?.description)) {
+      onChange(next);
+    }
+  }, [items, onChange]);
+
   const stageOptions = useMemo(
     () =>
       [...stages]
@@ -281,7 +305,9 @@ export default function OrderTransportSection({
         id: existing?.id || `temp-transport-${target.key}-${Date.now()}-${idx}`,
         orderId: existing?.orderId || '',
         name: existing?.name || target.label,
-        description: existing?.description || target.assignment || undefined,
+        description:
+          normalizeWholeOrderAssignmentDescription(existing?.description) ??
+          (existing?.description ?? target.assignment ?? undefined),
         rateType: 'FLAT' as const,
         rateValue: amount,
         units: 1,
@@ -579,7 +605,12 @@ export default function OrderTransportSection({
                           type="text"
                           maxLength={ORDER_LINE_DESCRIPTION_MAX_LENGTH}
                           className={orderLineDescriptionInputClass}
-                          value={item.description || target?.assignment || ''}
+                          value={
+                            normalizeWholeOrderAssignmentDescription(item.description) ??
+                            item.description ??
+                            target?.assignment ??
+                            ''
+                          }
                           onChange={(e) =>
                             updateRow(idx, {
                               description: clampOrderLineDescription(e.target.value),
@@ -706,7 +737,12 @@ export default function OrderTransportSection({
                     if (rowStage) {
                       return `${stageToDisplayLabel(rowStage)}${rowStage.date ? ` (${new Date(rowStage.date as any).toLocaleDateString('pl-PL')})` : ''}`;
                     }
-                    return row?.description || targets[infoRowIndex]?.assignment || 'Własny element';
+                    return (
+                      normalizeWholeOrderAssignmentDescription(row?.description) ??
+                      row?.description ??
+                      targets[infoRowIndex]?.assignment ??
+                      'Własny element'
+                    );
                   })()}
                 </div>
               </div>
