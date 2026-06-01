@@ -4,6 +4,49 @@ import { GripVertical, Plus, Trash2 } from 'lucide-react'
 import { Order, OrderStage } from '@lama-stage/shared-types'
 import { dateInputToISO, isoToDateInput, daysBetween } from '../../../shared/utils/dateHelpers'
 import { randomClientUuid } from '../../../shared/utils/uuid'
+import { SCHEDULE_TIME_TBA, isScheduleTimeTba } from '../utils/scheduleTime'
+
+function ScheduleTimeField({
+  value,
+  onChange,
+  defaultTime,
+}: {
+  value?: string | null
+  onChange: (next: string) => void
+  defaultTime: string
+}) {
+  if (isScheduleTimeTba(value)) {
+    return (
+      <button
+        type="button"
+        className="w-full min-w-[80px] px-2 py-1 text-xs font-medium border border-dashed border-primary/40 rounded bg-primary/5 hover:bg-primary/10 text-foreground"
+        onClick={() => onChange(defaultTime)}
+        title="Kliknij, aby ustawić konkretną godzinę"
+      >
+        TBA
+      </button>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <input
+        type="time"
+        className="w-full min-w-[80px] px-2 py-1 bg-background border border-border rounded text-xs"
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <button
+        type="button"
+        className="text-[10px] text-primary hover:underline self-start px-0.5"
+        onClick={() => onChange(SCHEDULE_TIME_TBA)}
+        title="Do ustalenia (TBA)"
+      >
+        TBA
+      </button>
+    </div>
+  )
+}
 
 interface OrderScheduleSectionProps {
   /** Data rozpoczęcia zlecenia – pierwsza proponowana data przy dodawaniu etapu */
@@ -213,19 +256,17 @@ export default function OrderScheduleSection({ orderDateFrom, onChange }: OrderS
                   />
                 </td>
                 <td className="py-1 px-2">
-                  <input
-                    type="time"
-                    className="w-full min-w-[80px] px-2 py-1 bg-background border border-border rounded text-xs"
-                    value={stage.timeStart || ''}
-                    onChange={(e) => updateStage(index, { timeStart: e.target.value })}
+                  <ScheduleTimeField
+                    value={stage.timeStart}
+                    defaultTime="09:00"
+                    onChange={(timeStart) => updateStage(index, { timeStart })}
                   />
                 </td>
                 <td className="py-1 px-2">
-                  <input
-                    type="time"
-                    className="w-full min-w-[80px] px-2 py-1 bg-background border border-border rounded text-xs"
-                    value={stage.timeEnd || ''}
-                    onChange={(e) => updateStage(index, { timeEnd: e.target.value })}
+                  <ScheduleTimeField
+                    value={stage.timeEnd}
+                    defaultTime="17:00"
+                    onChange={(timeEnd) => updateStage(index, { timeEnd })}
                   />
                 </td>
                 <td className="py-1 px-2">

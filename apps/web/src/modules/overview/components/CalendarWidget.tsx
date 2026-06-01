@@ -12,6 +12,7 @@ import { useOrders, useDeleteOrder, useUpdateOrder } from '../../orders/hooks/us
 import { useEquipment } from '../../equipment/hooks/useEquipment'
 import { api } from '../../../shared/api/client'
 import { ORDER_STATUSES, type Order, type OrderStage } from '@lama-stage/shared-types'
+import { isScheduleTimeTba, parseScheduleTime } from '../../orders/utils/scheduleTime'
 
 type CalendarNoteEvent = {
   id: string
@@ -277,14 +278,14 @@ export default function CalendarWidget({
           const stageDate = stage.date != null ? new Date(stage.date) : new Date()
           const startDate = new Date(stageDate)
           const endDate = new Date(stageDate)
-          if (stage.timeStart) {
-            const [h, m] = String(stage.timeStart).split(':').map(Number)
-            startDate.setHours(h ?? 0, m ?? 0, 0, 0)
+          const startTime = parseScheduleTime(stage.timeStart)
+          const endTime = parseScheduleTime(stage.timeEnd)
+          if (startTime) {
+            startDate.setHours(startTime.hours, startTime.minutes, 0, 0)
           }
-          if (stage.timeEnd) {
-            const [h, m] = String(stage.timeEnd).split(':').map(Number)
-            endDate.setHours(h ?? 0, m ?? 0, 0, 0)
-          } else {
+          if (endTime) {
+            endDate.setHours(endTime.hours, endTime.minutes, 0, 0)
+          } else if (!startTime) {
             endDate.setHours(23, 59, 0, 0)
           }
           if (endDate.getTime() <= startDate.getTime()) {
@@ -292,12 +293,13 @@ export default function CalendarWidget({
           }
           const stageLabel = stage.label || STAGE_LABELS[stage.type as keyof typeof STAGE_LABELS] || stage.type
           const eventId = `stage-${order.id}-${stage.id ?? `i-${idx}`}`
+          const anyTba = isScheduleTimeTba(stage.timeStart) || isScheduleTimeTba(stage.timeEnd)
           return {
             id: eventId,
             title: order.name,
             start: startDate.toISOString(),
             end: endDate.toISOString(),
-            allDay: !stage.timeStart && !stage.timeEnd,
+            allDay: anyTba || (!stage.timeStart && !stage.timeEnd),
             backgroundColor: style.bg,
             borderColor: style.bg,
             classNames: style.classNames,
