@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client'
 import { prisma } from '../../prisma/client'
 import { NotFoundError } from '../../shared/errors/AppError'
 import { PaginationSchema } from '@lama-stage/shared-types'
+import { equipmentListSearchWhere } from '../../shared/utils/prisma-search'
 
 /** Nowe kody: sprzęt = EQP-, zasoby = RES- (5 cyfr). Skan uwzględnia legacy SPR-/ZAS- przy wyliczaniu kolejnego numeru. */
 const CODE_PREFIX_EQUIPMENT = 'EQP-'
@@ -54,26 +55,22 @@ export const getEquipment = async (req: Request, res: Response, next: NextFuncti
 
     const deletedOnly = deletedOnlyQuery === 'true' || deletedOnlyQuery === '1';
 
-    const where: Prisma.EquipmentWhereInput = { isDeleted: deletedOnly }
     // ZASOBY są tylko w zakładce Zasoby – w liście sprzętu zawsze wykluczamy
     const excludeZasoby = category !== 'ZASOBY'
+    const andFilters: Prisma.EquipmentWhereInput[] = [{ isDeleted: deletedOnly }]
     if (category && category !== 'all') {
-      where.category = category as string
+      andFilters.push({ category: category as string })
     } else if (!deletedOnly) {
-      where.category = { not: 'ZASOBY' }
+      andFilters.push({ category: { not: 'ZASOBY' } })
     }
     if (subcategory && category === 'ZASOBY') {
-      where.subcategory = String(subcategory)
+      andFilters.push({ subcategory: String(subcategory) })
     }
-    if (search) {
-      const term = String(search).trim()
-      where.OR = [
-        { name: { contains: term } },
-        { description: { contains: term } },
-        { internalCode: { contains: term } },
-        { subcategory: { contains: term } },
-      ]
+    const searchTerm = typeof search === 'string' ? search.trim() : ''
+    if (searchTerm) {
+      andFilters.push(equipmentListSearchWhere(searchTerm))
     }
+    const where: Prisma.EquipmentWhereInput = { AND: andFilters }
 
     const [equipmentRaw, total] = await prisma.$transaction([
       prisma.equipment.findMany({

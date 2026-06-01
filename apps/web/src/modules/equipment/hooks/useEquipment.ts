@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { equipmentApi } from '../api/equipment.api'
 import { CreateEquipmentDto, UpdateEquipmentDto } from '@lama-stage/shared-types'
 
@@ -6,6 +6,7 @@ export const useEquipment = (params?: { category?: string, subcategory?: string,
   return useQuery({
     queryKey: ['equipment', params],
     queryFn: () => equipmentApi.getAll(params),
+    placeholderData: keepPreviousData,
   })
 }
 

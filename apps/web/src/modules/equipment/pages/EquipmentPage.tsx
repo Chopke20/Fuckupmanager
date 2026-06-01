@@ -35,9 +35,26 @@ export default function EquipmentPage() {
   const categories =
     categoriesFiltered.length > 0 ? categoriesFiltered : ['AUDIO', 'MULTIMEDIA', 'SCENA', 'STREAM', 'ŚWIATŁO']
   const categoryParam = selectedCategory === 'ZASOBY' ? 'all' : selectedCategory
-  const { data: paginatedEquipment, isLoading } = useEquipment({ category: categoryParam, search, page: 1, limit: 500 })
+  const searchQuery = search.trim()
+  const { data: paginatedEquipment, isLoading, isFetching } = useEquipment({
+    category: categoryParam,
+    search: searchQuery || undefined,
+    page: 1,
+    limit: 500,
+  })
   const equipmentRaw = paginatedEquipment?.data || []
-  const equipmentFiltered = equipmentRaw.filter((eq) => eq.category !== 'ZASOBY')
+  const equipmentFiltered = useMemo(() => {
+    const withoutResources = equipmentRaw.filter((eq) => eq.category !== 'ZASOBY')
+    if (!searchQuery) return withoutResources
+    const needle = searchQuery.toLowerCase()
+    return withoutResources.filter((eq) => {
+      const haystack = [eq.name, eq.description, eq.internalCode, eq.category, eq.subcategory]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      return haystack.includes(needle)
+    })
+  }, [equipmentRaw, searchQuery])
 
   const [sortBy, setSortBy] = useState<string>('internalCode')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
@@ -45,6 +62,8 @@ export default function EquipmentPage() {
     setSortBy(key)
     setSortDir((d) => (sortBy === key ? (d === 'asc' ? 'desc' : 'asc') : key === 'internalCode' ? 'desc' : 'asc'))
   }
+  const showInitialLoading = isLoading && equipmentRaw.length === 0
+
   const equipment = useMemo(() => {
     const list = [...equipmentFiltered]
     const mult = sortDir === 'asc' ? 1 : -1
@@ -142,13 +161,21 @@ export default function EquipmentPage() {
 
       <div className="border border-border rounded overflow-hidden">
         <div className="overflow-x-auto">
-          {isLoading ? (
+          {showInitialLoading ? (
             <div className="p-8 text-center text-muted-foreground">Ładowanie sprzętu...</div>
           ) : equipment.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">
-              Brak sprzętu w bazie. Kliknij "Nowy sprzęt", aby dodać.
+              {searchQuery
+                ? 'Brak sprzętu spełniającego kryteria. Zmień wyszukiwanie lub kategorię.'
+                : 'Brak sprzętu w bazie. Kliknij "Nowy sprzęt", aby dodać.'}
             </div>
           ) : (
+            <>
+            {isFetching && searchQuery ? (
+              <div className="px-3 py-1.5 text-xs text-muted-foreground border-b border-border bg-surface-2/50">
+                Szukam…
+              </div>
+            ) : null}
             <>
               <table className="w-full">
                 <thead>
@@ -215,6 +242,7 @@ export default function EquipmentPage() {
                   ))}
                 </tbody>
               </table>
+            </>
             </>
           )}
         </div>

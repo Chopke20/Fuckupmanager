@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { orderApi } from '../api/order.api';
 import { Order, CreateOrderDto, UpdateOrderDto } from '@lama-stage/shared-types';
 
@@ -23,6 +23,7 @@ export const useOrders = (params?: {
   return useQuery({
     queryKey: orderKeys.list(params),
     queryFn: () => orderApi.getAll(params),
+    placeholderData: keepPreviousData,
   });
 };
 

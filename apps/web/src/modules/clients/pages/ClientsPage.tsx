@@ -60,21 +60,7 @@ export default function ClientsPage() {
     }
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="text-muted-foreground">Ładowanie klientów...</div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
-        <p className="text-red-500">Błąd ładowania klientów: {(error as Error).message}</p>
-      </div>
-    )
-  }
+  const showInitialLoading = isLoading && clientsRaw.length === 0
 
   return (
     <div className="space-y-6">
@@ -113,7 +99,13 @@ export default function ClientsPage() {
 
       <div className="border border-border rounded overflow-hidden">
         <div className="overflow-x-auto">
-          {clients.length > 0 ? (
+          {error ? (
+            <div className="bg-red-500/10 p-4">
+              <p className="text-red-500">Błąd ładowania klientów: {(error as Error).message}</p>
+            </div>
+          ) : showInitialLoading ? (
+            <div className="p-8 text-center text-muted-foreground">Ładowanie klientów...</div>
+          ) : clients.length > 0 ? (
             <>
               <table className="w-full">
                 <thead>

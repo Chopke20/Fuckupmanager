@@ -141,22 +141,7 @@ export default function OrdersPage() {
   }, [])
 
 
-  if (isLoading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="text-muted-foreground">Ładowanie zleceń...</div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
-        <p className="text-red-500">Błąd podczas ładowania zleceń</p>
-        <p className="text-sm text-red-500/80 mt-1">Spróbuj odświeżyć stronę</p>
-      </div>
-    )
-  }
+  const showInitialLoading = isLoading && ordersRaw.length === 0
 
   return (
     <div className="space-y-6">
@@ -207,7 +192,14 @@ export default function OrdersPage() {
       </div>
 
       <div className="border border-border rounded overflow-hidden">
-        {orders && orders.length > 0 ? (
+        {error ? (
+          <div className="bg-red-500/10 border-b border-red-500/30 p-4">
+            <p className="text-red-500">Błąd podczas ładowania zleceń</p>
+            <p className="text-sm text-red-500/80 mt-1">Spróbuj odświeżyć stronę</p>
+          </div>
+        ) : showInitialLoading ? (
+          <div className="p-8 text-center text-muted-foreground">Ładowanie zleceń...</div>
+        ) : orders && orders.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>

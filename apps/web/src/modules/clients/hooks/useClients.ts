@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { clientApi } from '../api/client.api'
 import { CreateClientDto, UpdateClientDto } from '@lama-stage/shared-types'
 
@@ -6,6 +6,7 @@ export const useClients = (params?: { page?: number, limit?: number, search?: st
   return useQuery({
     queryKey: ['clients', params],
     queryFn: () => clientApi.getAll(params),
+    placeholderData: keepPreviousData,
   })
 }
 
