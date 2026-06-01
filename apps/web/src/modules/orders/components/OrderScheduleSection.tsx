@@ -17,28 +17,30 @@ function ScheduleTimeField({
 }) {
   if (isScheduleTimeTba(value)) {
     return (
-      <button
-        type="button"
-        className="w-full min-w-[80px] px-2 py-1 text-xs font-medium border border-dashed border-primary/40 rounded bg-primary/5 hover:bg-primary/10 text-foreground"
-        onClick={() => onChange(defaultTime)}
-        title="Kliknij, aby ustawić konkretną godzinę"
-      >
-        TBA
-      </button>
+      <div className="flex items-center gap-1.5 w-full max-w-[9.5rem]">
+        <button
+          type="button"
+          className="flex-1 min-w-0 px-2 py-1 text-xs font-medium border border-dashed border-primary/40 rounded bg-primary/5 hover:bg-primary/10 text-foreground"
+          onClick={() => onChange(defaultTime)}
+          title="Kliknij, aby ustawić konkretną godzinę"
+        >
+          TBA
+        </button>
+      </div>
     )
   }
 
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="flex items-center gap-1.5 w-full max-w-[9.5rem]">
       <input
         type="time"
-        className="w-full min-w-[80px] px-2 py-1 bg-background border border-border rounded text-xs"
+        className="w-[5.25rem] shrink-0 px-1.5 py-1 bg-background border border-border rounded text-xs"
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
       />
       <button
         type="button"
-        className="text-[10px] text-primary hover:underline self-start px-0.5"
+        className="shrink-0 px-1 py-1 text-xs font-medium text-primary hover:bg-primary/10 rounded"
         onClick={() => onChange(SCHEDULE_TIME_TBA)}
         title="Do ustalenia (TBA)"
       >
