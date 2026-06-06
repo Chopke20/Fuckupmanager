@@ -139,7 +139,6 @@ function validateOrderPayload(
     equipmentItems?: Partial<OrderEquipmentItem>[];
     productionItems?: Partial<OrderProductionItem>[];
   },
-  isEditing: boolean,
   formEquipmentItems?: Partial<OrderEquipmentItem>[]
 ): string | null {
   if (!payload.name?.trim()) return 'Nazwa zlecenia jest wymagana.';
@@ -148,12 +147,6 @@ function validateOrderPayload(
   const endDate = payload.endDate ?? payload.startDate ?? new Date();
   if (isEndDateBeforeStartDate(startDate, endDate)) {
     return 'Data zakończenia nie może być wcześniejsza niż data rozpoczęcia.';
-  }
-  if (!isEditing) {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const start = new Date(startDate).getTime();
-    if (start < todayStart.getTime()) return 'Data rozpoczęcia nie może być w przeszłości.';
   }
   const rawEq = formEquipmentItems ?? [];
   for (const item of rawEq) {
@@ -586,7 +579,7 @@ export default function OrderFormPage() {
         return;
       }
       const payload = buildPayload(getValues() as Partial<Order>);
-      const validationError = validateOrderPayload(payload, true, getValues('equipmentItems') as Partial<OrderEquipmentItem>[] | undefined);
+      const validationError = validateOrderPayload(payload, getValues('equipmentItems') as Partial<OrderEquipmentItem>[] | undefined);
       if (validationError) {
         setSubmitError(validationError);
         return;
@@ -627,7 +620,7 @@ export default function OrderFormPage() {
     setSubmitError(null);
     const data = getValues();
     const payload = buildPayload(data as Partial<Order>);
-    const validationError = validateOrderPayload(payload, isEditing, data.equipmentItems as Partial<OrderEquipmentItem>[] | undefined);
+    const validationError = validateOrderPayload(payload, data.equipmentItems as Partial<OrderEquipmentItem>[] | undefined);
     if (validationError) {
       setSubmitError(validationError);
       submitInFlightRef.current = false;
@@ -876,7 +869,6 @@ export default function OrderFormPage() {
                     <div className="lg:col-span-2" />
                     <div>
                       <OrderHeaderSection
-                        isNewOrder={!isEditing}
                         onChange={handleOrderChange}
                       />
                     </div>

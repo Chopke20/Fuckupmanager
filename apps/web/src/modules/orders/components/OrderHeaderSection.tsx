@@ -19,12 +19,10 @@ function normalizeSearch(s: string): string {
 }
 
 interface OrderHeaderSectionProps {
-  /** Przy tworzeniu nowego zlecenia blokujemy daty w przeszłości */
-  isNewOrder?: boolean
   onChange?: (data: Partial<Order>) => void
 }
 
-export default function OrderHeaderSection({ isNewOrder, onChange }: OrderHeaderSectionProps) {
+export default function OrderHeaderSection({ onChange }: OrderHeaderSectionProps) {
   const { watch } = useFormContext<Partial<Order>>()
   const queryClient = useQueryClient()
   const { data: paginatedClients } = useClients({ limit: 500 })
@@ -72,11 +70,6 @@ export default function OrderHeaderSection({ isNewOrder, onChange }: OrderHeader
       setClientInput(formatClientLabel(resolvedClient))
     }
   }, [clientId, resolvedClient])
-
-  const todayYMD = (() => {
-    const d = new Date()
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-  })()
 
   useEffect(() => {
     if (!dateFromFocused.current) {
@@ -377,7 +370,6 @@ export default function OrderHeaderSection({ isNewOrder, onChange }: OrderHeader
             <input
               type="date"
               className="w-full px-3 py-2 text-sm bg-background border border-border rounded"
-              min={isNewOrder ? todayYMD : undefined}
               value={localDateFrom}
               onFocus={() => { dateFromFocused.current = true }}
               onBlur={() => {
@@ -406,7 +398,7 @@ export default function OrderHeaderSection({ isNewOrder, onChange }: OrderHeader
             <input
               type="date"
               className="w-full px-3 py-2 text-sm bg-background border border-border rounded"
-              min={localDateFrom || todayYMD}
+              min={localDateFrom || undefined}
               value={localDateTo}
               onFocus={() => { dateToFocused.current = true }}
               onBlur={() => {
