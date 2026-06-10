@@ -20,8 +20,13 @@ function filenameFromContentDisposition(cd: string | undefined, fallback: string
   return fallback;
 }
 
-/** PDF magazynu / załadunku (wydruk z pustymi kratkami). */
-export async function downloadOrderWarehousePdf(orderId: string): Promise<void> {
+export type WarehousePdfDownloadResult = {
+  exportCreated: boolean;
+  numberReused: boolean;
+};
+
+/** PDF magazynu / załadunku (wydruk z pustymi kratkami). Zapisuje snapshot jak przy ofercie. */
+export async function downloadOrderWarehousePdf(orderId: string): Promise<WarehousePdfDownloadResult> {
   try {
     const res = await axios.get(`/api/pdf/warehouse/${orderId}/generate`, {
       responseType: 'blob',
@@ -52,6 +57,10 @@ export async function downloadOrderWarehousePdf(orderId: string): Promise<void> 
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+    return {
+      exportCreated: res.headers['x-warehouse-export-created'] === '1',
+      numberReused: res.headers['x-warehouse-number-reused'] === '1',
+    };
   } catch (e: unknown) {
     if (e instanceof Error && e.message !== 'Network Error' && !axios.isAxiosError(e)) throw e;
     const ax = axios.isAxiosError(e) ? e : null;

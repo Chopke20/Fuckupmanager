@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Download, Eye, FileText, Plus, Save } from 'lucide-react';
+import { ArrowLeft, Download, Eye, FileText, Save } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useOrder } from '../hooks/useOrders';
 import {
@@ -36,9 +36,9 @@ export default function OrderWarehousePage() {
   const [loadingDraft, setLoadingDraft] = useState(false);
   const [loadingExports, setLoadingExports] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
-  const [creatingExport, setCreatingExport] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
   const equipmentSorted = useMemo(() => {
     const items = order?.equipmentItems ?? [];
@@ -96,28 +96,28 @@ export default function OrderWarehousePage() {
     }
   };
 
-  const createSnapshotExport = async () => {
+  const reloadExports = async () => {
     if (!id) return;
-    if (draft) await saveDraft();
-    setCreatingExport(true);
-    setError(null);
-    try {
-      const created = await orderApi.createDocumentExport(id, 'WAREHOUSE');
-      setExports((prev) => [created, ...prev]);
-    } catch (e: any) {
-      const raw = e?.response?.data?.error ?? e?.message;
-      setError(typeof raw === 'string' ? raw : 'Nie udało się utworzyć snapshotu magazynu.');
-    } finally {
-      setCreatingExport(false);
-    }
+    const list = await orderApi.getDocumentExports(id, 'WAREHOUSE');
+    setExports(list);
   };
 
   const handleDownloadPdf = async () => {
-    if (!id) return;
+    if (!id || !draft) return;
     setPdfLoading(true);
     setError(null);
+    setInfo(null);
     try {
-      await downloadOrderWarehousePdf(id);
+      await saveDraft();
+      const result = await downloadOrderWarehousePdf(id);
+      await reloadExports();
+      if (result.numberReused) {
+        setInfo(
+          'Treść bez zmian względem ostatniego eksportu — ten sam numer dokumentu. Data w nagłówku PDF jest aktualna; lista snapshotów bez nowego wiersza.'
+        );
+      } else if (result.exportCreated) {
+        setInfo('Zapisano nowy snapshot magazynu i nadano kolejny numer wersji.');
+      }
     } catch (e: any) {
       setError(e instanceof Error ? e.message : 'Nie udało się pobrać PDF.');
     } finally {
@@ -191,17 +191,14 @@ export default function OrderWarehousePage() {
             <Save size={16} />
             {savingDraft ? 'Zapisywanie…' : 'Zapisz tytuł i notatki'}
           </button>
-          <button
-            type="button"
-            onClick={createSnapshotExport}
-            disabled={creatingExport}
-            className="px-3 py-1.5 text-sm border border-border rounded hover:bg-surface-2 flex items-center gap-1.5 disabled:opacity-50"
-          >
-            <Plus size={16} />
-            {creatingExport ? 'Tworzenie…' : 'Snapshot w systemie'}
-          </button>
         </div>
       </div>
+
+      {info && (
+        <div className="max-w-5xl mx-auto px-3 py-2 rounded bg-primary/10 border border-primary/30 text-sm text-foreground">
+          {info}
+        </div>
+      )}
 
       {error && (
         <div className="px-3 py-2 rounded bg-red-500/10 border border-red-500/30 text-red-600 text-sm">
@@ -209,11 +206,12 @@ export default function OrderWarehousePage() {
         </div>
       )}
 
-      <div className="max-w-3xl rounded-lg border border-border bg-surface-2/50 px-4 py-3 text-sm text-muted-foreground">
+      <div className="max-w-5xl mx-auto rounded-lg border border-border bg-surface-2/50 px-4 py-3 text-sm text-muted-foreground text-center">
         <p className="font-medium text-foreground mb-1">Do wydruku w magazynie</p>
         <p>
           PDF ma ten sam styl nagłówka co oferta i listę sprzętu z <strong>pustymi kratkami</strong> do odhaczenia ołówkiem.
-          Tytuł i notatki poniżej trafiają na dokument — zapisz je przed generowaniem PDF.
+          Tytuł i notatki poniżej trafiają na dokument — zapisz je przed pobraniem PDF.
+          Snapshot w historii tworzy się automatycznie przy <strong>Pobierz PDF (wydruk)</strong>, jak przy ofercie.
         </p>
       </div>
 
@@ -284,7 +282,7 @@ export default function OrderWarehousePage() {
         {loadingExports ? (
           <div className="text-sm text-muted-foreground">Ładowanie…</div>
         ) : exports.length === 0 ? (
-          <div className="text-sm text-muted-foreground">Brak zapisanych snapshotów.</div>
+          <div className="text-sm text-muted-foreground">Brak zapisanych snapshotów — użyj „Pobierz PDF (wydruk)”.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

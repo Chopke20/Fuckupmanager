@@ -6,6 +6,7 @@ import { OrderOfferSnapshotSchema, type OfferDocumentDraft, type OrderOfferSnaps
 import { buildOfferHtmlV5, type OrderLike } from './offer-v5-builder'
 import { buildWarehousePdfHtml } from './warehouse-pdf-builder'
 import {
+  buildDefaultDraft,
   buildDocumentNumber,
   parseJsonSafely,
   resolveDefaultIssuerForDraft,
@@ -16,6 +17,11 @@ import {
   loadOfferDraftPayload,
   orderOfferSnapshotToPdfOrderLike,
 } from '../orders/offer-snapshot-merge'
+import {
+  areWarehouseSnapshotContentsEqual,
+  buildWarehouseSnapshotFromOrder,
+  type OrderForWarehouseSnapshot,
+} from '../orders/warehouse-snapshot'
 
 type OrderWithRelations = Awaited<ReturnType<typeof loadOrderForPdf>>
 
@@ -563,7 +569,7 @@ export class PdfController {
 
   /**
    * PDF „Magazyn / załadunek” do wydruku: nagłówek jak oferta, lista sprzętu z pustymi kratkami (odhaczanie odręczne).
-   * Nie tworzy rekordu eksportu — numer `WHS-{YY}-{NNNN}-v{następna}` jest „kolejnym” względem zapisanych snapshotów.
+   * Przy pobraniu (nie podglądzie) zapisuje snapshot jak oferta — nowy numer tylko gdy treść się zmieniła.
    */
   async generateWarehousePdf(req: Request, res: Response) {
     try {
@@ -581,6 +587,9 @@ export class PdfController {
         },
       })
       if (!order) return res.status(404).json({ error: 'Zlecenie nie znalezione' })
+      if (!order.client) {
+        return res.status(400).json({ error: 'Zlecenie nie ma przypisanego klienta — brak danych do dokumentu magazynu.' })
+      }
 
       const orderYear = order.orderYear ?? new Date(order.createdAt).getFullYear()
       const orderNumber = order.orderNumber
@@ -590,16 +599,8 @@ export class PdfController {
         })
       }
 
-      const exportCount = await prisma.orderDocumentExport.count({
-        where: { orderId, documentType: 'WAREHOUSE' },
-      })
-      const version = exportCount + 1
-      const documentNumberDisplay = buildDocumentNumber({
-        documentType: 'WAREHOUSE',
-        orderNumber,
-        orderYear,
-        version,
-      })
+      const inline =
+        req.query.inline === '1' || req.query.preview === '1' || req.query.preview === 'true'
 
       const draftRecord = await prisma.orderDocumentDraft.findUnique({
         where: {
@@ -610,19 +611,89 @@ export class PdfController {
         },
       })
       const parsedDraft = parseJsonSafely(draftRecord?.payload ?? null)
+      const draftPayload =
+        parsedDraft != null ? parsedDraft : buildDefaultDraft(order, 'WAREHOUSE')
       let draftTitle = ''
       let draftNotes = ''
       if (parsedDraft && typeof parsedDraft === 'object') {
         const o = parsedDraft as Record<string, unknown>
         if (typeof o.title === 'string') draftTitle = o.title
         if (typeof o.notes === 'string') draftNotes = o.notes
+      } else if (draftPayload && typeof draftPayload === 'object') {
+        const o = draftPayload as Record<string, unknown>
+        if (typeof o.title === 'string') draftTitle = o.title
+        if (typeof o.notes === 'string') draftNotes = o.notes
+      }
+
+      const generatedAt = new Date().toISOString()
+      const warehouseOrder = order as OrderForWarehouseSnapshot
+      let documentNumberDisplay: string
+
+      if (inline) {
+        const exportCount = await prisma.orderDocumentExport.count({
+          where: { orderId, documentType: 'WAREHOUSE' },
+        })
+        documentNumberDisplay = buildDocumentNumber({
+          documentType: 'WAREHOUSE',
+          orderNumber,
+          orderYear,
+          version: exportCount + 1,
+        })
+      } else {
+        const candidateSnapshot = buildWarehouseSnapshotFromOrder(warehouseOrder, draftPayload, generatedAt)
+        const lastExport = await prisma.orderDocumentExport.findFirst({
+          where: { orderId, documentType: 'WAREHOUSE' },
+          orderBy: { exportedAt: 'desc' },
+        })
+
+        let lastParsed: Record<string, unknown> | null = null
+        if (lastExport?.snapshot) {
+          try {
+            lastParsed = JSON.parse(lastExport.snapshot) as Record<string, unknown>
+          } catch {
+            lastParsed = null
+          }
+        }
+
+        const reuseSameNumber =
+          lastParsed != null && areWarehouseSnapshotContentsEqual(candidateSnapshot, lastParsed)
+
+        if (reuseSameNumber && lastExport) {
+          documentNumberDisplay = lastExport.documentNumber
+          res.setHeader('X-Warehouse-Export-Created', '0')
+          res.setHeader('X-Warehouse-Number-Reused', '1')
+        } else {
+          const created = await prisma.$transaction(async (tx) => {
+            const existingCount = await tx.orderDocumentExport.count({
+              where: { orderId, documentType: 'WAREHOUSE' },
+            })
+            const version = existingCount + 1
+            const documentNumber = buildDocumentNumber({
+              documentType: 'WAREHOUSE',
+              orderNumber,
+              orderYear,
+              version,
+            })
+            const snap = buildWarehouseSnapshotFromOrder(warehouseOrder, draftPayload, generatedAt)
+            return tx.orderDocumentExport.create({
+              data: {
+                orderId,
+                documentType: 'WAREHOUSE',
+                documentNumber,
+                snapshot: JSON.stringify(snap),
+              },
+            })
+          })
+          documentNumberDisplay = created.documentNumber
+          res.setHeader('X-Warehouse-Export-Created', '1')
+          res.setHeader('X-Warehouse-Number-Reused', '0')
+        }
       }
 
       const issuer = await resolveDefaultIssuerForDraft(prisma)
       const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
       const branding = await this.resolvePdfBranding(appSettings)
       const projectContact = this.pickProjectContact(appSettings, null)
-      const generatedAt = new Date().toISOString()
       const html = buildWarehousePdfHtml({
         documentNumberDisplay,
         issuedAt: generatedAt,
@@ -659,8 +730,6 @@ export class PdfController {
 
       const pdfBuffer = await this.renderPdf(html)
       const filename = `Magazyn-${documentNumberDisplay}.pdf`
-      const inline =
-        req.query.inline === '1' || req.query.preview === '1' || req.query.preview === 'true'
       res.setHeader('Content-Type', 'application/pdf')
       res.setHeader(
         'Content-Disposition',

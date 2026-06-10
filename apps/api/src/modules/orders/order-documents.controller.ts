@@ -6,7 +6,6 @@ import {
   DocumentTypeSchema,
   OfferDocumentDraftSchema,
   WarehouseDocumentDraftSchema,
-  WarehouseSnapshotSchema,
 } from '@lama-stage/shared-types'
 import {
   buildDefaultDraft,
@@ -31,6 +30,7 @@ function parseOfferVersionFromDocumentNumber(documentNumber: string): number {
   return 0
 }
 import { buildOrderOfferSnapshotFromOrder, loadOfferDraftPayload } from './offer-snapshot-merge'
+import { buildWarehouseSnapshotFromOrder, type OrderForWarehouseSnapshot } from './warehouse-snapshot'
 
 /** Po usunięciu eksportu OFFER: `offerVersion` / `offerNumber` = najwyższa wersja z pozostałych snapshotów, albo reset (0 / null). */
 async function syncOrderOfferFromRemainingExports(tx: Prisma.TransactionClient, orderId: string) {
@@ -376,23 +376,14 @@ export const createOrderDocumentExport = async (req: Request, res: Response, nex
       // Snapshot z OFFER budowany w transakcji (numer + generatedAt) — patrz $transaction poniżej
       snapshot = null
     } else if (documentType === 'WAREHOUSE') {
-      const parsedDraft = WarehouseDocumentDraftSchema.parse(draftPayload)
-      snapshot = WarehouseSnapshotSchema.parse({
-        orderId: order.id,
-        orderYear,
-        orderNumber,
-        documentType: 'WAREHOUSE',
-        title: parsedDraft.title,
-        notes: parsedDraft.notes ?? undefined,
-        generatedAt: new Date().toISOString(),
-        client: normalizedClient,
-        venue: order.venue ?? undefined,
-        venuePlaceId: order.venuePlaceId ?? undefined,
-        startDate: order.startDate.toISOString(),
-        endDate: order.endDate.toISOString(),
-        equipmentItems: normalizedEquipmentItems,
-        itemLoadChecked: parsedDraft.checked,
-      })
+      if (!order.client) {
+        throw new AppError('Zlecenie nie ma przypisanego klienta — brak danych do dokumentu magazynu', 400)
+      }
+      snapshot = buildWarehouseSnapshotFromOrder(
+        order as OrderForWarehouseSnapshot,
+        draftPayload,
+        new Date().toISOString()
+      )
     } else {
       snapshot = {
         orderId: order.id,
