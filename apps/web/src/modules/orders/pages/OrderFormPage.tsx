@@ -18,7 +18,7 @@ import {
   OrderOfferBlock,
   CreateOrderDto,
   UpdateOrderDto,
-  clampOrderLineDescription,
+  normalizeOrderLineDescriptionForSave,
   clampOrderOfferBlockTitle,
   validateOrderOfferBlocksForSave,
 } from '@lama-stage/shared-types';
@@ -495,7 +495,7 @@ export default function OrderFormPage() {
           return {
             equipmentId: item?.equipmentId || undefined,
             name,
-            description: clampOrderLineDescription(item?.description) || undefined,
+            description: normalizeOrderLineDescriptionForSave(item?.description) || undefined,
             category: item?.category || 'Inne',
             quantity: Math.max(1, Math.round(toNumber(item?.quantity, 1))),
             unitPrice: Math.max(0, toNumber(item?.unitPrice, 0)),
@@ -524,7 +524,7 @@ export default function OrderFormPage() {
       (Array.isArray(list) ? list : []).map((item, idx) => ({
         ...(item?.id && isValidUuid(item.id) ? { id: item.id } : {}),
         name: item?.name || 'Pozycja produkcji',
-        description: clampOrderLineDescription(item?.description) || undefined,
+        description: normalizeOrderLineDescriptionForSave(item?.description) || undefined,
         rateType: item?.rateType || 'FLAT',
         rateValue: Math.max(0, toNumber(item?.rateValue, 0)),
         units: Math.max(0.01, toNumber(item?.units, 1)),

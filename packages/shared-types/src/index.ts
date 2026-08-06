@@ -48,6 +48,7 @@ export {
   ORDER_LINE_DESCRIPTION_MAX_LENGTH,
   ORDER_LINE_DESCRIPTION_PDF_MAX_LENGTH,
   clampOrderLineDescription,
+  normalizeOrderLineDescriptionForSave,
   truncateOrderLineDescriptionForPdf,
 } from './constants/orderLineDescription';
 export {
