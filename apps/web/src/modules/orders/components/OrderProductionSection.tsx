@@ -1,12 +1,13 @@
-import { useEffect } from 'react'
-import { Trash2, Eye, EyeOff, Plus } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Trash2, Eye, EyeOff, Plus, Database } from 'lucide-react'
 import {
   OrderProductionItem,
   OrderStage,
   ORDER_LINE_DESCRIPTION_MAX_LENGTH,
   clampOrderLineDescription,
 } from '@lama-stage/shared-types'
-import { useEquipment } from '../../equipment/hooks/useEquipment'
+import { useEquipment, useResourceSubcategories } from '../../equipment/hooks/useEquipment'
+import EquipmentFormModal from '../../equipment/components/EquipmentFormModal'
 import { randomClientUuid } from '../../../shared/utils/uuid'
 import { stageToDisplayLabel } from '../utils/stageLabel'
 import {
@@ -42,6 +43,16 @@ export default function OrderProductionSection({
 }: OrderProductionSectionProps) {
   const { data: paginatedResources } = useEquipment({ category: 'ZASOBY', limit: 200, page: 1 })
   const resources = paginatedResources?.data || []
+  const { data: resourceSubcategories = [] } = useResourceSubcategories()
+  const [saveToCatalog, setSaveToCatalog] = useState<{
+    index: number
+    draft: {
+      name: string
+      description: string
+      dailyPrice: number
+      visibleInOffer: boolean
+    }
+  } | null>(null)
   const findResourceByName = (name: string) => {
     const normalized = name.trim().toLowerCase()
     if (!normalized) return undefined
@@ -269,14 +280,36 @@ export default function OrderProductionSection({
                       </button>
                     </td>
                     <td className="py-1 px-2 whitespace-nowrap sticky right-0 bg-background z-[1] text-center">
-                      <button
-                        type="button"
-                        onClick={() => removeItem(index)}
-                        className="p-1 text-red-500 hover:text-red-700"
-                        title="Usuń"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      <div className="flex items-center justify-center gap-1">
+                        {(item.name || '').trim() && !findResourceByName(item.name || '') ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSaveToCatalog({
+                                index,
+                                draft: {
+                                  name: (item.name || '').trim(),
+                                  description: item.description || '',
+                                  dailyPrice: Number(item.rateValue) || 0,
+                                  visibleInOffer: item.visibleInOffer !== false,
+                                },
+                              })
+                            }
+                            className="p-1 text-primary hover:text-primary-hover"
+                            title="Dodaj do bazy zasobów"
+                          >
+                            <Database size={16} />
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => removeItem(index)}
+                          className="p-1 text-red-500 hover:text-red-700"
+                          title="Usuń"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )
@@ -320,6 +353,38 @@ export default function OrderProductionSection({
           </table>
         </div>
       </div>
+
+      {saveToCatalog && (
+        <EquipmentFormModal
+          isOpen
+          onClose={() => setSaveToCatalog(null)}
+          titleOverride="Dodaj zasób do bazy"
+          defaultCategory="ZASOBY"
+          lockCategory
+          hideStockWhenUnlimited
+          resourceSubcategories={resourceSubcategories}
+          equipment={{
+            name: saveToCatalog.draft.name,
+            description: saveToCatalog.draft.description,
+            category: 'ZASOBY',
+            subcategory: '',
+            dailyPrice: saveToCatalog.draft.dailyPrice,
+            stockQuantity: 1,
+            unit: 'szt.',
+            visibleInOffer: saveToCatalog.draft.visibleInOffer,
+            pricingRule: { day1: 1.0, nextDays: 1.0 },
+          }}
+          onSuccess={(created) => {
+            updateItem(saveToCatalog.index, {
+              name: created.name,
+              description: created.description || saveToCatalog.draft.description || '',
+              rateValue: created.dailyPrice,
+              visibleInOffer: created.visibleInOffer,
+            })
+            setSaveToCatalog(null)
+          }}
+        />
+      )}
     </div>
   )
 }

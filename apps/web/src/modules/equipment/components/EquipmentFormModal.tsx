@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { useCreateEquipment, useEquipmentCategories, useUpdateEquipment } from '../hooks/useEquipment'
 import { equipmentApi } from '../api/equipment.api'
-import { CreateEquipmentDto, UpdateEquipmentDto, EQUIPMENT_CATEGORIES } from '@lama-stage/shared-types'
+import { CreateEquipmentDto, UpdateEquipmentDto, Equipment, EQUIPMENT_CATEGORIES } from '@lama-stage/shared-types'
 
 interface EquipmentFormModalProps {
   isOpen: boolean
@@ -14,6 +14,8 @@ interface EquipmentFormModalProps {
   resourceSubcategories?: string[]
   /** Gdy true, dla podkategorii "LUDZIE" ukrywa stan/jednostkę (zasób nielimitowany) */
   hideStockWhenUnlimited?: boolean
+  /** Po udanym utworzeniu / aktualizacji — np. podpięcie pozycji w zleceniu. */
+  onSuccess?: (saved: Equipment) => void
 }
 
 export default function EquipmentFormModal({
@@ -25,6 +27,7 @@ export default function EquipmentFormModal({
   titleOverride,
   resourceSubcategories = [],
   hideStockWhenUnlimited = false,
+  onSuccess,
 }: EquipmentFormModalProps) {
   const { data: equipmentCategories = [] } = useEquipmentCategories()
   const normalizeCategoryName = (value: string): string => {
@@ -63,7 +66,15 @@ export default function EquipmentFormModal({
   const [descriptionError, setDescriptionError] = useState<string | null>(null)
   const [isGeneratingDescription, setIsGeneratingDescription] = useState(false)
 
+  // Reset formularza tylko przy otwarciu / zmianie edytowanego rekordu — nie przy każdym renderze rodzica.
+  const equipmentFormKey = equipment?.id
+    ? `edit:${equipment.id}`
+    : equipment
+      ? `new:${equipment.name}|${equipment.category}|${equipment.dailyPrice}|${equipment.description || ''}`
+      : `blank:${defaultCategory}`
+
   useEffect(() => {
+    if (!isOpen) return
     setCodeError(null)
     setDescriptionError(null)
     if (equipment) {
@@ -97,18 +108,24 @@ export default function EquipmentFormModal({
         pricingRule: { day1: 1.0, nextDays: 0.5 },
       })
     }
-  }, [equipment, defaultCategory])
+  }, [isOpen, equipmentFormKey, defaultCategory])
 
   // Propozycja kolejnego kodu przy dodawaniu nowej pozycji
   useEffect(() => {
     if (!isOpen || equipment?.id) return
     let cancelled = false
-    const category = defaultCategory || 'AUDIO'
+    const category = lockCategory
+      ? 'ZASOBY'
+      : (equipment?.category || defaultCategory || 'Multimedia')
     equipmentApi.getNextCode(category).then(({ proposedCode }) => {
-      if (!cancelled) setFormData((prev) => ({ ...prev, internalCode: proposedCode }))
+      if (!cancelled) {
+        setFormData((prev) =>
+          prev.internalCode?.trim() ? prev : { ...prev, internalCode: proposedCode }
+        )
+      }
     }).catch(() => {})
     return () => { cancelled = true }
-  }, [isOpen, equipment?.id, defaultCategory])
+  }, [isOpen, equipmentFormKey, equipment?.id, equipment?.category, defaultCategory, lockCategory])
 
   const isResource = lockCategory || formData.category === 'ZASOBY'
   const mergedEquipmentCategories = Array.from(
@@ -142,11 +159,10 @@ export default function EquipmentFormModal({
       ? { ...preparedData, stockQuantity: 0, unit: 'szt.' }
       : preparedData
     try {
-      if (equipment?.id) {
-        await updateMutation.mutateAsync({ id: equipment.id, data: dataToSend as UpdateEquipmentDto })
-      } else {
-        await createMutation.mutateAsync(dataToSend)
-      }
+      const saved = equipment?.id
+        ? await updateMutation.mutateAsync({ id: equipment.id, data: dataToSend as UpdateEquipmentDto })
+        : await createMutation.mutateAsync(dataToSend)
+      onSuccess?.(saved as Equipment)
       onClose()
     } catch (err: any) {
       const msg = err?.response?.data?.error?.message

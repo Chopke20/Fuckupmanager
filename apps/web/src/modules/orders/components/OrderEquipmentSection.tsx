@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { Trash2, Eye, EyeOff, Copy, AlertCircle, CheckCircle2, XCircle, X, Plus, Info } from 'lucide-react'
+import { Trash2, Eye, EyeOff, Copy, AlertCircle, CheckCircle2, XCircle, X, Plus, Info, Database } from 'lucide-react'
 import { OrderEquipmentItem, Equipment, ORDER_LINE_DESCRIPTION_MAX_LENGTH, clampOrderLineDescription } from '@lama-stage/shared-types'
 import { useEquipment } from '../../equipment/hooks/useEquipment'
+import EquipmentFormModal from '../../equipment/components/EquipmentFormModal'
 import { orderApi, EquipmentAvailabilityItem } from '../api/order.api'
 import {
   orderLineDescriptionInputClass,
@@ -66,6 +67,17 @@ export default function OrderEquipmentSection({
   const [isCheckingAvailability, setIsCheckingAvailability] = useState(false)
   const [conflictBannerDismissed, setConflictBannerDismissed] = useState(false)
   const [availabilityModalItem, setAvailabilityModalItem] = useState<{ item: Partial<OrderEquipmentItem>; index: number } | null>(null)
+  const [saveToCatalog, setSaveToCatalog] = useState<{
+    index: number
+    draft: {
+      name: string
+      description: string
+      category: string
+      dailyPrice: number
+      visibleInOffer: boolean
+      pricingRule?: { day1: number; nextDays: number }
+    }
+  } | null>(null)
 
   /** Wpis w nagłówku „Dni (…)”: odświeżany przy zmianie długości zlecenia; blur = jednorazowo ustawia dni we wszystkich wierszach */
   const [bulkDaysDraft, setBulkDaysDraft] = useState(() => String(Math.max(1, orderSpanDays)))
@@ -492,6 +504,28 @@ export default function OrderEquipmentSection({
                     </td>
                     <td className="py-1 px-2 whitespace-nowrap sticky right-0 bg-background z-[1]">
                       <div className="flex items-center justify-center gap-1">
+                        {!item.equipmentId && (item.name || '').trim() ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSaveToCatalog({
+                                index,
+                                draft: {
+                                  name: (item.name || '').trim(),
+                                  description: item.description || '',
+                                  category: normalizeCategoryName(item.category || 'Inne'),
+                                  dailyPrice: Number(item.unitPrice) || 0,
+                                  visibleInOffer: item.visibleInOffer !== false,
+                                  pricingRule: item.pricingRule || { day1: 1.0, nextDays: 0.5 },
+                                },
+                              })
+                            }
+                            className="p-1 text-primary hover:text-primary-hover"
+                            title="Dodaj do bazy sprzętu"
+                          >
+                            <Database size={16} />
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           onClick={() => duplicateItem(index)}
@@ -679,6 +713,37 @@ export default function OrderEquipmentSection({
             )}
           </div>
         </div>
+      )}
+      {saveToCatalog && (
+        <EquipmentFormModal
+          isOpen
+          onClose={() => setSaveToCatalog(null)}
+          titleOverride="Dodaj sprzęt do bazy"
+          defaultCategory={saveToCatalog.draft.category}
+          equipment={{
+            name: saveToCatalog.draft.name,
+            description: saveToCatalog.draft.description,
+            category: saveToCatalog.draft.category,
+            dailyPrice: saveToCatalog.draft.dailyPrice,
+            stockQuantity: 1,
+            unit: 'szt.',
+            visibleInOffer: saveToCatalog.draft.visibleInOffer,
+            pricingRule: saveToCatalog.draft.pricingRule || { day1: 1.0, nextDays: 0.5 },
+          }}
+          onSuccess={(created) => {
+            updateItem(saveToCatalog.index, {
+              equipmentId: created.id,
+              equipment: created,
+              name: created.name,
+              description: created.description || saveToCatalog.draft.description || '',
+              category: normalizeCategoryName(created.category),
+              unitPrice: created.dailyPrice,
+              pricingRule: created.pricingRule || saveToCatalog.draft.pricingRule || { day1: 1.0, nextDays: 0.5 },
+              visibleInOffer: created.visibleInOffer,
+            })
+            setSaveToCatalog(null)
+          }}
+        />
       )}
     </div>
   )
