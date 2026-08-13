@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { useCreateEquipment, useEquipmentCategories, useUpdateEquipment } from '../hooks/useEquipment'
 import { equipmentApi } from '../api/equipment.api'
@@ -200,7 +201,7 @@ export default function EquipmentFormModal({
 
   if (!isOpen) return null
 
-  return (
+  const modalContent = (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2.5">
       <div className="bg-surface rounded-xl border border-border w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center p-3 border-b border-border">
@@ -215,7 +216,14 @@ export default function EquipmentFormModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-3 space-y-3">
+        <form
+          onSubmit={(e) => {
+            e.stopPropagation()
+            handleSubmit(e)
+          }}
+          className="p-3 space-y-3"
+          noValidate
+        >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium mb-1">Nazwa *</label>
@@ -459,4 +467,6 @@ export default function EquipmentFormModal({
       </div>
     </div>
   )
+
+  return createPortal(modalContent, document.body)
 }
