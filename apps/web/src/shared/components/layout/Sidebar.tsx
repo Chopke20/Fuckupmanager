@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, ClipboardList, Users, Package, Boxes, Trash2, Shield } from 'lucide-react'
+import { LayoutDashboard, ClipboardList, Users, Package, Boxes, Wrench, Trash2, Shield } from 'lucide-react'
 import { useAuth } from '../../../modules/auth/AuthProvider'
 
 export default function Sidebar() {
@@ -20,6 +20,7 @@ export default function Sidebar() {
     { to: '/clients', label: 'Klienci', icon: Users },
     { to: '/equipment', label: 'Sprzęt', icon: Package },
     { to: '/resources', label: 'Zasoby', icon: Boxes },
+    { to: '/toolbox', label: 'Toolbox', icon: Wrench },
     { to: '/trash', label: 'Kosz', icon: Trash2 },
     ...(hasPermission('admin.users.read') ? [{ to: '/admin', label: 'Admin', icon: Shield }] : []),
   ]
@@ -45,6 +46,7 @@ export default function Sidebar() {
               <li key={item.to}>
                 <NavLink
                   to={item.to}
+                  end={item.to === '/'}
                   className={({ isActive }) =>
                     `flex items-center gap-2.5 px-2.5 py-2 text-sm transition-colors ${isActive
                       ? 'bg-surface text-primary border-l-2 border-primary'

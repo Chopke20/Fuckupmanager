@@ -15,6 +15,8 @@ import ResourcesPage from '../modules/resources/pages/ResourcesPage'
 import TrashPage from '../modules/trash/pages/TrashPage'
 import NotFoundPage from '../shared/pages/NotFoundPage'
 import FinanceDashboardPage from '../modules/finance/pages/FinanceDashboardPage'
+import ToolboxPage from '../modules/toolbox/pages/ToolboxPage'
+import TechnicianCashCalculatorPage from '../modules/toolbox/pages/TechnicianCashCalculatorPage'
 import LoginPage from '../modules/auth/pages/LoginPage'
 import ForgotPasswordPage from '../modules/auth/pages/ForgotPasswordPage'
 import ResetPasswordPage from '../modules/auth/pages/ResetPasswordPage'
@@ -50,6 +52,8 @@ export const appRouter = createBrowserRouter([
   { path: '/resources', element: <ProtectedLayout><ResourcesPage /></ProtectedLayout> },
   { path: '/trash', element: <ProtectedLayout><TrashPage /></ProtectedLayout> },
   { path: '/finance', element: <ProtectedLayout><FinanceDashboardPage /></ProtectedLayout> },
+  { path: '/toolbox', element: <ProtectedLayout><ToolboxPage /></ProtectedLayout> },
+  { path: '/toolbox/technik-gotowka', element: <ProtectedLayout><TechnicianCashCalculatorPage /></ProtectedLayout> },
   {
     path: '/admin',
     element: (
