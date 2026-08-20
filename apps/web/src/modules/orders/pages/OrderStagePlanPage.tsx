@@ -3,7 +3,7 @@ import { ArrowLeft, Download, Eye } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useOrder } from '../hooks/useOrders'
 import { formatOrderNumber } from '../utils/orderNumberFormat'
-import { parseStagePlanJson, renderStagePlanSvg } from '@lama-stage/shared-types'
+import { formatMeters, parseStagePlanJson, renderStagePlanSvg } from '@lama-stage/shared-types'
 import { downloadOrderStagePlanPdf, getOrderStagePlanPdfPreviewUrl } from '../api/order.api'
 
 export default function OrderStagePlanPage() {
@@ -14,7 +14,7 @@ export default function OrderStagePlanPage() {
   const [error, setError] = useState<string | null>(null)
 
   const plan = useMemo(() => parseStagePlanJson(order?.stagePlanJson ?? null), [order?.stagePlanJson])
-  const svg = plan ? renderStagePlanSvg(plan) : ''
+  const svg = plan ? renderStagePlanSvg(plan, { theme: 'dark' }) : ''
   const previewUrl = id ? getOrderStagePlanPdfPreviewUrl(id) : ''
 
   const orderNumberDisplay = useMemo(() => {
@@ -116,12 +116,19 @@ export default function OrderStagePlanPage() {
                     <tr key={line.key} className="border-b border-border/50">
                       <td className="py-1.5 pr-2">{line.name}</td>
                       <td className="py-1.5 text-right tabular-nums">
-                        {line.quantity} {line.unit}
+                        {formatMeters(line.quantity)} {line.unit}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              {plan.warnings.length > 0 ? (
+                <ul className="space-y-1 rounded border border-warning/40 bg-warning/10 p-2 text-xs text-warning">
+                  {plan.warnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              ) : null}
               <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
                 {plan.notes.map((note) => (
                   <li key={note}>{note}</li>

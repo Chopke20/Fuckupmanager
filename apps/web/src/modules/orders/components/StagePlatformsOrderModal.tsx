@@ -22,7 +22,7 @@ export default function StagePlatformsOrderModal({
       }}
     >
       <div
-        className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-border bg-surface"
+        className="flex max-h-[92vh] w-full max-w-7xl flex-col overflow-hidden rounded-xl border border-border bg-surface"
         role="dialog"
         aria-modal="true"
         aria-labelledby="stage-platforms-dialog-title"

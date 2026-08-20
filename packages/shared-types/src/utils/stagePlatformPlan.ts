@@ -1,57 +1,131 @@
+/**
+ * Plan sceny z podestów — model v2.
+ *
+ * W wersji 1 plan był wynikiem funkcji: z frontu i głębokości algorytm układał
+ * prostokąt i z niego liczył materiały. W wersji 2 plan jest dokumentem, który
+ * operator redaguje na rzucie: układ podestów jest źródłem, a obwód, pola,
+ * barierki i schody są z niego wyliczane. Wymiary gabarytowe zostają wyłącznie
+ * jako opis, nie jako podstawa wyceny.
+ */
+
+import {
+  STAGE_TOL_M,
+  analyzeStageLayout,
+  computeSharedEdgeMeters,
+  computeStageAreaM2,
+  computeStageBounds,
+  computeStageJunctions,
+  computeStageOutline,
+  findEdgeCovering,
+  round2,
+  roundM,
+  type StageEdge,
+  type StageEdgeSide,
+  type StageLayoutIssues,
+  type StageRect,
+} from './stagePlatformGeometry'
+
+export {
+  STAGE_TOL_M,
+  computeStageOutline,
+  computeStageAreaM2,
+  computeStageBounds,
+  roundM,
+  round2,
+}
+export type { StageEdge, StageEdgeSide, StageLayoutIssues, StageRect }
+
 export const STAGE_PLAN_LINE_MARKER = '[plan sceny]'
+export const STAGE_PLAN_VERSION = 2
 
 export const STAGE_LEG_HEIGHTS_CM = [20, 40, 60, 80, 100, 120, 140, 160, 180, 200] as const
 
-export type StageDeckKind = '2x1' | '1x1'
-export type StageOrientation = 'auto' | 'long-along-front' | 'long-along-depth'
-export type StageCladdingMaterial = 'none' | 'skirt' | 'hard'
-export type StageCladdingSides = 'front' | 'front-sides' | 'all'
-export type StageLegShare = 'per-deck' | 'shared-corners'
+/** Dostępne kroki siatki. Domyślny 0,25 m pozwala ustawić blat „na ćwiartkę”. */
+export const STAGE_GRID_STEPS_M = [0.25, 0.5, 1] as const
+export const STAGE_DEFAULT_GRID_STEP_M = 0.25
 
-export interface StageTile {
-  x: number
-  y: number
-  w: number
-  h: number
+/** Promień magnesu do krawędzi sąsiada przy wyłączonej siatce. */
+export const STAGE_MAGNET_M = 0.1
+
+export const STAGE_MAX_SPAN_M = 40
+export const STAGE_MAX_DECKS = 400
+export const STAGE_DEFAULT_STAIR_WIDTH_M = 1
+export const STAGE_MIN_STAIR_WIDTH_M = 0.5
+export const STAGE_MAX_STAIR_WIDTH_M = 4
+/** Przyjęta wysokość stopnia — z niej wychodzi liczba stopni i wysięg biegu. */
+export const STAGE_STEP_RISE_CM = 20
+export const STAGE_STEP_TREAD_M = 0.25
+/** Od tej wysokości schody i barierki mają sens. */
+export const STAGE_ACCESSORY_MIN_CM = 40
+
+export type StageDeckKind = '2x1' | '1x1'
+export type StageCladdingMaterial = 'none' | 'skirt' | 'hips'
+export type StageFloorMaterial = 'none' | 'carpet' | 'hips'
+export type StageBomUnit = 'szt.' | 'mb' | 'm²'
+
+export interface StageDeck extends StageRect {
+  id: string
   kind: StageDeckKind
+}
+
+/**
+ * Bieg schodów przypięty do krawędzi konturu.
+ *
+ * Pozycja jest zapisana bezwzględnie (`atM` = współrzędna krawędzi, `posM` =
+ * początek wzdłuż niej), a nie kluczem krawędzi: klucze zmieniają się przy
+ * każdej edycji układu, a schody mają zostać tam, gdzie je postawiono.
+ */
+export interface StageStair {
+  id: string
+  side: StageEdgeSide
+  atM: number
+  posM: number
+  widthM: number
+}
+
+/**
+ * Wybór krawędzi pod obicie albo barierki: bazowo całe strony sceny, plus
+ * ręczne wyjątki dla pojedynczych krawędzi. Wyjątki przetrwają przesunięcie
+ * podestu tylko wtedy, gdy krawędź się nie zmieniła — reszta wraca do reguły
+ * dla strony, co jest zachowaniem przewidywalnym dla operatora.
+ */
+export interface StageEdgeSelection {
+  sides: StageEdgeSide[]
+  overrides: Record<string, boolean>
 }
 
 export interface StageBomLine {
   key: string
   name: string
   quantity: number
-  unit: 'szt.' | 'mb'
-  group: 'decks' | 'legs' | 'clamps' | 'cladding' | 'accessories'
+  unit: StageBomUnit
+  group: 'decks' | 'legs' | 'clamps' | 'cladding' | 'floor' | 'accessories'
   offer: boolean
 }
 
+/** Część planu, którą redaguje operator. To ona jest zapisywana w zleceniu. */
 export interface StagePlanInput {
-  widthM: number
-  depthM: number
-  orientation: StageOrientation
+  decks: StageDeck[]
+  stairs: StageStair[]
   claddingMaterial: StageCladdingMaterial
-  claddingSides: StageCladdingSides
+  cladding: StageEdgeSelection
+  floorMaterial: StageFloorMaterial
+  railings: StageEdgeSelection
   legHeightCm: number
-  legShare: StageLegShare
-  includeStairs: boolean
-  includeRailings: boolean
+  snapToGrid: boolean
+  gridStepM: number
 }
 
-export interface StagePlan {
-  version: 1
-  requestedWidthM: number
-  requestedDepthM: number
+export interface StagePlan extends StagePlanInput {
+  version: 2
+  /** Gabaryt — do nagłówka i podglądu, nie do liczenia materiałów. */
   widthM: number
   depthM: number
-  orientationUsed: Exclude<StageOrientation, 'auto'>
-  tiles: StageTile[]
-  claddingMaterial: StageCladdingMaterial
-  claddingSides: StageCladdingSides
-  claddingMeters: number
-  legHeightCm: number
-  legShare: StageLegShare
-  includeStairs: boolean
-  includeRailings: boolean
+  edges: StageEdge[]
+  areaM2: number
+  claddingMb: number
+  claddingM2: number
+  railingMb: number
   counts: {
     decks2x1: number
     decks1x1: number
@@ -62,199 +136,328 @@ export interface StagePlan {
     quadLegClamps: number
     braces: number
     stairs: number
-    railingMeters: number
+    stepsPerStair: number
   }
+  issues: StageLayoutIssues
+  warnings: string[]
   notes: string[]
   bom: StageBomLine[]
 }
 
-function ceilPositiveMeters(value: number): number {
-  if (!Number.isFinite(value) || value <= 0) return 0
-  return Math.max(1, Math.ceil(value - 1e-9))
+export const STAGE_EDGE_SIDES = ['front', 'right', 'back', 'left'] as const
+
+let idCounter = 0
+
+function nextId(prefix: string): string {
+  idCounter += 1
+  return `${prefix}${Date.now().toString(36)}${idCounter.toString(36)}${Math.random()
+    .toString(36)
+    .slice(2, 6)}`
 }
 
-export function packStageTiles(
+export function createStageDeck(
+  kind: StageDeckKind,
+  x: number,
+  y: number,
+  rotated = false
+): StageDeck {
+  const long = kind === '2x1'
+  const w = long ? (rotated ? 1 : 2) : 1
+  const h = long ? (rotated ? 2 : 1) : 1
+  return { id: nextId('d'), kind, x: roundM(x), y: roundM(y), w, h }
+}
+
+export function rotateStageDeck(deck: StageDeck): StageDeck {
+  if (deck.kind === '1x1') return deck
+  return { ...deck, w: deck.h, h: deck.w }
+}
+
+export function createStageStair(
+  side: StageEdgeSide,
+  atM: number,
+  posM: number,
+  widthM = STAGE_DEFAULT_STAIR_WIDTH_M
+): StageStair {
+  return {
+    id: nextId('s'),
+    side,
+    atM: roundM(atM),
+    posM: roundM(posM),
+    widthM: clampStairWidth(widthM),
+  }
+}
+
+export function clampStairWidth(value: number): number {
+  if (!Number.isFinite(value)) return STAGE_DEFAULT_STAIR_WIDTH_M
+  return round2(Math.min(STAGE_MAX_STAIR_WIDTH_M, Math.max(STAGE_MIN_STAIR_WIDTH_M, value)))
+}
+
+export function edgeSelection(sides: StageEdgeSide[] = []): StageEdgeSelection {
+  return { sides: [...sides], overrides: {} }
+}
+
+export function isEdgeSelected(selection: StageEdgeSelection, edge: StageEdge): boolean {
+  const override = selection.overrides[edge.key]
+  if (typeof override === 'boolean') return override
+  return selection.sides.includes(edge.side)
+}
+
+export function selectedEdges(
+  selection: StageEdgeSelection,
+  edges: StageEdge[]
+): StageEdge[] {
+  return edges.filter((edge) => isEdgeSelected(selection, edge))
+}
+
+export function toggleEdgeInSelection(
+  selection: StageEdgeSelection,
+  edge: StageEdge
+): StageEdgeSelection {
+  const next = { ...selection, overrides: { ...selection.overrides } }
+  const wanted = !isEdgeSelected(selection, edge)
+  if (wanted === selection.sides.includes(edge.side)) delete next.overrides[edge.key]
+  else next.overrides[edge.key] = wanted
+  return next
+}
+
+export function toggleSideInSelection(
+  selection: StageEdgeSelection,
+  side: StageEdgeSide,
+  edges: StageEdge[]
+): StageEdgeSelection {
+  const active = selection.sides.includes(side)
+  const sides = active
+    ? selection.sides.filter((s) => s !== side)
+    : [...selection.sides, side]
+  const overrides = { ...selection.overrides }
+  // Przełączenie całej strony kasuje wyjątki na tej stronie — inaczej klik
+  // w „Front” nie robiłby nic, gdy wszystkie krawędzie mają override.
+  for (const edge of edges) {
+    if (edge.side === side) delete overrides[edge.key]
+  }
+  return { sides, overrides }
+}
+
+/** Krok siatki: 0 wyłącza przyciąganie. */
+export function snapToStep(value: number, step: number): number {
+  if (!Number.isFinite(value)) return 0
+  if (!Number.isFinite(step) || step <= 0) return roundM(value)
+  return roundM(Math.round(value / step) * step)
+}
+
+/**
+ * Wypełnia prostokąt blatami — akcja startowa edytora, nie stan planu.
+ * Dłuższy bok 2×1 kładziony wzdłuż frontu albo w głąb, resztki dobierane 1×1.
+ */
+export function fillRectWithDecks(
   widthM: number,
   depthM: number,
-  longAlongFront: boolean
-): StageTile[] {
-  const tiles: StageTile[] = []
-  if (widthM < 1 || depthM < 1) return tiles
+  longAlongFront = true
+): StageDeck[] {
+  const w = Math.max(0, Math.floor(widthM))
+  const d = Math.max(0, Math.floor(depthM))
+  if (w < 1 || d < 1) return []
+  const decks: StageDeck[] = []
 
   if (longAlongFront) {
-    const pairs = Math.floor(widthM / 2)
-    const odd = widthM % 2 === 1
-    for (let y = 0; y < depthM; y += 1) {
-      for (let i = 0; i < pairs; i += 1) {
-        tiles.push({ x: i * 2, y, w: 2, h: 1, kind: '2x1' })
-      }
-      if (odd) tiles.push({ x: pairs * 2, y, w: 1, h: 1, kind: '1x1' })
+    const pairs = Math.floor(w / 2)
+    const odd = w % 2 === 1
+    for (let y = 0; y < d; y += 1) {
+      for (let i = 0; i < pairs; i += 1) decks.push(createStageDeck('2x1', i * 2, y))
+      if (odd) decks.push(createStageDeck('1x1', pairs * 2, y))
     }
-    return tiles
+    return decks
   }
 
-  const pairs = Math.floor(depthM / 2)
-  const odd = depthM % 2 === 1
-  for (let x = 0; x < widthM; x += 1) {
-    for (let i = 0; i < pairs; i += 1) {
-      tiles.push({ x, y: i * 2, w: 1, h: 2, kind: '2x1' })
-    }
-    if (odd) tiles.push({ x, y: pairs * 2, w: 1, h: 1, kind: '1x1' })
+  const pairs = Math.floor(d / 2)
+  const odd = d % 2 === 1
+  for (let x = 0; x < w; x += 1) {
+    for (let i = 0; i < pairs; i += 1) decks.push(createStageDeck('2x1', x, i * 2, true))
+    if (odd) decks.push(createStageDeck('1x1', x, pairs * 2))
   }
-  return tiles
+  return decks
 }
 
-function tileScore(tiles: StageTile[]) {
-  const decks1x1 = tiles.filter((t) => t.kind === '1x1').length
-  const decks2x1 = tiles.filter((t) => t.kind === '2x1').length
-  return { decks1x1, decks2x1, total: decks1x1 + decks2x1 }
+/** Liczba stopni biegu dobrana do wysokości nóg. */
+export function stageStairSteps(legHeightCm: number): number {
+  return Math.max(1, Math.ceil(legHeightCm / STAGE_STEP_RISE_CM))
 }
 
-function pickOrientation(
-  widthM: number,
-  depthM: number,
-  orientation: StageOrientation
-): Exclude<StageOrientation, 'auto'> {
-  if (orientation === 'long-along-front' || orientation === 'long-along-depth') return orientation
-  const alongFront = packStageTiles(widthM, depthM, true)
-  const alongDepth = packStageTiles(widthM, depthM, false)
-  const a = tileScore(alongFront)
-  const b = tileScore(alongDepth)
-  if (a.decks1x1 !== b.decks1x1) return a.decks1x1 < b.decks1x1 ? 'long-along-front' : 'long-along-depth'
-  if (a.total !== b.total) return a.total < b.total ? 'long-along-front' : 'long-along-depth'
-  return 'long-along-front'
+/** Wysięg biegu schodów poza kontur sceny. */
+export function stageStairDepthM(legHeightCm: number): number {
+  return round2(stageStairSteps(legHeightCm) * STAGE_STEP_TREAD_M)
 }
 
-function sharedEdgeMeters(tiles: StageTile[]): number {
-  let meters = 0
-  for (let i = 0; i < tiles.length; i += 1) {
-    for (let j = i + 1; j < tiles.length; j += 1) {
-      const a = tiles[i]!
-      const b = tiles[j]!
-      const overlapX = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x))
-      const overlapY = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y))
-      const touchingY = a.y + a.h === b.y || b.y + b.h === a.y
-      const touchingX = a.x + a.w === b.x || b.x + b.w === a.x
-      if (touchingY && overlapX > 0) meters += overlapX
-      else if (touchingX && overlapY > 0) meters += overlapY
-    }
+function stairOverlapOnEdge(stair: StageStair, edge: StageEdge): number {
+  const horizontal = edge.side === 'front' || edge.side === 'back'
+  const edgeAt = horizontal ? edge.y1 : edge.x1
+  if (edge.side !== stair.side || Math.abs(edgeAt - stair.atM) > STAGE_TOL_M) return 0
+  const start = horizontal ? edge.x1 : edge.y1
+  const end = horizontal ? edge.x2 : edge.y2
+  return Math.max(0, Math.min(end, stair.posM + stair.widthM) - Math.max(start, stair.posM))
+}
+
+export function stairIsAttached(stair: StageStair, edges: StageEdge[]): boolean {
+  return (
+    findEdgeCovering(edges, stair.side, stair.atM, stair.posM, stair.widthM) !== null
+  )
+}
+
+export function emptyStagePlanInput(): StagePlanInput {
+  return {
+    decks: [],
+    stairs: [],
+    claddingMaterial: 'skirt',
+    cladding: edgeSelection([...STAGE_EDGE_SIDES]),
+    floorMaterial: 'none',
+    railings: edgeSelection(['back', 'left', 'right']),
+    legHeightCm: 60,
+    snapToGrid: true,
+    gridStepM: STAGE_DEFAULT_GRID_STEP_M,
   }
-  return meters
 }
 
-function uniqueCorners(tiles: StageTile[]): number {
-  const set = new Set<string>()
-  for (const tile of tiles) {
-    set.add(`${tile.x},${tile.y}`)
-    set.add(`${tile.x + tile.w},${tile.y}`)
-    set.add(`${tile.x},${tile.y + tile.h}`)
-    set.add(`${tile.x + tile.w},${tile.y + tile.h}`)
-  }
-  return set.size
-}
-
-function junctionCounts(tiles: StageTile[]): { dual: number; quad: number } {
-  const vertex = new Map<string, number>()
-  const bump = (x: number, y: number) => {
-    const key = `${x},${y}`
-    vertex.set(key, (vertex.get(key) ?? 0) + 1)
-  }
-  for (const tile of tiles) {
-    bump(tile.x, tile.y)
-    bump(tile.x + tile.w, tile.y)
-    bump(tile.x, tile.y + tile.h)
-    bump(tile.x + tile.w, tile.y + tile.h)
-  }
-  let dual = 0
-  let quad = 0
-  for (const count of vertex.values()) {
-    if (count === 2) dual += 1
-    if (count === 4) quad += 1
-  }
-  return { dual, quad }
-}
-
-function claddingMeters(widthM: number, depthM: number, sides: StageCladdingSides): number {
-  if (sides === 'front') return widthM
-  if (sides === 'front-sides') return widthM + 2 * depthM
-  return 2 * (widthM + depthM)
-}
-
-function railingMeters(widthM: number, depthM: number): number {
-  return widthM + 2 * depthM
+/** Domyślny plan otwierany, gdy zlecenie nie ma jeszcze sceny. */
+export function createDefaultStagePlan(): StagePlan {
+  return buildStagePlan({ ...emptyStagePlanInput(), decks: fillRectWithDecks(6, 4, true) })
 }
 
 function pushBom(bom: StageBomLine[], line: StageBomLine) {
   if (line.quantity > 0) bom.push(line)
 }
 
-export function buildStagePlan(input: StagePlanInput): StagePlan | { ok: false; error: string } {
-  const requestedWidthM = Number(input.widthM)
-  const requestedDepthM = Number(input.depthM)
-  if (!Number.isFinite(requestedWidthM) || requestedWidthM <= 0) {
-    return { ok: false, error: 'Szerokość sceny (front) musi być większa od zera.' }
+function prunedSelection(
+  selection: StageEdgeSelection,
+  edges: StageEdge[]
+): StageEdgeSelection {
+  const known = new Set(edges.map((edge) => edge.key))
+  const overrides: Record<string, boolean> = {}
+  for (const [key, value] of Object.entries(selection.overrides ?? {})) {
+    if (known.has(key)) overrides[key] = value
   }
-  if (!Number.isFinite(requestedDepthM) || requestedDepthM <= 0) {
-    return { ok: false, error: 'Głębokość sceny musi być większa od zera.' }
-  }
-  if (requestedWidthM > 40 || requestedDepthM > 40) {
-    return { ok: false, error: 'Wymiar sceny jest za duży (max 40 m).' }
-  }
+  const sides = (selection.sides ?? []).filter((side) =>
+    STAGE_EDGE_SIDES.includes(side)
+  )
+  return { sides, overrides }
+}
 
-  const widthM = ceilPositiveMeters(requestedWidthM)
-  const depthM = ceilPositiveMeters(requestedDepthM)
-  const orientationUsed = pickOrientation(widthM, depthM, input.orientation)
-  const tiles = packStageTiles(widthM, depthM, orientationUsed === 'long-along-front')
-  const score = tileScore(tiles)
-  const shared = sharedEdgeMeters(tiles)
-  const corners = uniqueCorners(tiles)
-  const junctions = junctionCounts(tiles)
-  const legs = input.legShare === 'shared-corners' ? corners : score.total * 4
-  const deckClamps = shared
+export function buildStagePlan(input: StagePlanInput): StagePlan {
+  const decks = input.decks.slice(0, STAGE_MAX_DECKS)
+  const edges = computeStageOutline(decks)
+  const bounds = computeStageBounds(decks)
+  const areaM2 = computeStageAreaM2(decks)
+  const issues = analyzeStageLayout(decks)
+  const junctions = computeStageJunctions(decks)
+  const shared = computeSharedEdgeMeters(decks)
+
+  const cladding = prunedSelection(input.cladding, edges)
+  const railings = prunedSelection(input.railings, edges)
   const height = Math.round(input.legHeightCm)
+  const accessoriesAllowed = height >= STAGE_ACCESSORY_MIN_CM
+
+  const decks2x1 = decks.filter((deck) => deck.kind === '2x1').length
+  const decks1x1 = decks.filter((deck) => deck.kind === '1x1').length
+  const decksTotal = decks.length
+  const legs = decksTotal * 4
+
+  const claddingEdges =
+    input.claddingMaterial === 'none' ? [] : selectedEdges(cladding, edges)
+  const claddingMb = round2(claddingEdges.reduce((acc, edge) => acc + edge.lengthM, 0))
+  const claddingM2 = round2((claddingMb * height) / 100)
+
+  const railingEdges = accessoriesAllowed ? selectedEdges(railings, edges) : []
+  const railingGross = railingEdges.reduce((acc, edge) => acc + edge.lengthM, 0)
+  const stairs = accessoriesAllowed ? input.stairs : []
+  const railingGaps = stairs.reduce((acc, stair) => {
+    const onSelectedEdge = railingEdges.reduce(
+      (best, edge) => Math.max(best, stairOverlapOnEdge(stair, edge)),
+      0
+    )
+    return acc + onSelectedEdge
+  }, 0)
+  const railingMb = round2(Math.max(0, railingGross - railingGaps))
+
   const clampRows = height > 100 ? 2 : 1
   const dualLegClamps = height >= 60 ? junctions.dual * clampRows : 0
   const quadLegClamps = height >= 60 ? junctions.quad * clampRows : 0
-  const braces = height >= 168 ? Math.max(0, (widthM - 1) * (depthM - 1)) : 0
-  const claddingM =
-    input.claddingMaterial === 'none' ? 0 : claddingMeters(widthM, depthM, input.claddingSides)
-  const stairs = input.includeStairs && height >= 40 ? 1 : 0
-  const railM = input.includeRailings && height >= 40 ? railingMeters(widthM, depthM) : 0
+  const braces = height >= 168 ? junctions.dual + junctions.quad : 0
+  const stepsPerStair = stageStairSteps(height)
 
-  const notes: string[] = []
-  if (widthM !== requestedWidthM || depthM !== requestedDepthM) {
-    notes.push(
-      `Podane ${formatMeters(requestedWidthM)} × ${formatMeters(requestedDepthM)} m zaokrąglone w górę do siatki 1 m: ${widthM} × ${depthM} m.`
+  const warnings: string[] = []
+  if (decksTotal === 0) {
+    warnings.push('Plan jest pusty — dodaj podesty na rzucie.')
+  }
+  if (issues.overlaps > 0) {
+    warnings.push(
+      `Podesty nachodzą na siebie w ${issues.overlaps} ${issues.overlaps === 1 ? 'miejscu' : 'miejscach'} — takiego układu nie da się zbudować.`
     )
   }
+  if (issues.islands > 1) {
+    warnings.push(
+      `Układ ma ${issues.islands} rozłączne części — jeśli to nie są osobne wyspy, dosuń podesty do siebie.`
+    )
+  }
+  if (issues.nearMisses > 0) {
+    warnings.push(
+      `W ${issues.nearMisses} ${issues.nearMisses === 1 ? 'miejscu' : 'miejscach'} podesty nie stykają się dokładnie — obicie policzone po konturze z tolerancją 2 cm.`
+    )
+  }
+  const detachedStairs = stairs.filter((stair) => !stairIsAttached(stair, edges)).length
+  if (detachedStairs > 0) {
+    warnings.push(
+      `${detachedStairs} ${detachedStairs === 1 ? 'bieg schodów nie przylega' : 'biegi schodów nie przylegają'} do krawędzi sceny — przestaw je na obrys.`
+    )
+  }
+  if (input.stairs.length > 0 && !accessoriesAllowed) {
+    warnings.push(
+      `Przy wysokości ${height} cm schody i barierki nie są liczone — wejście jest jednym stopniem.`
+    )
+  }
+  if (bounds.widthM > STAGE_MAX_SPAN_M || bounds.depthM > STAGE_MAX_SPAN_M) {
+    warnings.push(`Gabaryt sceny przekracza ${STAGE_MAX_SPAN_M} m — sprawdź układ.`)
+  }
+
+  const notes: string[] = []
+  if (decksTotal > 0) {
+    notes.push(
+      `Układ ${bounds.widthM} × ${bounds.depthM} m gabarytowo, powierzchnia użytkowa ${formatMeters(areaM2)} m².`
+    )
+    notes.push('Nogi: 4 na każdy podest, bez współdzielenia narożników.')
+  }
+  if (claddingMb > 0) {
+    notes.push(
+      `Obicie ${claddingMaterialLabel(input.claddingMaterial).toLowerCase()} na ${edgeSelectionLabel(cladding, edges)}: ${formatMeters(claddingMb)} mb, ${formatMeters(claddingM2)} m² przy wysokości ${height} cm.`
+    )
+  }
+  if (input.floorMaterial !== 'none' && areaM2 > 0) {
+    notes.push(
+      `Podłoga ${floorMaterialLabel(input.floorMaterial).toLowerCase()}: ${formatMeters(areaM2)} m².`
+    )
+  }
+  if (stairs.length > 0) {
+    notes.push(
+      `Schody: ${stairs.length} ${stairs.length === 1 ? 'bieg' : 'biegi'}, po ${stepsPerStair} ${stepsPerStair === 1 ? 'stopniu' : 'stopni'} na wysokość ${height} cm.`
+    )
+  }
+  if (railingMb > 0) {
+    notes.push(
+      `Barierki na ${edgeSelectionLabel(railings, edges)}: ${formatMeters(railingMb)} mb${railingGaps > 0 ? ` (po odjęciu ${formatMeters(round2(railingGaps))} mb przejść na schody)` : ''}.`
+    )
+  }
+  if (height >= 60) notes.push('Powyżej 60 cm wysokości: klamry nóg obowiązkowe (stężenie).')
+  if (height > 100) notes.push('Powyżej 100 cm: druga linia klamer nóg (ok. 1/3 i 2/3 wysokości).')
+  if (height >= 168) notes.push('Od 168 cm: dodatkowe stężenia poziome i ukośne.')
   notes.push(
-    orientationUsed === 'long-along-front'
-      ? 'Układ: dłuższy bok podestu 2×1 wzdłuż frontu (publiczność).'
-      : 'Układ: dłuższy bok podestu 2×1 w głąb sceny.'
+    input.snapToGrid
+      ? `Siatka włączona, krok ${formatMeters(input.gridStepM)} m.`
+      : `Siatka wyłączona — blaty dociągane magnetycznie do sąsiada w promieniu ${Math.round(STAGE_MAGNET_M * 100)} cm.`
   )
-  notes.push(
-    input.legShare === 'per-deck'
-      ? 'Nogi: 4 na każdy podest (typowa kompletacja magazynowa).'
-      : 'Nogi: współdzielone w narożnikach siatki (mniej sztuk, inna kompletacja).'
-  )
-  if (height >= 60) {
-    notes.push('Powyżej 60 cm wysokości: klamry nóg obowiązkowe (stężenie).')
-  }
-  if (height > 100) {
-    notes.push('Powyżej 100 cm: druga linia klamer nóg (ok. 1/3 i 2/3 wysokości).')
-  }
-  if (height >= 168) {
-    notes.push('Od 168 cm: dodatkowe stężenia poziome i ukośne.')
-  }
-  if (stairs) {
-    notes.push(`Schody dobrane do wysokości ${height} cm (stopnie ~20 cm).`)
-  }
 
   const bom: StageBomLine[] = []
   pushBom(bom, {
     key: 'deck-2x1',
     name: 'Podest sceniczny 2×1 m',
-    quantity: score.decks2x1,
+    quantity: decks2x1,
     unit: 'szt.',
     group: 'decks',
     offer: true,
@@ -262,7 +465,7 @@ export function buildStagePlan(input: StagePlanInput): StagePlan | { ok: false; 
   pushBom(bom, {
     key: 'deck-1x1',
     name: 'Podest sceniczny 1×1 m',
-    quantity: score.decks1x1,
+    quantity: decks1x1,
     unit: 'szt.',
     group: 'decks',
     offer: true,
@@ -278,7 +481,7 @@ export function buildStagePlan(input: StagePlanInput): StagePlan | { ok: false; 
   pushBom(bom, {
     key: 'deck-clamps',
     name: 'Klamry / szybkozłączki blatów',
-    quantity: deckClamps,
+    quantity: Math.ceil(shared),
     unit: 'szt.',
     group: 'clamps',
     offer: false,
@@ -310,136 +513,269 @@ export function buildStagePlan(input: StagePlanInput): StagePlan | { ok: false; 
   if (input.claddingMaterial === 'skirt') {
     pushBom(bom, {
       key: 'cladding',
-      name: `Obicie — kotara / falbana (${claddingSidesLabel(input.claddingSides)})`,
-      quantity: claddingM,
+      name: `Obicie — kotara (${edgeSelectionLabel(cladding, edges)}, h=${height} cm, ${formatMeters(claddingM2)} m²)`,
+      quantity: claddingMb,
       unit: 'mb',
       group: 'cladding',
       offer: true,
     })
   }
-  if (input.claddingMaterial === 'hard') {
+  if (input.claddingMaterial === 'hips') {
     pushBom(bom, {
       key: 'cladding',
-      name: `Obicie — blendy sklejka (${claddingSidesLabel(input.claddingSides)}, h=${height} cm)`,
-      quantity: claddingM,
-      unit: 'mb',
+      name: `Obicie — HIPS (${edgeSelectionLabel(cladding, edges)}, h=${height} cm, ${formatMeters(claddingMb)} mb)`,
+      quantity: claddingM2,
+      unit: 'm²',
       group: 'cladding',
+      offer: true,
+    })
+  }
+  if (input.floorMaterial === 'carpet') {
+    pushBom(bom, {
+      key: 'floor',
+      name: 'Wykładzina na podestach',
+      quantity: areaM2,
+      unit: 'm²',
+      group: 'floor',
+      offer: true,
+    })
+  }
+  if (input.floorMaterial === 'hips') {
+    pushBom(bom, {
+      key: 'floor',
+      name: 'Podłoga HIPS na podestach',
+      quantity: areaM2,
+      unit: 'm²',
+      group: 'floor',
       offer: true,
     })
   }
   pushBom(bom, {
     key: 'stairs',
-    name: `Schody na scenę (do ${height} cm)`,
-    quantity: stairs,
+    name: `Schody na scenę (${height} cm, ${stepsPerStair} ${stepsPerStair === 1 ? 'stopień' : 'stopni'})`,
+    quantity: stairs.length,
     unit: 'szt.',
     group: 'accessories',
     offer: true,
   })
   pushBom(bom, {
     key: 'railings',
-    name: 'Barierki (tył + boki)',
-    quantity: railM,
+    name: `Barierki (${edgeSelectionLabel(railings, edges)})`,
+    quantity: railingMb,
     unit: 'mb',
     group: 'accessories',
     offer: true,
   })
 
   return {
-    version: 1,
-    requestedWidthM,
-    requestedDepthM,
-    widthM,
-    depthM,
-    orientationUsed,
-    tiles,
+    version: 2,
+    decks,
+    stairs,
     claddingMaterial: input.claddingMaterial,
-    claddingSides: input.claddingSides,
-    claddingMeters: claddingM,
+    cladding,
+    floorMaterial: input.floorMaterial,
+    railings,
     legHeightCm: height,
-    legShare: input.legShare,
-    includeStairs: input.includeStairs,
-    includeRailings: input.includeRailings,
+    snapToGrid: input.snapToGrid,
+    gridStepM: input.gridStepM,
+    widthM: bounds.widthM,
+    depthM: bounds.depthM,
+    edges,
+    areaM2,
+    claddingMb,
+    claddingM2,
+    railingMb,
     counts: {
-      decks2x1: score.decks2x1,
-      decks1x1: score.decks1x1,
-      decksTotal: score.total,
+      decks2x1,
+      decks1x1,
+      decksTotal,
       legs,
-      deckClamps,
+      deckClamps: Math.ceil(shared),
       dualLegClamps,
       quadLegClamps,
       braces,
-      stairs,
-      railingMeters: railM,
+      stairs: stairs.length,
+      stepsPerStair,
     },
+    issues,
+    warnings,
     notes,
     bom,
   }
 }
 
-export function isStagePlan(value: unknown): value is StagePlan {
-  if (!value || typeof value !== 'object') return false
-  const v = value as StagePlan
-  return v.version === 1 && Array.isArray(v.tiles) && Array.isArray(v.bom)
+/* ------------------------------------------------------------- migracja --- */
+
+interface LegacyTile {
+  x: number
+  y: number
+  w: number
+  h: number
+  kind?: string
 }
 
+interface LegacyPlan {
+  version: 1
+  tiles: LegacyTile[]
+  claddingMaterial?: string
+  claddingSides?: string
+  legHeightCm?: number
+  includeStairs?: boolean
+  includeRailings?: boolean
+}
+
+function legacyCladdingSides(sides: string | undefined): StageEdgeSide[] {
+  if (sides === 'front') return ['front']
+  if (sides === 'front-sides') return ['front', 'left', 'right']
+  return [...STAGE_EDGE_SIDES]
+}
+
+/**
+ * Podnosi plan v1 do v2. Stare snapshoty dokumentów STAGE_PLAN są nieusuwalne,
+ * więc migracja działa przy odczycie — renderer nigdy nie dostaje v1.
+ * Współdzielone narożniki znikają: nogi są przeliczane na 4 na podest.
+ */
+export function migrateLegacyStagePlan(legacy: LegacyPlan): StagePlan {
+  const decks = (Array.isArray(legacy.tiles) ? legacy.tiles : []).map((tile) => {
+    const kind: StageDeckKind = tile.kind === '1x1' ? '1x1' : '2x1'
+    const deck = createStageDeck(kind, Number(tile.x) || 0, Number(tile.y) || 0)
+    return { ...deck, w: Number(tile.w) || deck.w, h: Number(tile.h) || deck.h }
+  })
+  const material: StageCladdingMaterial =
+    legacy.claddingMaterial === 'hard'
+      ? 'hips'
+      : legacy.claddingMaterial === 'skirt'
+        ? 'skirt'
+        : 'none'
+
+  const base: StagePlanInput = {
+    decks,
+    stairs: [],
+    claddingMaterial: material,
+    cladding: edgeSelection(legacyCladdingSides(legacy.claddingSides)),
+    floorMaterial: 'none',
+    railings: edgeSelection(legacy.includeRailings ? ['back', 'left', 'right'] : []),
+    legHeightCm: Number(legacy.legHeightCm) || 60,
+    snapToGrid: true,
+    gridStepM: 1,
+  }
+
+  if (!legacy.includeStairs) return buildStagePlan(base)
+
+  const edges = computeStageOutline(decks)
+  const front = edges
+    .filter((edge) => edge.side === 'front')
+    .sort((a, b) => b.lengthM - a.lengthM)[0]
+  if (!front) return buildStagePlan(base)
+  const width = Math.min(STAGE_DEFAULT_STAIR_WIDTH_M, front.lengthM)
+  const stair = createStageStair(
+    'front',
+    front.y1,
+    roundM(front.x1 + (front.lengthM - width) / 2),
+    width
+  )
+  return buildStagePlan({ ...base, stairs: [stair] })
+}
+
+export function isStagePlan(value: unknown): value is StagePlan {
+  if (!value || typeof value !== 'object') return false
+  const plan = value as StagePlan
+  return plan.version === 2 && Array.isArray(plan.decks) && Array.isArray(plan.bom)
+}
+
+function isLegacyStagePlan(value: unknown): value is LegacyPlan {
+  if (!value || typeof value !== 'object') return false
+  const plan = value as LegacyPlan
+  return plan.version === 1 && Array.isArray(plan.tiles)
+}
+
+/**
+ * Wczytuje plan z JSON-a. Pola wyliczane są zawsze przeliczane od nowa, żeby
+ * zapisany kiedyś BOM nie rozjechał się z aktualnymi regułami liczenia.
+ */
 export function parseStagePlanJson(raw: string | null | undefined): StagePlan | null {
   if (!raw) return null
   try {
     const parsed = JSON.parse(raw) as unknown
-    return isStagePlan(parsed) ? parsed : null
+    if (isLegacyStagePlan(parsed)) return migrateLegacyStagePlan(parsed)
+    if (!isStagePlan(parsed)) return null
+    return buildStagePlan({
+      decks: parsed.decks,
+      stairs: Array.isArray(parsed.stairs) ? parsed.stairs : [],
+      claddingMaterial: parsed.claddingMaterial ?? 'none',
+      cladding: parsed.cladding ?? edgeSelection(),
+      floorMaterial: parsed.floorMaterial ?? 'none',
+      railings: parsed.railings ?? edgeSelection(),
+      legHeightCm: parsed.legHeightCm ?? 60,
+      snapToGrid: parsed.snapToGrid ?? true,
+      gridStepM: parsed.gridStepM ?? STAGE_DEFAULT_GRID_STEP_M,
+    })
   } catch {
     return null
   }
 }
 
-export function formatMeters(value: number): string {
-  if (!Number.isFinite(value)) return '—'
-  return Number.isInteger(value) ? String(value) : value.toLocaleString('pl-PL', { maximumFractionDigits: 2 })
+/** Do zapisu w zleceniu trafia tylko część redagowana — reszta jest pochodna. */
+export function serializeStagePlan(plan: StagePlan): string {
+  const input: StagePlanInput & { version: 2 } = {
+    version: 2,
+    decks: plan.decks,
+    stairs: plan.stairs,
+    claddingMaterial: plan.claddingMaterial,
+    cladding: plan.cladding,
+    floorMaterial: plan.floorMaterial,
+    railings: plan.railings,
+    legHeightCm: plan.legHeightCm,
+    snapToGrid: plan.snapToGrid,
+    gridStepM: plan.gridStepM,
+  }
+  return JSON.stringify({ ...input, bom: plan.bom })
 }
 
-export function claddingSidesLabel(sides: StageCladdingSides): string {
-  if (sides === 'front') return 'tylko front'
-  if (sides === 'front-sides') return 'front + boki'
-  return 'cały obwód'
+/* --------------------------------------------------------------- opisy ---- */
+
+export function formatMeters(value: number): string {
+  if (!Number.isFinite(value)) return '—'
+  return Number.isInteger(value)
+    ? String(value)
+    : value.toLocaleString('pl-PL', { maximumFractionDigits: 2 })
 }
 
 export function claddingMaterialLabel(material: StageCladdingMaterial): string {
-  if (material === 'skirt') return 'Kotara / falbana'
-  if (material === 'hard') return 'Blendy sklejka'
+  if (material === 'skirt') return 'Kotara'
+  if (material === 'hips') return 'HIPS'
   return 'Bez obicia'
 }
 
-/** SVG rzutu z góry. y rośnie w głąb sceny; front (publiczność) na dole. */
-export function renderStagePlanSvg(plan: StagePlan, opts?: { widthPx?: number }): string {
-  const pad = 36
-  const labelH = 22
-  const widthPx = opts?.widthPx ?? 560
-  const innerW = widthPx - pad * 2
-  const scale = innerW / plan.widthM
-  const innerH = plan.depthM * scale
-  const heightPx = innerH + pad * 2 + labelH
-  const toX = (m: number) => pad + m * scale
-  const toY = (m: number) => pad + (plan.depthM - m) * scale
+export function floorMaterialLabel(material: StageFloorMaterial): string {
+  if (material === 'carpet') return 'Wykładzina'
+  if (material === 'hips') return 'HIPS'
+  return 'Bez podłogi'
+}
 
-  const tiles = plan.tiles
-    .map((tile) => {
-      const x = toX(tile.x)
-      const y = toY(tile.y + tile.h)
-      const w = tile.w * scale
-      const h = tile.h * scale
-      const fill = tile.kind === '2x1' ? '#d7efe0' : '#e8e4d4'
-      const stroke = tile.kind === '2x1' ? '#1f6b45' : '#6b5d2a'
-      const label = tile.kind === '2x1' ? '2×1' : '1×1'
-      const fs = Math.max(9, Math.min(13, Math.min(w, h) * 0.28))
-      return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="${fill}" stroke="${stroke}" stroke-width="1.4"/>
-        <text x="${(x + w / 2).toFixed(1)}" y="${(y + h / 2 + fs * 0.35).toFixed(1)}" text-anchor="middle" font-size="${fs.toFixed(0)}" font-family="Arial, sans-serif" fill="#222">${label}</text>`
-    })
-    .join('\n')
+export function edgeSideLabel(side: StageEdgeSide): string {
+  if (side === 'front') return 'front'
+  if (side === 'back') return 'tył'
+  if (side === 'left') return 'lewy bok'
+  return 'prawy bok'
+}
 
-  const dim = `${plan.widthM} × ${plan.depthM} m`
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${widthPx} ${heightPx}" width="${widthPx}" height="${heightPx}">
-    <rect x="0" y="0" width="${widthPx}" height="${heightPx}" fill="#f7f7f4"/>
-    ${tiles}
-    <text x="${widthPx / 2}" y="${pad + innerH + 18}" text-anchor="middle" font-size="11" font-family="Arial, sans-serif" fill="#444">FRONT / PUBLICZNOŚĆ · ${dim}</text>
-  </svg>`
+/** Krótki opis wyboru krawędzi — do notatek, BOM i nagłówka rysunku. */
+export function edgeSelectionLabel(
+  selection: StageEdgeSelection,
+  edges: StageEdge[]
+): string {
+  const chosen = selectedEdges(selection, edges)
+  if (chosen.length === 0) return 'brak krawędzi'
+  if (chosen.length === edges.length && edges.length > 0) return 'cały obwód'
+  const sides = STAGE_EDGE_SIDES.filter((side) =>
+    chosen.some((edge) => edge.side === side)
+  )
+  const partial = sides.some(
+    (side) =>
+      chosen.filter((edge) => edge.side === side).length <
+      edges.filter((edge) => edge.side === side).length
+  )
+  const label = sides.map(edgeSideLabel).join(' + ')
+  return partial ? `${label} (wybrane krawędzie)` : label
 }

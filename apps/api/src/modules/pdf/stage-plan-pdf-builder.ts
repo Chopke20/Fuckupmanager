@@ -1,4 +1,9 @@
-import { renderStagePlanSvg, type StagePlan } from '@lama-stage/shared-types'
+import {
+  formatMeters,
+  renderStagePlanSvg,
+  stagePlanLegend,
+  type StagePlan,
+} from '@lama-stage/shared-types'
 
 function escapeHtml(s: string): string {
   return String(s)
@@ -17,14 +22,25 @@ export function buildStagePlanPdfHtml(params: {
   issuedAt: string
   plan: StagePlan
 }): string {
-  const svg = renderStagePlanSvg(params.plan, { widthPx: 640 })
+  // Wydruk używa jasnej palety — ta sama funkcja rysuje ciemny podgląd w
+  // aplikacji, więc motyw musi być podany jawnie.
+  const svg = renderStagePlanSvg(params.plan, { widthPx: 640, theme: 'print' })
   const bomRows = params.plan.bom
     .map(
       (line) =>
-        `<tr><td>${escapeHtml(line.name)}</td><td style="text-align:right">${line.quantity} ${escapeHtml(line.unit)}</td></tr>`
+        `<tr><td>${escapeHtml(line.name)}</td><td style="text-align:right">${escapeHtml(formatMeters(line.quantity))} ${escapeHtml(line.unit)}</td></tr>`
+    )
+    .join('')
+  const legendRows = stagePlanLegend(params.plan)
+    .map(
+      (item) =>
+        `<div class="legend-item"><span class="legend-label">${escapeHtml(item.label)}</span><span>${escapeHtml(item.value)}</span></div>`
     )
     .join('')
   const notes = params.plan.notes.map((n) => `<li>${escapeHtml(n)}</li>`).join('')
+  const warnings = params.plan.warnings
+    .map((w) => `<li>${escapeHtml(w)}</li>`)
+    .join('')
   const orderRef =
     params.orderNumber != null && params.orderYear != null
       ? `${params.orderNumber}/${params.orderYear}`
@@ -46,6 +62,10 @@ export function buildStagePlanPdfHtml(params: {
   th { font-size: 8pt; text-transform: uppercase; letter-spacing: .08em; color:#666; }
   ul { margin: 10px 0 0; padding-left: 18px; color:#444; font-size:9pt; }
   .plan { margin: 12px 0; border: 1px solid #ddd; padding: 8px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 9pt; margin-top: 8px; }
+  .legend-item { display: flex; gap: 6px; }
+  .legend-label { color:#666; text-transform: uppercase; font-size: 7.5pt; letter-spacing: .06em; align-self: center; }
+  .warnings { color:#a83232; }
 </style>
 </head>
 <body>
@@ -59,10 +79,12 @@ export function buildStagePlanPdfHtml(params: {
       &nbsp;·&nbsp; ${escapeHtml(issued)}
     </div>
     <div class="plan">${svg}</div>
+    <div class="legend">${legendRows}</div>
     <table>
       <thead><tr><th>Pozycja</th><th style="text-align:right">Ilość</th></tr></thead>
       <tbody>${bomRows}</tbody>
     </table>
+    ${warnings ? `<ul class="warnings">${warnings}</ul>` : ''}
     <ul>${notes}</ul>
   </div>
 </body>

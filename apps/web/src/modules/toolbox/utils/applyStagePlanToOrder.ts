@@ -1,5 +1,5 @@
 import type { Equipment, OrderEquipmentItem, StagePlan } from '@lama-stage/shared-types'
-import { STAGE_PLAN_LINE_MARKER } from '@lama-stage/shared-types'
+import { STAGE_PLAN_LINE_MARKER, formatMeters } from '@lama-stage/shared-types'
 
 function norm(value: string): string {
   return value
@@ -22,7 +22,16 @@ export function matchStageBomToCatalog(list: Equipment[], plan: StagePlan): Map<
     (n) => n.includes('nog') && n.includes(String(plan.legHeightCm))
   ) || findCatalog(list, (n) => n.includes('nog'))
   const skirt = findCatalog(list, (n) => n.includes('kotar') || n.includes('falban') || n.includes('obic'))
-  const hard = findCatalog(list, (n) => n.includes('blend') || (n.includes('sklejk') && n.includes('obic')))
+  const hipsCladding =
+    findCatalog(list, (n) => n.includes('hips') && (n.includes('obic') || n.includes('bok'))) ||
+    findCatalog(list, (n) => n.includes('hips')) ||
+    findCatalog(list, (n) => n.includes('blend') || (n.includes('sklejk') && n.includes('obic')))
+  const carpet = findCatalog(list, (n) => n.includes('wykładzin') || n.includes('wykladzin'))
+  const hipsFloor =
+    findCatalog(
+      list,
+      (n) => n.includes('hips') && (n.includes('podłog') || n.includes('podlog'))
+    ) || findCatalog(list, (n) => n.includes('hips'))
   const stairs = findCatalog(list, (n) => n.includes('schod'))
   const rail = findCatalog(list, (n) => n.includes('barierk'))
   const deckClamp = findCatalog(list, (n) => n.includes('klamr') && (n.includes('blat') || n.includes('szybkoz')))
@@ -33,7 +42,9 @@ export function matchStageBomToCatalog(list: Equipment[], plan: StagePlan): Map<
   if (deck1) map.set('deck-1x1', deck1)
   if (legs) map.set('legs', legs)
   if (plan.claddingMaterial === 'skirt' && skirt) map.set('cladding', skirt)
-  if (plan.claddingMaterial === 'hard' && hard) map.set('cladding', hard)
+  if (plan.claddingMaterial === 'hips' && hipsCladding) map.set('cladding', hipsCladding)
+  if (plan.floorMaterial === 'carpet' && carpet) map.set('floor', carpet)
+  if (plan.floorMaterial === 'hips' && hipsFloor) map.set('floor', hipsFloor)
   if (stairs) map.set('stairs', stairs)
   if (rail) map.set('railings', rail)
   if (deckClamp) map.set('deck-clamps', deckClamp)
@@ -60,15 +71,20 @@ export function applyStagePlanToEquipmentItems(params: {
   const dim = `${params.plan.widthM}×${params.plan.depthM} m, nogi ${params.plan.legHeightCm} cm`
   const newItems: Partial<OrderEquipmentItem>[] = params.plan.bom.map((line, idx) => {
     const eq = matched.get(line.key)
+    // Ilość w zleceniu jest liczbą całkowitą, więc metry i metry kwadratowe
+    // idą w górę do pełnej jednostki. Dokładna wartość zostaje w opisie.
+    const quantity = Math.max(1, Math.ceil(line.quantity))
+    const exact =
+      line.unit === 'szt.' ? '' : ` · ${formatMeters(line.quantity)} ${line.unit}`
     return {
       id: `temp-stage-${now}-${idx}`,
       orderId: '',
       equipmentId: eq?.id,
       equipment: eq,
       name: eq?.name || line.name,
-      description: `${STAGE_PLAN_LINE_MARKER} ${dim}`,
+      description: `${STAGE_PLAN_LINE_MARKER} ${dim}${exact}`,
       category: eq ? (eq.category === 'SCENA' ? 'Scena' : eq.category) : 'Scena',
-      quantity: line.quantity,
+      quantity,
       unitPrice: eq?.dailyPrice ?? 0,
       days: Math.max(1, params.days),
       discount: 0,

@@ -22,6 +22,7 @@ import {
   clampOrderOfferBlockTitle,
   validateOrderOfferBlocksForSave,
   parseStagePlanJson,
+  serializeStagePlan,
   type StagePlan,
 } from '@lama-stage/shared-types';
 import OrderOfferBlocksEditor from '../components/OrderOfferBlocksEditor';
@@ -441,7 +442,7 @@ export default function OrderFormPage() {
         days: Math.max(1, orderDays),
         offerBlockId: blocks.length > 0 ? firstBlockId : null,
       })
-      setValue('stagePlanJson', JSON.stringify(plan), { shouldDirty: true })
+      setValue('stagePlanJson', serializeStagePlan(plan), { shouldDirty: true })
       handleEquipmentChange(next)
     },
     [equipmentItems, equipmentCatalog, orderDays, offerBlocksRaw, setValue, handleEquipmentChange]
