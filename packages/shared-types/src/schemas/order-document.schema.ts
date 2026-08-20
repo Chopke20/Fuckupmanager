@@ -8,7 +8,7 @@ import {
 import { ClientSchema } from './client.schema';
 import { CurrencySchema, ProjectContactKeySchema, VatRateOfferSchema } from './order.schema';
 
-export const DOCUMENT_TYPES = ['OFFER', 'PROPOSAL', 'WAREHOUSE', 'BRIEF'] as const;
+export const DOCUMENT_TYPES = ['OFFER', 'PROPOSAL', 'WAREHOUSE', 'BRIEF', 'STAGE_PLAN'] as const;
 export const DocumentTypeSchema = z.enum(DOCUMENT_TYPES);
 
 export const OrderOfferSnapshotSchema = z.object({
@@ -102,6 +102,34 @@ export const WarehouseSnapshotSchema = z.object({
   itemLoadChecked: z.record(z.boolean()).optional(),
 });
 
+export const PROPOSAL_SKINS = ['MINIMAL', 'DYNAMIC'] as const;
+export const ProposalSkinSchema = z.enum(PROPOSAL_SKINS);
+export const MAX_PROPOSAL_OPTIONS = 6;
+export const PROPOSAL_OPTION_KINDS = ['BLOCK', 'EQUIPMENT', 'PRODUCTION'] as const;
+export const ProposalOptionKindSchema = z.enum(PROPOSAL_OPTION_KINDS);
+
+export const ProposalOptionRefSchema = z.object({
+  id: z.string().min(1).max(80),
+  kind: ProposalOptionKindSchema,
+  targetId: z.string().uuid(),
+  rationale: z.string().max(500).default(''),
+});
+
+export const ProposalDocumentDraftSchema = z.object({
+  offerExportId: z.string().uuid().nullable().optional(),
+  skin: ProposalSkinSchema.default('MINIMAL'),
+  lead: z.string().max(800).default(''),
+  whyThisSet: z.string().max(2000).default(''),
+  options: z.array(ProposalOptionRefSchema).max(MAX_PROPOSAL_OPTIONS).default([]),
+});
+
+export const ProposalClientSignalsSchema = z.object({
+  interestedOptionIds: z.array(z.string().min(1).max(80)).max(MAX_PROPOSAL_OPTIONS).default([]),
+  discussRequestedAt: z.string().datetime().nullable().default(null),
+});
+
+export const ProposalPublicEventTypeSchema = z.enum(['OPEN', 'PDF', 'CTA']);
+
 export const OrderDocumentDraftSchema = z.object({
   id: z.string().uuid(),
   orderId: z.string().uuid(),
@@ -127,4 +155,9 @@ export type OrderDocumentExport = z.infer<typeof OrderDocumentExportSchema>;
 export type OfferDocumentDraft = z.infer<typeof OfferDocumentDraftSchema>;
 export type WarehouseDocumentDraft = z.infer<typeof WarehouseDocumentDraftSchema>;
 export type OrderDocumentDraft = z.infer<typeof OrderDocumentDraftSchema>;
+export type ProposalSkin = z.infer<typeof ProposalSkinSchema>;
+export type ProposalOptionRef = z.infer<typeof ProposalOptionRefSchema>;
+export type ProposalDocumentDraft = z.infer<typeof ProposalDocumentDraftSchema>;
+export type ProposalClientSignals = z.infer<typeof ProposalClientSignalsSchema>;
+export type ProposalPublicEventType = z.infer<typeof ProposalPublicEventTypeSchema>;
 

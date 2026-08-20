@@ -2,9 +2,11 @@ import { Request, Response } from 'express'
 import { prisma } from '../../prisma/client'
 import puppeteer from 'puppeteer'
 import { ZodError } from 'zod'
-import { OrderOfferSnapshotSchema, type OfferDocumentDraft, type OrderOfferSnapshot } from '@lama-stage/shared-types'
+import { AppError } from '../../shared/errors/AppError'
+import { OrderOfferSnapshotSchema, parseStagePlanJson, type OfferDocumentDraft, type OrderOfferSnapshot } from '@lama-stage/shared-types'
 import { buildOfferHtmlV5, type OrderLike } from './offer-v5-builder'
 import { buildWarehousePdfHtml } from './warehouse-pdf-builder'
+import { buildStagePlanPdfHtml } from './stage-plan-pdf-builder'
 import {
   buildDefaultDraft,
   buildDocumentNumber,
@@ -493,75 +495,78 @@ export class PdfController {
     }
   }
 
+  async buildOfferPdfFromExportId(exportId: string): Promise<{ buffer: Buffer; filename: string }> {
+    const exportRecord = await prisma.orderDocumentExport.findUnique({
+      where: { id: exportId },
+    })
+    if (!exportRecord) {
+      throw new AppError('Eksport dokumentu nie znaleziony', 404, 'NOT_FOUND')
+    }
+    if (exportRecord.documentType !== 'OFFER') {
+      throw new AppError('Obsługiwany jest tylko eksport oferty (OFFER)', 400)
+    }
+    let snapshotRaw: unknown
+    try {
+      snapshotRaw = JSON.parse(exportRecord.snapshot)
+    } catch {
+      throw new AppError('Nie udało się odczytać snapshotu eksportu', 500)
+    }
+    const parsed = OrderOfferSnapshotSchema.safeParse(snapshotRaw)
+    const raw = snapshotRaw as Record<string, unknown>
+    let issuedAtFallback: string | undefined
+    if (typeof raw.generatedAt === 'string') {
+      issuedAtFallback = raw.generatedAt
+    } else {
+      const dd = raw.documentDraft
+      if (dd && typeof dd === 'object' && dd !== null && 'issuedAt' in dd) {
+        const v = (dd as { issuedAt?: unknown }).issuedAt
+        if (typeof v === 'string') issuedAtFallback = v
+      }
+    }
+    const issuedAt: string | undefined =
+      parsed.success && parsed.data.generatedAt ? parsed.data.generatedAt : issuedAtFallback
+    const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
+    const branding = await this.resolvePdfBranding(appSettings)
+    const projectContact = this.pickProjectContact(appSettings, null)
+    const html = parsed.success
+      ? buildOfferHtmlV5(orderOfferSnapshotToPdfOrderLike(parsed.data), exportRecord.documentNumber, {
+          issuedAt,
+          projectContact,
+          accentColorHex: branding.accentColorHex,
+          logoUrl: branding.logoUrl,
+        })
+      : buildOfferHtmlV5(raw as OrderLike, exportRecord.documentNumber, {
+          issuedAt,
+          projectContact,
+          accentColorHex: branding.accentColorHex,
+          logoUrl: branding.logoUrl,
+        })
+    const pdfBuffer = await this.renderPdf(html)
+    return { buffer: pdfBuffer, filename: `Oferta-${exportRecord.documentNumber}.pdf` }
+  }
+
+  async sendOfferExportPdf(exportId: string, res: Response, inline: boolean) {
+    const { buffer, filename } = await this.buildOfferPdfFromExportId(exportId)
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader(
+      'Content-Disposition',
+      inline ? `inline; filename="${filename.replace('.pdf', '-podglad.pdf')}"` : `attachment; filename="${filename}"`
+    )
+    res.send(buffer)
+  }
+
   /** Generuj ofertę z istniejącego eksportu (snapshot) – nie zmienia numeracji */
   async exportOfferFromSnapshot(req: Request, res: Response) {
     try {
       const exportId = req.params.exportId
       if (!exportId) return res.status(400).json({ error: 'Brak ID eksportu' })
-
-      const exportRecord = await prisma.orderDocumentExport.findUnique({
-        where: { id: exportId },
-      })
-
-      if (!exportRecord) {
-        return res.status(404).json({ error: 'Eksport dokumentu nie znaleziony' })
-      }
-
-      if (exportRecord.documentType !== 'OFFER') {
-        return res.status(400).json({ error: 'Obsługiwany jest tylko eksport oferty (OFFER)' })
-      }
-
-      let snapshotRaw: unknown
-      try {
-        snapshotRaw = JSON.parse(exportRecord.snapshot)
-      } catch {
-        return res.status(500).json({ error: 'Nie udało się odczytać snapshotu eksportu' })
-      }
-
-      const parsed = OrderOfferSnapshotSchema.safeParse(snapshotRaw)
-      const raw = snapshotRaw as Record<string, unknown>
-      let issuedAtFallback: string | undefined
-      if (typeof raw.generatedAt === 'string') {
-        issuedAtFallback = raw.generatedAt
-      } else {
-        const dd = raw.documentDraft
-        if (dd && typeof dd === 'object' && dd !== null && 'issuedAt' in dd) {
-          const v = (dd as { issuedAt?: unknown }).issuedAt
-          if (typeof v === 'string') issuedAtFallback = v
-        }
-      }
-      const issuedAt: string | undefined =
-        parsed.success && parsed.data.generatedAt ? parsed.data.generatedAt : issuedAtFallback
-      const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
-      const branding = await this.resolvePdfBranding(appSettings)
-      const projectContact = this.pickProjectContact(appSettings, null)
-      const html = parsed.success
-        ? buildOfferHtmlV5(orderOfferSnapshotToPdfOrderLike(parsed.data), exportRecord.documentNumber, {
-            issuedAt,
-            projectContact,
-            accentColorHex: branding.accentColorHex,
-            logoUrl: branding.logoUrl,
-          })
-        : buildOfferHtmlV5(raw as OrderLike, exportRecord.documentNumber, {
-            issuedAt,
-            projectContact,
-            accentColorHex: branding.accentColorHex,
-            logoUrl: branding.logoUrl,
-          })
-      const pdfBuffer = await this.renderPdf(html)
-
-      const filename = `Oferta-${exportRecord.documentNumber}.pdf`
       const inline =
         req.query.inline === '1' || req.query.preview === '1' || req.query.preview === 'true'
-      res.setHeader('Content-Type', 'application/pdf')
-      res.setHeader(
-        'Content-Disposition',
-        inline
-          ? `inline; filename="Oferta-${exportRecord.documentNumber}-podglad.pdf"`
-          : `attachment; filename="${filename}"`
-      )
-      res.send(pdfBuffer)
+      await this.sendOfferExportPdf(exportId, res, Boolean(inline))
     } catch (error) {
+      if (error instanceof AppError) {
+        return res.status(error.statusCode).json({ error: error.message })
+      }
       console.error('Błąd generowania PDF z eksportu:', error)
       res.status(500).json({ error: 'Błąd generowania oferty PDF z eksportu' })
     }
@@ -739,6 +744,96 @@ export class PdfController {
     } catch (error) {
       console.error('Błąd generowania PDF magazynu:', error)
       res.status(500).json({ error: 'Błąd generowania PDF magazynu' })
+    }
+  }
+
+  async generateStagePlanPdf(req: Request, res: Response) {
+    try {
+      const { orderId } = req.params
+      if (!orderId) return res.status(400).json({ error: 'Brak ID zlecenia' })
+
+      const order = await prisma.order.findFirst({
+        where: { id: orderId, isDeleted: false },
+        include: { client: true },
+      })
+      if (!order) return res.status(404).json({ error: 'Zlecenie nie znalezione' })
+
+      const plan = parseStagePlanJson(order.stagePlanJson)
+      if (!plan) {
+        return res.status(400).json({ error: 'Brak zapisanego planu sceny — złóż scenę w zleceniu.' })
+      }
+
+      const orderYear = order.orderYear ?? new Date(order.createdAt).getFullYear()
+      const orderNumber = order.orderNumber
+      if (orderNumber == null || orderYear == null) {
+        return res.status(400).json({ error: 'Zlecenie nie ma nadanego numeru.' })
+      }
+
+      const inline =
+        req.query.inline === '1' || req.query.preview === '1' || req.query.preview === 'true'
+      const generatedAt = new Date().toISOString()
+
+      let documentNumberDisplay: string
+      if (inline) {
+        const exportCount = await prisma.orderDocumentExport.count({
+          where: { orderId, documentType: 'STAGE_PLAN' },
+        })
+        documentNumberDisplay = buildDocumentNumber({
+          documentType: 'STAGE_PLAN',
+          orderNumber,
+          orderYear,
+          version: exportCount + 1,
+        })
+      } else {
+        const created = await prisma.$transaction(async (tx) => {
+          const existingCount = await tx.orderDocumentExport.count({
+            where: { orderId, documentType: 'STAGE_PLAN' },
+          })
+          const version = existingCount + 1
+          const documentNumber = buildDocumentNumber({
+            documentType: 'STAGE_PLAN',
+            orderNumber,
+            orderYear,
+            version,
+          })
+          return tx.orderDocumentExport.create({
+            data: {
+              orderId,
+              documentType: 'STAGE_PLAN',
+              documentNumber,
+              snapshot: JSON.stringify({
+                orderId,
+                documentType: 'STAGE_PLAN',
+                generatedAt,
+                plan,
+              }),
+            },
+          })
+        })
+        documentNumberDisplay = created.documentNumber
+        res.setHeader('X-Stage-Plan-Export-Created', '1')
+      }
+
+      const html = buildStagePlanPdfHtml({
+        documentNumberDisplay,
+        orderName: order.name,
+        orderNumber,
+        orderYear,
+        venue: order.venue,
+        issuedAt: generatedAt,
+        plan,
+      })
+      const pdfBuffer = await this.renderPdf(html)
+      const filename = `Plan-sceny-${documentNumberDisplay}.pdf`
+      res.setHeader('Content-Type', 'application/pdf')
+      res.setHeader(
+        'Content-Disposition',
+        inline ? 'inline; filename="Plan-sceny-podglad.pdf"' : `attachment; filename="${filename}"`,
+      )
+      res.send(pdfBuffer)
+    } catch (error) {
+      console.error('Błąd generowania PDF planu sceny:', error)
+      res.status(500).json({ error: 'Błąd generowania PDF planu sceny' })
     }
   }
 

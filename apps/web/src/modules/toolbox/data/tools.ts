@@ -15,6 +15,12 @@ export const TOOLBOX_TOOLS: ToolboxTool[] = [
     status: 'ready',
   },
   {
+    slug: 'podesty',
+    title: 'Wizualizer podestów',
+    description: 'Rzut z góry sceny z podestów 2×1 i 1×1, nogi, klamry i metry obicia.',
+    status: 'ready',
+  },
+  {
     slug: 'transport-km',
     title: 'Transport km',
     description: 'Wycena transportu z przedziałów km i stawki za kilometr.',

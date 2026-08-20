@@ -7,8 +7,10 @@ import OrdersPage from '../modules/orders/pages/OrdersPage'
 import OrderFormPage from '../modules/orders/pages/OrderFormPage'
 import OrderOfferPage from '../modules/orders/pages/OrderOfferPage'
 import OrderProposalPage from '../modules/orders/pages/OrderProposalPage'
+import PublicProposalPage from '../modules/orders/pages/PublicProposalPage'
 import OrderWarehousePage from '../modules/orders/pages/OrderWarehousePage'
 import OrderBriefPage from '../modules/orders/pages/OrderBriefPage'
+import OrderStagePlanPage from '../modules/orders/pages/OrderStagePlanPage'
 import ClientsPage from '../modules/clients/pages/ClientsPage'
 import EquipmentPage from '../modules/equipment/pages/EquipmentPage'
 import ResourcesPage from '../modules/resources/pages/ResourcesPage'
@@ -17,6 +19,7 @@ import NotFoundPage from '../shared/pages/NotFoundPage'
 import FinanceDashboardPage from '../modules/finance/pages/FinanceDashboardPage'
 import ToolboxPage from '../modules/toolbox/pages/ToolboxPage'
 import TechnicianCashCalculatorPage from '../modules/toolbox/pages/TechnicianCashCalculatorPage'
+import StagePlatformsCalculatorPage from '../modules/toolbox/pages/StagePlatformsCalculatorPage'
 import LoginPage from '../modules/auth/pages/LoginPage'
 import ForgotPasswordPage from '../modules/auth/pages/ForgotPasswordPage'
 import ResetPasswordPage from '../modules/auth/pages/ResetPasswordPage'
@@ -38,6 +41,7 @@ export const appRouter = createBrowserRouter([
   { path: '/forgot-password', element: <ForgotPasswordPage /> },
   { path: '/reset-password', element: <ResetPasswordPage /> },
   { path: '/accept-invite', element: <AcceptInvitePage /> },
+  { path: '/p/:token', element: <PublicProposalPage /> },
   { path: '/', element: <ProtectedLayout><OverviewPage /></ProtectedLayout> },
   { path: '/v4', element: <ProtectedLayout><OverviewPageV4 /></ProtectedLayout> },
   { path: '/orders', element: <ProtectedLayout><OrdersPage /></ProtectedLayout> },
@@ -47,6 +51,7 @@ export const appRouter = createBrowserRouter([
   { path: '/orders/:id/proposal', element: <ProtectedLayout><OrderProposalPage /></ProtectedLayout> },
   { path: '/orders/:id/warehouse', element: <ProtectedLayout><OrderWarehousePage /></ProtectedLayout> },
   { path: '/orders/:id/brief', element: <ProtectedLayout><OrderBriefPage /></ProtectedLayout> },
+  { path: '/orders/:id/stage-plan', element: <ProtectedLayout><OrderStagePlanPage /></ProtectedLayout> },
   { path: '/clients', element: <ProtectedLayout><ClientsPage /></ProtectedLayout> },
   { path: '/equipment', element: <ProtectedLayout><EquipmentPage /></ProtectedLayout> },
   { path: '/resources', element: <ProtectedLayout><ResourcesPage /></ProtectedLayout> },
@@ -54,6 +59,7 @@ export const appRouter = createBrowserRouter([
   { path: '/finance', element: <ProtectedLayout><FinanceDashboardPage /></ProtectedLayout> },
   { path: '/toolbox', element: <ProtectedLayout><ToolboxPage /></ProtectedLayout> },
   { path: '/toolbox/technik-gotowka', element: <ProtectedLayout><TechnicianCashCalculatorPage /></ProtectedLayout> },
+  { path: '/toolbox/podesty', element: <ProtectedLayout><StagePlatformsCalculatorPage /></ProtectedLayout> },
   {
     path: '/admin',
     element: (

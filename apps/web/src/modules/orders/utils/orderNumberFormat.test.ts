@@ -25,5 +25,8 @@ describe('orderNumberFormat', () => {
     expect(
       buildDocumentNumber({ documentType: 'BRIEF', orderNumber: 16, orderYear: 2026, version: 1 })
     ).toBe('BRF-26-0016-v1')
+    expect(
+      buildDocumentNumber({ documentType: 'STAGE_PLAN', orderNumber: 16, orderYear: 2026, version: 1 })
+    ).toBe('SCN-26-0016-v1')
   })
 })

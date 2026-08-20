@@ -585,6 +585,7 @@ export class OrdersService {
       exchangeRateEur: source.exchangeRateEur ?? undefined,
       isRecurring: false,
       recurringConfig: undefined,
+      stagePlanJson: source.stagePlanJson ?? undefined,
       parentOrderId: undefined,
       stages,
       offerBlocks,

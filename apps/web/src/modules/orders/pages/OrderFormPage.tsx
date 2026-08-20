@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useLocation, useSearchParams, useBlocker } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Save, FileText, Calendar, DollarSign, Repeat, X, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Save, FileText, Calendar, DollarSign, Repeat, X, AlertCircle, LayoutGrid } from 'lucide-react';
 import { FormProvider, useForm } from 'react-hook-form';
 import { useOrder, useCreateOrder, useUpdateOrder } from '../hooks/useOrders';
 import { api } from '../../../shared/api/client';
@@ -21,6 +21,8 @@ import {
   normalizeOrderLineDescriptionForSave,
   clampOrderOfferBlockTitle,
   validateOrderOfferBlocksForSave,
+  parseStagePlanJson,
+  type StagePlan,
 } from '@lama-stage/shared-types';
 import OrderOfferBlocksEditor from '../components/OrderOfferBlocksEditor';
 import { randomClientUuid } from '../../../shared/utils/uuid';
@@ -32,6 +34,9 @@ import OrderTransportSection from '../components/OrderTransportSection';
 import OrderFinancialSection from '../components/OrderFinancialSection';
 import OrderRecurringSection from '../components/OrderRecurringSection';
 import ConfirmationModal from '../../../shared/components/ConfirmationModal';
+import StagePlatformsOrderModal from '../components/StagePlatformsOrderModal';
+import { applyStagePlanToEquipmentItems } from '../../toolbox/utils/applyStagePlanToOrder';
+import { useEquipment } from '../../equipment/hooks/useEquipment';
 
 const UNSAVED_LEAVE_MSG =
   'Masz niezapisane zmiany w zleceniu. Opuścić stronę bez zapisywania?';
@@ -71,6 +76,7 @@ function mapApiOrderToFormValues(o: any): Partial<Order> {
     offerNumber: o.offerNumber,
     isRecurring: o.isRecurring ?? false,
     recurringConfig: o.recurringConfig,
+    stagePlanJson: o.stagePlanJson ?? null,
     parentOrderId: o.parentOrderId,
     stages: Array.isArray(o.stages)
       ? o.stages.map((s: any) => ({
@@ -183,6 +189,7 @@ export default function OrderFormPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [dismissedHints, setDismissedHints] = useState<Set<string>>(new Set());
   const [unsavedModalOpen, setUnsavedModalOpen] = useState(false);
+  const [stageModalOpen, setStageModalOpen] = useState(false);
   const [pendingNav, setPendingNav] = useState<null | { kind: 'path'; to: string } | { kind: 'blocker' }>(null);
   const submitInFlightRef = useRef(false);
   const allowNextNavigationRef = useRef(false);
@@ -206,6 +213,7 @@ export default function OrderFormPage() {
       exchangeRateEur: undefined,
       isRecurring: false,
       recurringConfig: undefined,
+      stagePlanJson: null,
       parentOrderId: undefined,
       stages: [],
       equipmentItems: [],
@@ -397,6 +405,9 @@ export default function OrderFormPage() {
   const stages = watch('stages') || [];
   const equipmentItems = watch('equipmentItems') || [];
   const offerBlocksRaw = watch('offerBlocks') || [];
+  const { data: paginatedEquipment } = useEquipment({ page: 1, limit: 500 })
+  const equipmentCatalog = paginatedEquipment?.data || []
+
   const hasOfferBlocks = (offerBlocksRaw as Partial<OrderOfferBlock>[]).length > 0;
   const allProductionItems = watch('productionItems') || [];
   const productionItems = useMemo(
@@ -414,6 +425,27 @@ export default function OrderFormPage() {
     if (!from || !to) return 1
     return daysBetween(from, to)
   }, [formData?.dateFrom, formData?.dateTo])
+
+  const savedStagePlan = parseStagePlanJson(
+    typeof formData?.stagePlanJson === 'string' ? formData.stagePlanJson : null
+  )
+
+  const handleApplyStagePlan = useCallback(
+    (plan: StagePlan) => {
+      const blocks = offerBlocksRaw as Partial<OrderOfferBlock>[]
+      const firstBlockId = blocks[0]?.id ?? null
+      const next = applyStagePlanToEquipmentItems({
+        existing: equipmentItems as Partial<OrderEquipmentItem>[],
+        plan,
+        catalog: equipmentCatalog,
+        days: Math.max(1, orderDays),
+        offerBlockId: blocks.length > 0 ? firstBlockId : null,
+      })
+      setValue('stagePlanJson', JSON.stringify(plan), { shouldDirty: true })
+      handleEquipmentChange(next)
+    },
+    [equipmentItems, equipmentCatalog, orderDays, offerBlocksRaw, setValue, handleEquipmentChange]
+  )
 
   const buildPayload = (data: Partial<Order>): CreateOrderDto | UpdateOrderDto => {
     const toIso = (value: unknown) => {
@@ -562,6 +594,7 @@ export default function OrderFormPage() {
       exchangeRateEur: data.currency === 'EUR' && data.exchangeRateEur ? toNumber(data.exchangeRateEur, 0) : undefined,
       isRecurring: !!data.isRecurring,
       recurringConfig: normalizeRecurringConfig(data.recurringConfig),
+      stagePlanJson: typeof data.stagePlanJson === 'string' ? data.stagePlanJson : null,
       parentOrderId: data.parentOrderId || undefined,
       stages: normalizeStages((data?.stages ?? []) as any[]),
       offerBlocks: normalizeOfferBlocks(data.offerBlocks as any[]),
@@ -961,6 +994,16 @@ export default function OrderFormPage() {
                 </section>
 
                 <section id="offer-blocks" className="scroll-mt-24 mb-6">
+                  <div className="mb-3 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setStageModalOpen(true)}
+                      className="inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1.5 text-xs hover:bg-surface-2"
+                    >
+                      <LayoutGrid size={14} />
+                      Złóż scenę z podestów
+                    </button>
+                  </div>
                   <OrderOfferBlocksEditor
                     blocks={(offerBlocksRaw as Partial<OrderOfferBlock>[]) ?? []}
                     onBlocksChange={handleOfferBlocksChange}
@@ -979,10 +1022,20 @@ export default function OrderFormPage() {
                 {!hasOfferBlocks && (
                   <>
                     <section id="equipment" className="scroll-mt-24 mb-6">
-                      <h2 className="text-lg font-bold flex items-center gap-2 mb-3">
-                        <FileText size={24} />
-                        Wykaz sprzętu
-                      </h2>
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <h2 className="text-lg font-bold flex items-center gap-2">
+                          <FileText size={24} />
+                          Wykaz sprzętu
+                        </h2>
+                        <button
+                          type="button"
+                          onClick={() => setStageModalOpen(true)}
+                          className="inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1.5 text-xs hover:bg-surface-2"
+                        >
+                          <LayoutGrid size={14} />
+                          Złóż scenę z podestów
+                        </button>
+                      </div>
                       <div className="lg:col-span-2">
                         <OrderEquipmentSection
                           items={equipmentItems}
@@ -1071,10 +1124,14 @@ export default function OrderFormPage() {
                       <FileText size={18} />
                       Oferta
                     </button>
-                    <button type="button" disabled className="px-3 py-2 text-sm border border-border rounded opacity-60 cursor-not-allowed flex items-center gap-2" title="W przygotowaniu">
+                    <button
+                      type="button"
+                      disabled={!isEditing || !id || updateOrderMutation.isPending}
+                      onClick={() => id && void saveAndNavigateToDocument(`/orders/${id}/proposal`)}
+                      className="px-3 py-2 text-sm border-2 border-primary text-primary rounded font-medium hover:bg-primary/10 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
                       <FileText size={18} />
                       Proposal
-                      <span className="text-xs text-muted-foreground">(w przygotowaniu)</span>
                     </button>
                     <button
                       type="button"
@@ -1089,6 +1146,15 @@ export default function OrderFormPage() {
                       <FileText size={18} />
                       Brief techniczny
                       <span className="text-xs text-muted-foreground">(w przygotowaniu)</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!isEditing || !id || updateOrderMutation.isPending}
+                      onClick={() => id && void saveAndNavigateToDocument(`/orders/${id}/stage-plan`)}
+                      className="px-3 py-2 text-sm border-2 border-primary text-primary rounded font-medium hover:bg-primary/10 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <LayoutGrid size={18} />
+                      Plan sceny
                     </button>
                   </div>
                 </section>
@@ -1118,6 +1184,13 @@ export default function OrderFormPage() {
           </div>
         </div>
       </form>
+
+      <StagePlatformsOrderModal
+        open={stageModalOpen}
+        initialPlan={savedStagePlan}
+        onClose={() => setStageModalOpen(false)}
+        onApply={handleApplyStagePlan}
+      />
 
       <ConfirmationModal
         isOpen={unsavedModalOpen}

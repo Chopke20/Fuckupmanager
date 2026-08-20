@@ -56,3 +56,32 @@ export {
   clampOrderOfferBlockTitle,
 } from './constants/orderOfferBlock';
 export { validateOrderOfferBlocksForSave } from './utils/orderOfferBlockValidation';
+export {
+  computeProposalEquipmentNet,
+  computeProposalProductionNet,
+  applyGlobalDiscountAndVat,
+  proposalOptionKey,
+} from './utils/proposalFinance';
+export {
+  STAGE_PLAN_LINE_MARKER,
+  STAGE_LEG_HEIGHTS_CM,
+  buildStagePlan,
+  packStageTiles,
+  parseStagePlanJson,
+  isStagePlan,
+  formatMeters,
+  claddingSidesLabel,
+  claddingMaterialLabel,
+  renderStagePlanSvg,
+} from './utils/stagePlatformPlan';
+export type {
+  StageDeckKind,
+  StageOrientation,
+  StageCladdingMaterial,
+  StageCladdingSides,
+  StageLegShare,
+  StageTile,
+  StageBomLine,
+  StagePlanInput,
+  StagePlan,
+} from './utils/stagePlatformPlan';

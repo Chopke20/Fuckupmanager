@@ -19,7 +19,7 @@ const DRY = process.env.MIGRATE_DRY_RUN === '1' || process.env.MIGRATE_DRY_RUN =
 const PAD = 5
 
 function isNewDocumentNumber(s: string): boolean {
-  return /^(OFR|PRP|WHS|BRF)-\d{2}-\d{4}-v\d+$/i.test(s.trim())
+  return /^(OFR|PRP|WHS|BRF|SCN)-\d{2}-\d{4}-v\d+$/i.test(s.trim())
 }
 
 function parseLegacyDocumentNumber(

@@ -85,6 +85,39 @@ export function getOrderWarehousePdfPreviewUrl(orderId: string): string {
   return `/api/pdf/warehouse/${orderId}/generate?preview=1`;
 }
 
+export async function downloadOrderStagePlanPdf(orderId: string): Promise<void> {
+  const res = await axios.get(`/api/pdf/stage-plan/${orderId}/generate`, {
+    responseType: 'blob',
+    withCredentials: true,
+  })
+  const blob = res.data as Blob
+  if (blob.type === 'application/json') {
+    const text = await blob.text()
+    let msg = 'Nie udało się wygenerować PDF planu sceny.'
+    try {
+      const j = JSON.parse(text) as { error?: string }
+      if (typeof j.error === 'string') msg = j.error
+    } catch {
+      //
+    }
+    throw new Error(msg)
+  }
+  const name = filenameFromContentDisposition(res.headers['content-disposition'], `Plan-sceny-${orderId}.pdf`)
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = name
+  a.rel = 'noopener'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
+export function getOrderStagePlanPdfPreviewUrl(orderId: string): string {
+  return `/api/pdf/stage-plan/${orderId}/generate?preview=1`
+}
+
 export interface OrderDocumentExportMeta {
   id: string;
   orderId: string;
@@ -92,6 +125,10 @@ export interface OrderDocumentExportMeta {
   documentNumber: string;
   exportedAt: string;
   createdAt: string;
+  publicToken?: string | null;
+  expiresAt?: string | null;
+  clientSignals?: { interestedOptionIds: string[]; discussRequestedAt: string | null } | null;
+  eventCounts?: { OPEN: number; PDF: number; CTA: number } | null;
 }
 
 export interface OrderDocumentDraftDto<T = Record<string, any>> {

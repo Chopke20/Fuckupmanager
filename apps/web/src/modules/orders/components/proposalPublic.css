@@ -1,0 +1,170 @@
+.proposal-public-root {
+  min-height: 100vh;
+}
+
+.proposal-sheet {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 32px 20px 64px;
+}
+
+.proposal-logo {
+  height: 40px;
+  width: auto;
+  object-fit: contain;
+  margin-bottom: 16px;
+}
+
+.proposal-brand {
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.proposal-kicker {
+  font-size: 13px;
+  opacity: 0.7;
+  margin-bottom: 8px;
+}
+
+.proposal-hero h1 {
+  font-size: 32px;
+  line-height: 1.15;
+  margin-bottom: 8px;
+}
+
+.proposal-meta,
+.proposal-validity,
+.proposal-hint,
+.proposal-contact {
+  font-size: 14px;
+  opacity: 0.75;
+}
+
+.proposal-lead {
+  font-size: 18px;
+  line-height: 1.5;
+  margin: 16px 0;
+}
+
+.proposal-section {
+  margin-top: 36px;
+}
+
+.proposal-section h2 {
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.proposal-scope-grid,
+.proposal-option-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.proposal-scope-card,
+.proposal-option-card {
+  border: 1px solid currentColor;
+  padding: 16px;
+}
+
+.proposal-scope-card ul {
+  margin-top: 8px;
+  padding-left: 16px;
+  font-size: 14px;
+}
+
+.proposal-option-price {
+  font-weight: 600;
+  margin-top: 12px;
+}
+
+.proposal-option-toggle,
+.proposal-btn-primary,
+.proposal-btn-secondary {
+  margin-top: 12px;
+  border: 1px solid currentColor;
+  padding: 8px 12px;
+  font-size: 13px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.proposal-option-card.is-selected {
+  outline: 2px solid currentColor;
+}
+
+.proposal-finance dl {
+  display: grid;
+  gap: 8px;
+}
+
+.proposal-finance div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 15px;
+}
+
+.proposal-finance-total {
+  font-weight: 700;
+  font-size: 18px;
+  margin-top: 8px;
+}
+
+.proposal-cta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.proposal-skin-minimal {
+  background: #f6f4ef;
+  color: #161616;
+}
+
+.proposal-skin-minimal .proposal-sheet {
+  background: #f6f4ef;
+}
+
+.proposal-skin-minimal .proposal-scope-card,
+.proposal-skin-minimal .proposal-option-card {
+  background: #fff;
+  border-color: #d8d4cc;
+}
+
+.proposal-skin-minimal .proposal-btn-primary {
+  background: #161616;
+  color: #f6f4ef;
+  border-color: #161616;
+}
+
+.proposal-skin-dynamic {
+  background: #07070a;
+  color: #f4f4f5;
+}
+
+.proposal-skin-dynamic .proposal-hero h1 {
+  font-size: 40px;
+}
+
+.proposal-skin-dynamic .proposal-scope-card,
+.proposal-skin-dynamic .proposal-option-card {
+  background: #12131a;
+  border-color: #2a2c38;
+}
+
+.proposal-skin-dynamic .proposal-finance-total dd {
+  font-size: 28px;
+}
+
+.proposal-skin-dynamic .proposal-btn-primary {
+  background: #e8ff47;
+  color: #07070a;
+  border-color: #e8ff47;
+}

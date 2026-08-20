@@ -1,6 +1,7 @@
 import type { Order, PrismaClient } from '@prisma/client'
 import {
   OfferDocumentDraftSchema,
+  ProposalDocumentDraftSchema,
   WarehouseDocumentDraftSchema,
   type DocumentType,
   type OfferDocumentDraft,
@@ -80,6 +81,16 @@ export function buildDefaultDraft(order: Pick<Order, 'name'>, documentType: Docu
       title: `Magazyn / załadunek - ${order.name}`,
       notes: '',
       checked: {},
+    })
+  }
+
+  if (documentType === 'PROPOSAL') {
+    return ProposalDocumentDraftSchema.parse({
+      offerExportId: null,
+      skin: 'MINIMAL',
+      lead: '',
+      whyThisSet: '',
+      options: [],
     })
   }
 

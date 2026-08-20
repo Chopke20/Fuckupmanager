@@ -5,6 +5,7 @@ import { AppError } from '../../shared/errors/AppError'
 import {
   DocumentTypeSchema,
   OfferDocumentDraftSchema,
+  ProposalDocumentDraftSchema,
   WarehouseDocumentDraftSchema,
 } from '@lama-stage/shared-types'
 import {
@@ -31,6 +32,7 @@ function parseOfferVersionFromDocumentNumber(documentNumber: string): number {
 }
 import { buildOrderOfferSnapshotFromOrder, loadOfferDraftPayload } from './offer-snapshot-merge'
 import { buildWarehouseSnapshotFromOrder, type OrderForWarehouseSnapshot } from './warehouse-snapshot'
+import { parseClientSignals, publishProposalExport } from './proposal-publish'
 
 /** Po usunięciu eksportu OFFER: `offerVersion` / `offerNumber` = najwyższa wersja z pozostałych snapshotów, albo reset (0 / null). */
 async function syncOrderOfferFromRemainingExports(tx: Prisma.TransactionClient, orderId: string) {
@@ -95,10 +97,44 @@ export const listOrderDocumentExports = async (req: Request, res: Response, next
         documentNumber: true,
         exportedAt: true,
         createdAt: true,
+        publicToken: true,
+        expiresAt: true,
+        clientSignalsJson: true,
       },
     })
 
-    res.json({ data: exports })
+    const proposalIds = exports.filter((e) => e.documentType === 'PROPOSAL').map((e) => e.id)
+    const eventRows =
+      proposalIds.length > 0
+        ? await prisma.proposalPublicEvent.groupBy({
+            by: ['exportId', 'eventType'],
+            where: { exportId: { in: proposalIds } },
+            _count: { _all: true },
+          })
+        : []
+    const eventMap = new Map<string, { OPEN: number; PDF: number; CTA: number }>()
+    for (const row of eventRows) {
+      const current = eventMap.get(row.exportId) ?? { OPEN: 0, PDF: 0, CTA: 0 }
+      if (row.eventType === 'OPEN' || row.eventType === 'PDF' || row.eventType === 'CTA') {
+        current[row.eventType] = row._count._all
+      }
+      eventMap.set(row.exportId, current)
+    }
+
+    res.json({
+      data: exports.map((e) => ({
+        id: e.id,
+        orderId: e.orderId,
+        documentType: e.documentType,
+        documentNumber: e.documentNumber,
+        exportedAt: e.exportedAt,
+        createdAt: e.createdAt,
+        publicToken: e.publicToken,
+        expiresAt: e.expiresAt,
+        clientSignals: e.documentType === 'PROPOSAL' ? parseClientSignals(e.clientSignalsJson) : null,
+        eventCounts: e.documentType === 'PROPOSAL' ? eventMap.get(e.id) ?? { OPEN: 0, PDF: 0, CTA: 0 } : null,
+      })),
+    })
   } catch (error) {
     next(error)
   }
@@ -202,6 +238,13 @@ export const getOrderDocumentDraft = async (req: Request, res: Response, next: N
       } else {
         payload = buildDefaultDraft(order, documentType)
       }
+    } else if (documentType === 'PROPOSAL') {
+      if (parsed != null) {
+        const p = ProposalDocumentDraftSchema.safeParse(parsed)
+        payload = p.success ? p.data : buildDefaultDraft(order, documentType)
+      } else {
+        payload = buildDefaultDraft(order, documentType)
+      }
     } else {
       payload = parsed != null ? parsed : buildDefaultDraft(order, documentType)
     }
@@ -240,6 +283,12 @@ export const updateOrderDocumentDraft = async (req: Request, res: Response, next
       payload = OfferDocumentDraftSchema.parse(rawPayload)
     } else if (documentType === 'WAREHOUSE') {
       payload = WarehouseDocumentDraftSchema.parse(rawPayload)
+    } else if (documentType === 'PROPOSAL') {
+      const parsed = ProposalDocumentDraftSchema.safeParse(rawPayload)
+      if (!parsed.success) {
+        throw new AppError('Nieprawidłowy draft proposal.', 400, 'VALIDATION_ERROR', parsed.error.flatten())
+      }
+      payload = parsed.data
     }
 
     const created = await prisma.orderDocumentDraft.upsert({
@@ -285,6 +334,22 @@ export const createOrderDocumentExport = async (req: Request, res: Response, nex
     }
 
     const documentType = parsedType.data
+
+    if (documentType === 'PROPOSAL') {
+      const published = await publishProposalExport(orderId)
+      return res.status(201).json({
+        data: {
+          id: published.created.id,
+          orderId: published.created.orderId,
+          documentType: published.created.documentType,
+          documentNumber: published.created.documentNumber,
+          exportedAt: published.created.exportedAt,
+          createdAt: published.created.createdAt,
+          publicToken: published.created.publicToken,
+          expiresAt: published.created.expiresAt,
+        },
+      })
+    }
 
     const order = await prisma.order.findUnique({
       where: { id: orderId },

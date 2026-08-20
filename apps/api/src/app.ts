@@ -15,6 +15,7 @@ import financeRouter from './modules/finance/finance.router'
 import authRouter from './modules/auth/auth.router'
 import issuerProfilesRouter from './modules/issuer-profiles/issuer-profiles.router'
 import dataportRouter from './modules/dataport/dataport.router'
+import publicProposalRouter from './modules/orders/public-proposal.router'
 import { bindCompanyContext, requireAuth, requireModuleAccess, requirePermission } from './shared/middleware/auth.middleware'
 
 const PRODUCTION_FRONTEND_ORIGINS = ['https://fuckupmanager.lamastage.pl'] as const
@@ -64,6 +65,7 @@ export function createApp() {
 
   // API routes
   app.use('/api/auth', authRouter)
+  app.use('/api/public/proposals', publicProposalRouter)
   app.use('/api', requireAuth, bindCompanyContext)
   app.use('/api/clients', requireModuleAccess('clients'), clientsRouter)
   app.use('/api/equipment', requireModuleAccess('equipment'), equipmentRouter)
