@@ -11,7 +11,8 @@ export const TOOLBOX_TOOLS: ToolboxTool[] = [
   {
     slug: 'technik-gotowka',
     title: 'Technik — gotówka po podatkach',
-    description: 'Ile policzyć klienta, żeby po VAT i podatku dochodowym zostać z kwotą gotówki dla technika.',
+    description:
+      'Ile policzyć klienta, żeby po VAT, podatku (liniowy/skala/CIT/ryczałt) i składce zdrowotnej zostać z gotówką dla technika.',
     status: 'ready',
   },
   {
