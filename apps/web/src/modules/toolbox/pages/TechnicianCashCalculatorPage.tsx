@@ -108,7 +108,7 @@ export default function TechnicianCashCalculatorPage() {
             <ArrowLeft size={14} />
             Toolbox
           </Link>
-          <h1 className="mt-2 text-2xl font-bold">Technik — gotówka po podatkach</h1>
+          <h1 className="mt-2 text-2xl font-bold">Pracownik(złodziej)— gotówka po podatkach</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             Podajesz, ile technik ma dostać gotówką. Kalkulator liczy, ile wystawić klientowi, żeby po VAT,
             podatku dochodowym i składce zdrowotnej ta kwota została. Domyślnie: S.C. / JDG na podatku liniowym.

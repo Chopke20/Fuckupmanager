@@ -10,7 +10,7 @@ export interface ToolboxTool {
 export const TOOLBOX_TOOLS: ToolboxTool[] = [
   {
     slug: 'technik-gotowka',
-    title: 'Technik — gotówka po podatkach',
+    title: 'Pracownik(złodziej)— gotówka po podatkach',
     description:
       'Ile policzyć klienta, żeby po VAT, podatku (liniowy/skala/CIT/ryczałt) i składce zdrowotnej zostać z gotówką dla technika.',
     status: 'ready',
