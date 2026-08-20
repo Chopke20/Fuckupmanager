@@ -1,0 +1,59 @@
+---
+description: Zasady edycji modułu planu sceny z podestów (geometria, BOM, edytor drag-and-drop, render SVG)
+globs: packages/shared-types/src/utils/stagePlatform*.ts,apps/web/src/modules/toolbox/**,apps/api/src/modules/pdf/stage-plan-pdf-builder.ts,apps/web/src/modules/orders/pages/OrderStagePlanPage.tsx
+alwaysApply: false
+---
+
+# Moduł planu sceny — jak edytować, żeby nie zepsuć
+
+## Warstwy (kierunek zależności jest jednokierunkowy)
+
+1. `stagePlatformGeometry.ts` — czysta geometria prostokątów. **Nie importuje niczego z modułu.**
+2. `stagePlatformPlan.ts` — model, reguły biznesowe, BOM. Importuje geometrię.
+3. `stagePlatformRender.ts` — kolory, viewport, kształty, `renderStagePlanSvg`. Importuje 1 i 2.
+4. `useStagePlanEditor.ts` + `StagePlanCanvas.tsx` + `StagePlatformVisualizer.tsx` — UI. Importuje tylko przez `@lama-stage/shared-types`.
+
+Nigdy nie dodawaj importu „w górę” (geometria → plan, plan → render). Liczenie zawsze w `shared-types`, nigdy w komponencie.
+
+## Jedno źródło prawdy
+
+`StagePlanInput` (decks, stairs, materiały, wybory krawędzi, wysokość nóg, siatka) to jedyny stan edytowalny. Wszystko inne — `edges`, `areaM2`, `claddingMb/M2`, `railingMb`, `counts`, `bom`, `warnings` — liczy `buildStagePlan()` i jest **pochodne**. Nie dodawaj pola wyliczanego do `StagePlanInput` i nie ustawiaj pochodnych „z ręki”.
+
+## Nienaruszalne reguły biznesowe (ustalone z klientem)
+
+- Cztery nogi na każdy podest, **bez współdzielenia narożników** (`legs = decksTotal * 4`). Nie przywracaj `legShare` z v1.
+- Obicie: kotara rozliczana w `mb`, HIPS w `m²`. Jednostka zależy od materiału — obie wartości są liczone (`claddingMb`, `claddingM2`), ale do BOM idzie właściwa.
+- Podłoga (wykładzina / HIPS) zawsze w `m²`, z `areaM2` (suma zbiorów, nie suma pól blatów).
+- Obrót tylko o 90° (zamiana `w`/`h`). Podesty zawsze równoległe do osi — na tym stoi cała geometria konturu.
+- Siatka 0,25 m; przy wyłączonej siatce magnes 10 cm do krawędzi sąsiada (`resolveDeckPosition`).
+- Schodów może być wiele; schody i barierki liczone tylko od `STAGE_ACCESSORY_MIN_CM` (40 cm).
+- Tolerancja styku to jedno `STAGE_TOL_M` (2 cm). Nie wprowadzaj lokalnych epsilonów.
+
+## Zapis, odczyt i zgodność wstecz
+
+- `serializeStagePlan()` zapisuje **tylko input** (+ `bom` dla czytników). `parseStagePlanJson()` przelicza wszystko od nowa, żeby stary BOM nie rozjechał się z regułami.
+- `migrateLegacyStagePlan()` obsługuje plany v1 — snapshotów dokumentów `STAGE_PLAN` nie da się usunąć, więc **nie kasuj migracji**. Zmieniasz model? Podnieś `STAGE_PLAN_VERSION` i dopisz migrację v2→v3, nie przerabiaj parsowania v2.
+- `STAGE_PLAN_LINE_MARKER` (`[plan sceny]`) służy do znajdowania i podmiany pozycji w wykazie sprzętu. Zmiana tego stringa osieroci linie w istniejących zleceniach.
+- Ilość pozycji w zleceniu jest `Int`, więc `applyStagePlanToOrder.ts` zaokrągla `mb`/`m²` w górę, a wartość dokładną wpisuje w opis. Zostaw ten podział.
+
+## Rysunek i motywy
+
+- Dwa motywy: `dark` na ekranie, `print` w PDF. Kolory tylko z `STAGE_PALETTES` — nie wpisuj hexów w miejscu wywołania.
+- **`var()` nie działa w atrybutach prezentacyjnych SVG.** Kolor akcentu (`palette.cladding`) podawaj przez `style`, nigdy przez `stroke="…"` / `fill="…"`.
+- Geometrię rysunku (siatka, nogi, barierki, schody) liczą wspólne funkcje z `stagePlatformRender.ts`. Płótno w React i renderer stringowy muszą używać tych samych — nie duplikuj wyliczeń w komponencie.
+
+## Historia edytora
+
+`commit()` dla zmiany zamkniętej (klik, przycisk, pole). W trakcie przeciągania: raz `beginChange()`, potem `preview()` na każdym ruchu. `commit()` w `pointermove` zapcha historię.
+
+## Zanim uznasz zmianę za skończoną
+
+```bash
+npx vitest run packages/shared-types    # z katalogu repo, 53 testy
+npm run build
+```
+
+- Nowy export z `shared-types` **musi** trafić do `packages/shared-types/src/index.ts`, inaczej frontend go nie zobaczy.
+- Web resolwuje `@lama-stage/shared-types` do `dist/esm`, więc po zmianie w `shared-types` uruchom `npm run build -w packages/shared-types`, bo aplikacja pokazuje stary kod.
+- Nigdy nie commituj skompilowanych `.js` / `.d.ts` do `packages/shared-types/src` — przysłaniają źródła i wywalają vitest.
+- Dostawa (commit, push na `main`, weryfikacja wersji) wg `.cursor/rules/lama-delivery-workflow.mdc`.
