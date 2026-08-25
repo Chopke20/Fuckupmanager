@@ -1,0 +1,111 @@
+---
+description: Proposal Online — koncepcja produktu, stan wdrożenia i zadania dla dalszej pracy (narracja, core sprzedażowy, forma wizualna)
+globs: apps/web/src/modules/orders/**/Proposal*,apps/web/src/modules/orders/**/proposal*,apps/web/src/modules/orders/pages/PublicProposalPage.tsx,apps/web/src/modules/orders/pages/OrderProposalPage.tsx,apps/api/src/modules/orders/proposal-*,apps/api/src/modules/orders/public-proposal*,packages/shared-types/src/utils/proposalFinance.ts,packages/shared-types/src/schemas/order-document.schema.ts
+alwaysApply: false
+---
+
+# Proposal Online — brief dla agenta
+
+## Po co to jest (produkt)
+
+Proposal **nie jest** drugą ręcznie składaną ofertą ani pełnym wykazem sprzętu.
+
+Cel: wziąć **surowe dane z oferty / zlecenia** i **maszynowo** ubrać je w **krótki, atrakcyjny, sprzedażowy koncept realizacji technicznej** (opowieść + ceny + kilka szczegółów). Pełne szczegóły techniczne i pozycje zostają w **ofercie PDF**.
+
+Podział ról:
+
+| Warstwa | Rola |
+| --- | --- |
+| Oferta (`OFFER`) | Kontraktowa lista: pozycje, ilości, stawki, warunki |
+| Proposal (`PROPOSAL`) | Sprzedażowy koncept: co klient dostaje i dlaczego to działa, z cenami |
+
+AI / zewnętrzny program ma wymyślić **jak** upraszczać dane oferty do koncepcji (narracja, grupowanie, „co daje”), ale **nigdy nie zmienia** cen, ilości ani specyfikacji technicznej źródłowej. Te liczby pochodzą wyłącznie ze snapshotu oferty / zlecenia.
+
+## Co proposal ma sprzedawać (core)
+
+Proposal musi mieć czytelne **rdzenie sprzedaży** (nie surowy dump katalogu), np.:
+
+- nagłośnienie — skala / charakter + kluczowe liczby (np. liczba mikrofonów) + **co to daje** klientowi (1–2 zdania)
+- inne bloki z oferty (światło, scena, multimedia, produkcja…) — ten sam wzorzec: **nazwa konceptu → 2–5 faktów → korzyści → cena bloku**
+
+Zasady treści:
+
+- krótko; szczegóły są w ofercie
+- język korzyści + konkrety techniczne wybrane, nie pełna lista SKU
+- ceny widoczne (netto/VAT/brutto według istniejącego finance), bez ukrywania łącznej kwoty zakresu bazowego
+- opcje rozbudowy = dodatki, nie „braki” w bazie
+
+## Stan wdrożenia (już w kodzie — nie wynajduj od zera)
+
+Architektura Lama: jeden dokument zlecenia `PROPOSAL` na bazie `OrderDocumentDraft` + `OrderDocumentExport`.
+
+### Decyzje produktowe już przyjęte
+
+- Źródło finansów: snapshot powiązanej oferty (`offerExportId`), nie osobny cennik
+- Publikacja = **niezmienialny snapshot** + nowa wersja przy kolejnej publikacji
+- Publiczny link tokenowy (`/p/:token`), bez logowania
+- AI nie może mutować liczb oferty (tylko tekst / wybór opcji sprzedażowych)
+- Dwa placeholdery skinów: `MINIMAL` | `DYNAMIC` — **forma wizualna finalna jest otwarta** (patrz niżej)
+- Max 6 opcji rozbudowy (`BLOCK` | `EQUIPMENT` | `PRODUCTION`)
+- Sygnały klienta: OPEN / PDF / CTA + zainteresowanie opcjami + „omówmy”
+
+### Kluczowe pliki
+
+- Schema / draft: `packages/shared-types/src/schemas/order-document.schema.ts` (`ProposalDocumentDraftSchema`, skiny, opcje)
+- Finanse proposal: `packages/shared-types/src/utils/proposalFinance.ts`
+- Snapshot publiczny: `apps/api/src/modules/orders/proposal-snapshot.ts`
+- Publikacja + token: `apps/api/src/modules/orders/proposal-publish.ts`
+- Public API: `public-proposal.router.ts` + `public-proposal.controller.ts` (`/api/public/proposals`)
+- Operator UI: `apps/web/src/modules/orders/pages/OrderProposalPage.tsx`
+- Widok klienta: `ProposalClientView.tsx`, `PublicProposalPage.tsx`, `proposalPublic.css`
+- PDF oferty z publicznego proposal: reuse w `pdf.controller.ts` (`buildOfferPdfFromExportId`)
+
+### Co już robi UI klienta
+
+Hero (brand, event, lead), „dlaczego taki zestaw”, zakres bazowy pogrupowany w karty z listą nazw, opcje z cenami i zaznaczaniem zainteresowania, finance summary, CTA + pobranie PDF oferty, obsługa wygaśnięcia (redakcja treści po `expiresAt`).
+
+To jest **szkielet funkcjonalny**, nie finalny produkt sprzedażowy ani finalny design.
+
+## Otwarte prace (kolejność dla następnego agenta)
+
+### 1. Maszynowe ubieranie oferty w koncepcję (priorytet produktowy)
+
+Zaprojektuj i wdróż warstwę, która z danych oferty buduje **koncept techniczny**:
+
+- wejście: snapshot oferty / pozycje widoczne w ofercie + bloki
+- wyjście: lead, whyThisSet, **core elementy sprzedażowe** (nagłośnienie itd. z krótkim „co daje”), uproszczony zakres — nie pełny dump
+- reguły / AI mogą proponować tekst i grupowanie; liczby tylko z oferty
+- operator musi móc edytować / zatwierdzić przed publikacją (nie publikuj ślepo raw AI)
+
+Nie buduj osobnej bazy cen. Nie duplikuj oferty 1:1 jako listy pozycji.
+
+### 2. Forma wizualna (osobne zlecenie designowe — oczekiwane)
+
+Obecne skiny `MINIMAL` / `DYNAMIC` + CSS to placeholdery.
+
+Kolejny agent / designer ma opracować **formę wizualną** proposal (layout, typografia, hierarchia, branding multi-company, mobile). Wymagania:
+
+- jedna kompozycja sprzedażowa, nie dashboard
+- brand firmy z kontekstu zlecenia / issuer
+- czytelne core sprzedażowe i cena
+- dark mode aplikacji Lama **nie dyktuje** wyglądu publicznego proposal — publiczny widok może mieć własną skórkę, byle spójną z brandem
+- nie łamać publicznego kontraktu API snapshotu bez migracji wersji snapshotu
+
+Po wyborze formy: zaktualizuj `ProposalClientView` + CSS (lub nowy renderer), ewentualnie listę skinów w schema — bez psucia starych opublikowanych snapshotów (fallback).
+
+### 3. Twarde nie
+
+- nie zmieniać cen / ilości AI-em
+- nie renderować proposal „na żywo” z live order przy publicznym linku — tylko snapshot eksportu
+- nie mieszać proposal z briefem / warehouse / stage plan
+- nie committować sekretów; publiczny endpoint ma rate limit i nie wycieka marż / notatek wewnętrznych
+
+## Checklist przed domknięciem zmiany
+
+```bash
+npm run build
+# plus testy finansów proposal jeśli ruszasz shared-types:
+npx vitest run packages/shared-types/src/utils/proposalFinance.test.ts
+```
+
+Dostawa: commit → push `main` → wersja UI `main-<sha>` wg `lama-delivery-workflow.mdc`.
