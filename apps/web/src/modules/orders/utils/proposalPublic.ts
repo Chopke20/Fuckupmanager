@@ -1,5 +1,15 @@
 export type ProposalSkin = 'MINIMAL' | 'DYNAMIC'
 
+export type ProposalPublicCoreItem = {
+  id: string
+  title: string
+  facts: string[]
+  benefit: string
+  netAfterDiscount: number
+  vatAmount: number
+  grossTotal: number
+}
+
 export type ProposalPublicSnapshot = {
   documentType: 'PROPOSAL'
   documentNumber: string
@@ -31,6 +41,7 @@ export type ProposalPublicSnapshot = {
     phone: string | null
     email: string | null
   }
+  /** @deprecated Fallback dla starych snapshotów bez coreItems. */
   scope: Array<{
     id: string
     title: string
@@ -39,6 +50,7 @@ export type ProposalPublicSnapshot = {
     productionNet: number
     transportNet: number
   }>
+  coreItems?: ProposalPublicCoreItem[]
   options: Array<{
     id: string
     title: string
@@ -73,7 +85,9 @@ export function formatProposalDateRange(from: string, to: string): string {
   const a = new Date(from)
   const b = new Date(to)
   const fmt = (d: Date) =>
-    Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    Number.isNaN(d.getTime())
+      ? '—'
+      : d.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' })
   const fa = fmt(a)
   const fb = fmt(b)
   return fa === fb ? fa : `${fa} – ${fb}`

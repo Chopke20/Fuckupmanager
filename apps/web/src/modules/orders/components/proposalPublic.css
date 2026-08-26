@@ -1,170 +1,493 @@
-.proposal-public-root {
-  min-height: 100vh;
-}
+/* ==========================================================================
+   Proposal Online — publiczny widok klienta (/p/:token)
+   Zastępuje CAŁY plik apps/web/src/modules/orders/components/proposalPublic.css
+
+   Dwa skiny:
+     .proposal-skin-dynamic  — ciemny, energiczny (echo lamastage.pl)
+     .proposal-skin-minimal  — jasny, poważny (ten sam brand, spokojniejszy rejestr)
+
+   Kolor marki NIE jest tu hardkodowany — --proposal-accent dostaje wartość
+   inline z `snapshot.branding.primaryColorHex` w ProposalClientView.tsx
+   (multi-company: każda firma ma swój branding, patrz koncept część B.2/B.8).
+   Wartość #04FE90 poniżej to tylko fallback gdy firma nie ma primaryColorHex.
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
 
 .proposal-sheet {
-  max-width: 880px;
+  --proposal-accent: #04fe90;
+  --proposal-radius-sm: 10px;
+  --proposal-radius: 16px;
+  --proposal-font-body: 'Inter', system-ui, -apple-system, sans-serif;
+  --proposal-font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+
+  font-family: var(--proposal-font-body);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  max-width: 920px;
   margin: 0 auto;
-  padding: 32px 20px 64px;
+}
+
+.proposal-sheet * {
+  box-sizing: border-box;
+}
+
+.proposal-sheet img {
+  max-width: 100%;
+  display: block;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Skin: DYNAMIC — ciemny, energiczny                                     */
+/* ---------------------------------------------------------------------- */
+
+.proposal-skin-dynamic {
+  --proposal-bg: #030303;
+  --proposal-surface: #0f0f0f;
+  --proposal-surface-2: #161616;
+  --proposal-border: rgba(255, 255, 255, 0.09);
+  --proposal-border-strong: rgba(4, 254, 144, 0.35);
+  --proposal-border-strong: color-mix(in srgb, var(--proposal-accent) 45%, transparent);
+  --proposal-text: #f5f5f5;
+  --proposal-text-muted: #9a9a9a;
+  --proposal-text-dim: #6e6e6e;
+  --proposal-accent-ink: var(--proposal-accent);
+  --proposal-accent-contrast: #04120b;
+  background: var(--proposal-bg);
+  color: var(--proposal-text);
+}
+
+.proposal-skin-dynamic .proposal-hero {
+  background: radial-gradient(
+      ellipse at top right,
+      color-mix(in srgb, var(--proposal-accent) 12%, transparent),
+      transparent 60%
+    ),
+    var(--proposal-bg);
+}
+
+.proposal-skin-dynamic .proposal-hero h1 {
+  font-family: var(--proposal-font-display);
+}
+
+.proposal-skin-dynamic .proposal-core-card {
+  transition: border-color 0.2s ease;
+}
+
+.proposal-skin-dynamic .proposal-core-card:hover {
+  border-color: var(--proposal-border-strong);
+}
+
+/* Nawiązanie do przerywanej linii z lamastage.pl — tylko na DYNAMIC. */
+.proposal-dotted-rule {
+  height: 1px;
+  margin: 22px 0 0;
+  background-image: linear-gradient(to right, var(--proposal-accent) 2px, transparent 2px);
+  background-size: 6px 1px;
+  background-repeat: repeat-x;
+  opacity: 0.55;
+  display: none;
+}
+
+.proposal-skin-dynamic .proposal-dotted-rule {
+  display: block;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Skin: MINIMAL — jasny, poważny                                         */
+/* ---------------------------------------------------------------------- */
+
+.proposal-skin-minimal {
+  --proposal-bg: #ffffff;
+  --proposal-surface: #ffffff;
+  --proposal-surface-2: #f4f4f4;
+  --proposal-border: #e7e7e7;
+  --proposal-border-strong: #b9b9b9;
+  --proposal-border-strong: color-mix(in srgb, var(--proposal-accent) 55%, #111111 12%);
+  --proposal-text: #131313;
+  --proposal-text-muted: #656565;
+  --proposal-text-dim: #9a9a9a;
+  /* Czysty neonowy zielony ma za mały kontrast jako tekst na bieli (~1.3:1) —
+     przyciemniona wersja licząca się z kolorem marki, nie hardkodowana. */
+  --proposal-accent-ink: #029d59;
+  --proposal-accent-ink: color-mix(in srgb, var(--proposal-accent) 62%, black 38%);
+  --proposal-accent-contrast: #04120b;
+  background: var(--proposal-bg);
+  color: var(--proposal-text);
+}
+
+.proposal-skin-minimal .proposal-hero {
+  border-top: 3px solid var(--proposal-accent);
+}
+
+.proposal-skin-minimal .proposal-hero h1,
+.proposal-skin-minimal .proposal-section h2 {
+  font-family: var(--proposal-font-body);
+}
+
+.proposal-skin-minimal .proposal-core-card,
+.proposal-skin-minimal .proposal-option-card {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Hero                                                                    */
+/* ---------------------------------------------------------------------- */
+
+.proposal-hero {
+  padding: 56px 32px 36px;
+  border-bottom: 1px solid var(--proposal-border);
 }
 
 .proposal-logo {
-  height: 40px;
-  width: auto;
-  object-fit: contain;
-  margin-bottom: 16px;
+  height: 26px;
+  margin-bottom: 26px;
 }
 
 .proposal-brand {
-  font-size: 12px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  margin-bottom: 12px;
+  font-family: var(--proposal-font-display);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.02em;
+  margin: 0 0 26px;
 }
 
 .proposal-kicker {
-  font-size: 13px;
-  opacity: 0.7;
-  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--proposal-accent-ink);
+  margin: 0 0 10px;
 }
 
 .proposal-hero h1 {
-  font-size: 32px;
-  line-height: 1.15;
-  margin-bottom: 8px;
+  font-size: clamp(28px, 4.2vw, 42px);
+  font-weight: 700;
+  line-height: 1.14;
+  letter-spacing: -0.01em;
+  margin: 0 0 16px;
+  max-width: 20ch;
 }
 
-.proposal-meta,
-.proposal-validity,
-.proposal-hint,
-.proposal-contact {
+.proposal-meta {
   font-size: 14px;
-  opacity: 0.75;
+  color: var(--proposal-text-muted);
+  margin: 0 0 18px;
 }
 
 .proposal-lead {
-  font-size: 18px;
-  line-height: 1.5;
-  margin: 16px 0;
+  font-size: 17px;
+  line-height: 1.6;
+  max-width: 58ch;
+  margin: 0 0 20px;
 }
 
+.proposal-validity {
+  font-size: 13px;
+  color: var(--proposal-text-dim);
+  padding-top: 18px;
+  border-top: 1px dashed var(--proposal-border);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Sekcje ogólne                                                          */
+/* ---------------------------------------------------------------------- */
+
 .proposal-section {
-  margin-top: 36px;
+  padding: 40px 32px;
+  border-bottom: 1px solid var(--proposal-border);
+}
+
+.proposal-section:last-of-type {
+  border-bottom: none;
 }
 
 .proposal-section h2 {
   font-size: 13px;
-  letter-spacing: 0.12em;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  margin-bottom: 12px;
+  color: var(--proposal-text-muted);
+  margin: 0 0 20px;
 }
 
-.proposal-scope-grid,
+.proposal-hint {
+  font-size: 13px;
+  color: var(--proposal-text-dim);
+  margin: -8px 0 20px;
+}
+
+.proposal-section p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Core sprzedażowe (koncept) — patrz Zadanie 1, ProposalPublicCoreItem   */
+/* ---------------------------------------------------------------------- */
+
+.proposal-core-grid,
+.proposal-scope-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.proposal-core-card,
+.proposal-scope-card {
+  background: var(--proposal-surface);
+  border: 1px solid var(--proposal-border);
+  border-radius: var(--proposal-radius);
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.proposal-core-card h3,
+.proposal-scope-card h3 {
+  font-family: var(--proposal-font-display);
+  font-size: 17px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--proposal-text);
+}
+
+.proposal-core-facts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.proposal-core-facts li {
+  font-size: 14px;
+  padding-left: 18px;
+  position: relative;
+}
+
+.proposal-core-facts li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--proposal-accent);
+}
+
+.proposal-core-benefit {
+  font-size: 14px;
+  color: var(--proposal-text-muted);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.proposal-core-price {
+  margin: 4px 0 0;
+  font-family: var(--proposal-font-display);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--proposal-accent-ink);
+}
+
+/* Fallback dla starych snapshotów bez coreItems (surowa lista nazw). */
+.proposal-scope-card ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+  color: var(--proposal-text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Opcje rozbudowy                                                        */
+/* ---------------------------------------------------------------------- */
+
 .proposal-option-grid {
   display: grid;
-  gap: 12px;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
 }
 
-.proposal-scope-card,
 .proposal-option-card {
-  border: 1px solid currentColor;
-  padding: 16px;
-}
-
-.proposal-scope-card ul {
-  margin-top: 8px;
-  padding-left: 16px;
-  font-size: 14px;
-}
-
-.proposal-option-price {
-  font-weight: 600;
-  margin-top: 12px;
-}
-
-.proposal-option-toggle,
-.proposal-btn-primary,
-.proposal-btn-secondary {
-  margin-top: 12px;
-  border: 1px solid currentColor;
-  padding: 8px 12px;
-  font-size: 13px;
-  background: transparent;
-  cursor: pointer;
+  background: var(--proposal-surface-2);
+  border: 1px solid var(--proposal-border);
+  border-radius: var(--proposal-radius);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .proposal-option-card.is-selected {
-  outline: 2px solid currentColor;
+  border-color: var(--proposal-accent);
 }
+
+.proposal-option-card h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.proposal-option-card p {
+  font-size: 13px;
+  color: var(--proposal-text-muted);
+}
+
+.proposal-option-price {
+  font-weight: 700;
+  color: var(--proposal-accent-ink);
+  font-size: 14px;
+}
+
+.proposal-option-toggle {
+  margin-top: 4px;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: var(--proposal-radius-sm);
+  border: 1px solid var(--proposal-border-strong);
+  background: transparent;
+  color: var(--proposal-text);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.proposal-option-card.is-selected .proposal-option-toggle {
+  background: var(--proposal-accent);
+  color: var(--proposal-accent-contrast);
+  border-color: var(--proposal-accent);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Podsumowanie finansowe                                                 */
+/* ---------------------------------------------------------------------- */
 
 .proposal-finance dl {
-  display: grid;
-  gap: 8px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.proposal-finance div {
+.proposal-finance dl > div {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
-  font-size: 15px;
+  align-items: baseline;
+  font-size: 14px;
+}
+
+.proposal-finance dt {
+  color: var(--proposal-text-muted);
+}
+
+.proposal-finance dd {
+  margin: 0;
+  font-weight: 600;
 }
 
 .proposal-finance-total {
-  font-weight: 700;
-  font-size: 18px;
-  margin-top: 8px;
+  border-top: 1px solid var(--proposal-border);
+  margin-top: 6px;
+  padding-top: 14px;
 }
+
+.proposal-finance-total dt {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--proposal-text);
+}
+
+.proposal-finance-total dd {
+  font-family: var(--proposal-font-display);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--proposal-accent-ink);
+}
+
+/* ---------------------------------------------------------------------- */
+/* CTA / kontakt                                                          */
+/* ---------------------------------------------------------------------- */
 
 .proposal-cta {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
+  gap: 14px;
 }
 
-.proposal-skin-minimal {
-  background: #f6f4ef;
-  color: #161616;
+.proposal-btn-primary {
+  padding: 15px 26px;
+  border-radius: 999px;
+  border: none;
+  background: var(--proposal-accent);
+  color: var(--proposal-accent-contrast);
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  font-family: inherit;
 }
 
-.proposal-skin-minimal .proposal-sheet {
-  background: #f6f4ef;
+.proposal-btn-secondary {
+  padding: 14px 24px;
+  border-radius: 999px;
+  border: 1px solid var(--proposal-border-strong);
+  background: transparent;
+  color: var(--proposal-text);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  font-family: inherit;
 }
 
-.proposal-skin-minimal .proposal-scope-card,
-.proposal-skin-minimal .proposal-option-card {
-  background: #fff;
-  border-color: #d8d4cc;
+.proposal-btn-primary:disabled,
+.proposal-btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
-.proposal-skin-minimal .proposal-btn-primary {
-  background: #161616;
-  color: #f6f4ef;
-  border-color: #161616;
+.proposal-contact {
+  font-size: 13px;
+  color: var(--proposal-text-muted);
+  margin-top: 6px;
 }
 
-.proposal-skin-dynamic {
-  background: #07070a;
-  color: #f4f4f5;
-}
+/* ---------------------------------------------------------------------- */
+/* Responsywność                                                          */
+/* ---------------------------------------------------------------------- */
 
-.proposal-skin-dynamic .proposal-hero h1 {
-  font-size: 40px;
-}
+@media (max-width: 640px) {
+  .proposal-hero,
+  .proposal-section {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
 
-.proposal-skin-dynamic .proposal-scope-card,
-.proposal-skin-dynamic .proposal-option-card {
-  background: #12131a;
-  border-color: #2a2c38;
-}
+  .proposal-core-grid,
+  .proposal-option-grid,
+  .proposal-scope-grid {
+    grid-template-columns: 1fr;
+  }
 
-.proposal-skin-dynamic .proposal-finance-total dd {
-  font-size: 28px;
-}
+  .proposal-finance-total dd {
+    font-size: 22px;
+  }
 
-.proposal-skin-dynamic .proposal-btn-primary {
-  background: #e8ff47;
-  color: #07070a;
-  border-color: #e8ff47;
+  .proposal-cta {
+    width: 100%;
+  }
+
+  .proposal-btn-primary,
+  .proposal-btn-secondary {
+    width: 100%;
+    text-align: center;
+  }
 }

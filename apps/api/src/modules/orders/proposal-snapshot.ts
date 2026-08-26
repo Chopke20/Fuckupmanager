@@ -4,42 +4,27 @@ import {
   applyGlobalDiscountAndVat,
   computeProposalEquipmentNet,
   computeProposalProductionNet,
+  groupProposalScope,
   proposalOptionKey,
+  suggestProposalConcept,
+  type ProposalCoreItemOverride,
   type ProposalDocumentDraft,
   type ProposalOptionRef,
+  type ProposalScopeBlock,
+  type ProposalScopeEquipmentLine,
+  type ProposalScopeProductionLine,
   type ProposalSkin,
 } from '@lama-stage/shared-types'
 import { parseJsonSafely } from './order-document-draft-utils'
 
-export type ProposalEquipmentLine = {
-  id: string
-  name: string
-  category?: string | null
-  offerBlockId?: string | null
-  visibleInOffer?: boolean | null
-  unitPrice: number
-  quantity: number
-  days?: number | null
-  discount?: number | null
-  pricingRule?: unknown
-}
+/** @deprecated Use `ProposalScopeEquipmentLine` from `@lama-stage/shared-types` — kept as an alias so existing imports keep working. */
+export type ProposalEquipmentLine = ProposalScopeEquipmentLine
 
-export type ProposalProductionLine = {
-  id: string
-  name: string
-  offerBlockId?: string | null
-  visibleInOffer?: boolean | null
-  isTransport?: boolean | null
-  rateValue: number
-  units?: number | null
-  discount?: number | null
-}
+/** @deprecated Use `ProposalScopeProductionLine` from `@lama-stage/shared-types` — kept as an alias so existing imports keep working. */
+export type ProposalProductionLine = ProposalScopeProductionLine
 
-export type ProposalBlock = {
-  id: string
-  title: string
-  sortOrder?: number | null
-}
+/** @deprecated Use `ProposalScopeBlock` from `@lama-stage/shared-types` — kept as an alias so existing imports keep working. */
+export type ProposalBlock = ProposalScopeBlock
 
 export type ProposalPublicScopeGroup = {
   id: string
@@ -55,6 +40,23 @@ export type ProposalPublicOptionCard = {
   title: string
   rationale: string
   kind: ProposalOptionRef['kind']
+  netAfterDiscount: number
+  vatAmount: number
+  grossTotal: number
+}
+
+/**
+ * Koncept sprzedażowy jednej grupy zakresu bazowego — to jest to, co faktycznie widzi klient
+ * zamiast surowego dumpu pozycji (`ProposalPublicScopeGroup.itemNames`), patrz brief
+ * `lama-proposal-online.mdc` §"Co proposal ma sprzedawać". Tekst pochodzi z nadpisania operatora
+ * (`ProposalDocumentDraft.coreItems`) albo, gdy operator go nie uzupełnił, z silnika regułowego
+ * `suggestProposalConcept` — cena zawsze liczona z pozycji zlecenia, nigdy z tekstu.
+ */
+export type ProposalPublicCoreItem = {
+  id: string
+  title: string
+  facts: string[]
+  benefit: string
   netAfterDiscount: number
   vatAmount: number
   grossTotal: number
@@ -91,7 +93,9 @@ export type ProposalPublicSnapshot = {
     phone: string | null
     email: string | null
   }
+  /** @deprecated Zachowane dla starych snapshotów / debugu operatorskiego — klient renderuje `coreItems`, nie surowy dump nazw. */
   scope: ProposalPublicScopeGroup[]
+  coreItems: ProposalPublicCoreItem[]
   options: ProposalPublicOptionCard[]
   finance: {
     currency: 'PLN' | 'EUR'
@@ -114,10 +118,6 @@ function round2(n: number): number {
   return Number(n.toFixed(2))
 }
 
-function isVisibleInOffer(flag: boolean | null | undefined): boolean {
-  return flag !== false
-}
-
 export function parseProposalDraft(raw: unknown): ProposalDocumentDraft {
   const parsed = ProposalDocumentDraftSchema.safeParse(raw ?? {})
   if (parsed.success) return parsed.data
@@ -127,6 +127,7 @@ export function parseProposalDraft(raw: unknown): ProposalDocumentDraft {
     lead: '',
     whyThisSet: '',
     options: [],
+    coreItems: [],
   })
 }
 
@@ -152,6 +153,10 @@ function collectOptionSet(options: ProposalOptionRef[]): OptionSet {
     if (opt.kind === 'PRODUCTION') productionIds.add(opt.targetId)
   }
   return { blockIds, equipmentIds, productionIds, refs: options }
+}
+
+function isVisibleInOffer(flag: boolean | null | undefined): boolean {
+  return flag !== false
 }
 
 function isOptionEquipment(item: ProposalEquipmentLine, set: OptionSet): boolean {
@@ -201,6 +206,39 @@ function moneyForProduction(items: ProposalProductionLine[], discountGlobal: num
   return { netBefore, ...applyGlobalDiscountAndVat({ netBeforeGlobal: netBefore, discountGlobal, vatRate }) }
 }
 
+/**
+ * Dla każdej grupy zakresu bazowego zwraca gotowy `ProposalPublicCoreItem`: nadpisanie operatora
+ * (`ProposalDocumentDraft.coreItems`) scalone pole-po-polu z propozycją silnika regułowego —
+ * puste pole u operatora = użyj propozycji, niepuste = użyj tego co wpisał. Cena zawsze liczona
+ * z pozycji grupy (nigdy z draftu / tekstu).
+ */
+function buildCoreItems(args: {
+  groups: ReturnType<typeof groupProposalScope>
+  overrides: ProposalCoreItemOverride[]
+  discountGlobal: number
+  vatRate: number
+}): ProposalPublicCoreItem[] {
+  const overrideByGroup = new Map(args.overrides.map((o) => [o.groupId, o]))
+  return args.groups.map((group) => {
+    const suggestion = suggestProposalConcept(group)
+    const override = overrideByGroup.get(group.id)
+    const title = override?.title.trim() || suggestion.title
+    const facts = override && override.facts.length > 0 ? override.facts : suggestion.facts
+    const benefit = override?.benefit.trim() || suggestion.benefit
+    const netBefore = round2(group.equipmentNet + group.productionNet + group.transportNet)
+    const money = applyGlobalDiscountAndVat({ netBeforeGlobal: netBefore, discountGlobal: args.discountGlobal, vatRate: args.vatRate })
+    return {
+      id: group.id,
+      title,
+      facts,
+      benefit,
+      netAfterDiscount: money.netAfterDiscount,
+      vatAmount: money.vatAmount,
+      grossTotal: money.grossTotal,
+    }
+  })
+}
+
 export function buildProposalPublicSnapshot(args: {
   documentNumber: string
   generatedAt: string
@@ -239,53 +277,30 @@ export function buildProposalPublicSnapshot(args: {
   const netBefore = round2(eqMoney.netBefore + prodMoney.netBefore + transportMoney.netBefore)
   const totals = applyGlobalDiscountAndVat({ netBeforeGlobal: netBefore, discountGlobal, vatRate })
 
+  const scopeGroups = groupProposalScope({
+    blocks: args.blocks,
+    equipment: args.equipment,
+    production: args.production,
+    excludedEquipmentIds: optionSet.equipmentIds,
+    excludedProductionIds: optionSet.productionIds,
+    excludedBlockIds: optionSet.blockIds,
+  })
+  const scope: ProposalPublicScopeGroup[] = scopeGroups.map((g) => ({
+    id: g.id,
+    title: g.title,
+    itemNames: g.itemNames,
+    equipmentNet: g.equipmentNet,
+    productionNet: g.productionNet,
+    transportNet: g.transportNet,
+  }))
+  const coreItems = buildCoreItems({
+    groups: scopeGroups,
+    overrides: args.draft.coreItems,
+    discountGlobal,
+    vatRate,
+  })
+
   const blockById = new Map(args.blocks.map((b) => [b.id, b]))
-  const grouped = new Map<string, ProposalPublicScopeGroup>()
-
-  const ensureGroup = (id: string, title: string): ProposalPublicScopeGroup => {
-    const existing = grouped.get(id)
-    if (existing) return existing
-    const created: ProposalPublicScopeGroup = {
-      id,
-      title,
-      itemNames: [],
-      equipmentNet: 0,
-      productionNet: 0,
-      transportNet: 0,
-    }
-    grouped.set(id, created)
-    return created
-  }
-
-  for (const item of baseEq) {
-    const blockId = item.offerBlockId && blockById.has(item.offerBlockId) ? item.offerBlockId : 'ungrouped'
-    const title = blockId === 'ungrouped' ? 'Pozostały sprzęt' : blockById.get(blockId)!.title
-    const group = ensureGroup(blockId, title)
-    group.itemNames.push(item.name)
-    group.equipmentNet = round2(group.equipmentNet + computeProposalEquipmentNet(item))
-  }
-  for (const item of baseProdAll) {
-    const blockId = item.offerBlockId && blockById.has(item.offerBlockId) ? item.offerBlockId : 'ungrouped-prod'
-    const title =
-      blockId === 'ungrouped-prod'
-        ? item.isTransport
-          ? 'Transport'
-          : 'Obsługa'
-        : blockById.get(blockId)!.title
-    const group = ensureGroup(blockId === 'ungrouped-prod' && item.isTransport ? 'ungrouped-transport' : blockId, title)
-    if (blockId === 'ungrouped-prod' && item.isTransport) {
-      const g = ensureGroup('ungrouped-transport', 'Transport')
-      g.itemNames.push(item.name)
-      g.transportNet = round2(g.transportNet + computeProposalProductionNet(item))
-      continue
-    }
-    group.itemNames.push(item.name)
-    if (item.isTransport) group.transportNet = round2(group.transportNet + computeProposalProductionNet(item))
-    else group.productionNet = round2(group.productionNet + computeProposalProductionNet(item))
-  }
-
-  const scope = [...grouped.values()].filter((g) => g.itemNames.length > 0)
-
   const options: ProposalPublicOptionCard[] = []
   for (const opt of args.draft.options) {
     let title = 'Opcja'
@@ -344,6 +359,7 @@ export function buildProposalPublicSnapshot(args: {
     issuer: args.issuer,
     contact: args.contact,
     scope,
+    coreItems,
     options,
     finance: {
       currency: args.order.currency,

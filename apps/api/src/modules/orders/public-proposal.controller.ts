@@ -73,6 +73,7 @@ export const getPublicProposal = async (req: Request, res: Response, next: NextF
             ? {
                 ...snapshot,
                 scope: [],
+                coreItems: [],
                 options: [],
                 finance: {
                   ...snapshot.finance,

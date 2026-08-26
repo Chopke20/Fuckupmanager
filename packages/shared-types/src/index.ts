@@ -62,6 +62,23 @@ export {
   applyGlobalDiscountAndVat,
   proposalOptionKey,
 } from './utils/proposalFinance';
+export { groupProposalScope } from './utils/proposalScope';
+export type {
+  ProposalScopeBlock,
+  ProposalScopeEquipmentLine,
+  ProposalScopeProductionLine,
+  ProposalScopeEquipmentDetail,
+  ProposalScopeProductionDetail,
+  ProposalScopeGroup,
+} from './utils/proposalScope';
+export {
+  PROPOSAL_CONCEPT_CATEGORIES,
+  detectProposalConceptCategory,
+  generateProposalConceptFacts,
+  generateProposalConceptBenefit,
+  suggestProposalConcept,
+} from './utils/proposalConcept';
+export type { ProposalConceptCategory } from './utils/proposalConcept';
 export {
   STAGE_TOL_M,
   STAGE_GAP_WARN_M,

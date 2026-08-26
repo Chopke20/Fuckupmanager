@@ -68,30 +68,15 @@ To jest **szkielet funkcjonalny**, nie finalny produkt sprzedażowy ani finalny 
 
 ## Otwarte prace (kolejność dla następnego agenta)
 
-### 1. Maszynowe ubieranie oferty w koncepcję (priorytet produktowy)
+### 1. Maszynowe ubieranie oferty w koncepcję — WDROŻONE
 
-Zaprojektuj i wdróż warstwę, która z danych oferty buduje **koncept techniczny**:
+Silnik regułowy + `coreItems` w drafcie/snapshotcie + UI operatora + render klienta.
+Opcjonalny endpoint AI `/api/ai/proposal-concept` nadal nie jest wdrożony (łatwe rozszerzenie).
 
-- wejście: snapshot oferty / pozycje widoczne w ofercie + bloki
-- wyjście: lead, whyThisSet, **core elementy sprzedażowe** (nagłośnienie itd. z krótkim „co daje”), uproszczony zakres — nie pełny dump
-- reguły / AI mogą proponować tekst i grupowanie; liczby tylko z oferty
-- operator musi móc edytować / zatwierdzić przed publikacją (nie publikuj ślepo raw AI)
+### 2. Forma wizualna — WDROŻONA (placeholdery zastąpione)
 
-Nie buduj osobnej bazy cen. Nie duplikuj oferty 1:1 jako listy pozycji.
-
-### 2. Forma wizualna (osobne zlecenie designowe — oczekiwane)
-
-Obecne skiny `MINIMAL` / `DYNAMIC` + CSS to placeholdery.
-
-Kolejny agent / designer ma opracować **formę wizualną** proposal (layout, typografia, hierarchia, branding multi-company, mobile). Wymagania:
-
-- jedna kompozycja sprzedażowa, nie dashboard
-- brand firmy z kontekstu zlecenia / issuer
-- czytelne core sprzedażowe i cena
-- dark mode aplikacji Lama **nie dyktuje** wyglądu publicznego proposal — publiczny widok może mieć własną skórkę, byle spójną z brandem
-- nie łamać publicznego kontraktu API snapshotu bez migracji wersji snapshotu
-
-Po wyborze formy: zaktualizuj `ProposalClientView` + CSS (lub nowy renderer), ewentualnie listę skinów w schema — bez psucia starych opublikowanych snapshotów (fallback).
+Skiny MINIMAL / DYNAMIC z CSS marki (`--proposal-accent` z `primaryColorHex`), logo per skin.
+Do dopracowania na prawdziwych danych: słowniki faktów, ewentualny font z brandbooku.
 
 ### 3. Twarde nie
 

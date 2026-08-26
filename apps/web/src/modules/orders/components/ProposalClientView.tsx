@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import type { ProposalPublicSnapshot } from '../utils/proposalPublic'
 import { formatProposalDateRange, formatProposalMoney } from '../utils/proposalPublic'
 
@@ -24,9 +25,16 @@ export default function ProposalClientView({
 }: Props) {
   const money = (n: number) => formatProposalMoney(n, snapshot.finance.currency)
   const interactive = !expired && Boolean(onToggleOption || onDiscuss || onDownloadPdf)
+  const accentStyle = snapshot.branding.primaryColorHex
+    ? ({ '--proposal-accent': snapshot.branding.primaryColorHex } as CSSProperties)
+    : undefined
+  const coreItems = snapshot.coreItems ?? []
 
   return (
-    <div className={`proposal-sheet proposal-skin-${snapshot.skin.toLowerCase()}`}>
+    <div
+      className={`proposal-sheet proposal-skin-${snapshot.skin.toLowerCase()}`}
+      style={accentStyle}
+    >
       <header className="proposal-hero">
         {snapshot.branding.logoUrl ? (
           <img src={snapshot.branding.logoUrl} alt={snapshot.branding.brandName} className="proposal-logo" />
@@ -47,6 +55,8 @@ export default function ProposalClientView({
         </p>
       </header>
 
+      <div className="proposal-dotted-rule" aria-hidden="true" />
+
       {!expired && snapshot.whyThisSet ? (
         <section className="proposal-section">
           <h2>Dlaczego taki zestaw</h2>
@@ -54,7 +64,25 @@ export default function ProposalClientView({
         </section>
       ) : null}
 
-      {!expired ? (
+      {!expired && coreItems.length > 0 ? (
+        <section className="proposal-section">
+          <h2>Co obejmuje realizacja</h2>
+          <div className="proposal-core-grid">
+            {coreItems.map((item) => (
+              <article key={item.id} className="proposal-core-card">
+                <h3>{item.title}</h3>
+                <ul className="proposal-core-facts">
+                  {item.facts.map((fact) => (
+                    <li key={fact}>{fact}</li>
+                  ))}
+                </ul>
+                <p className="proposal-core-benefit">{item.benefit}</p>
+                <p className="proposal-core-price">{money(item.netAfterDiscount)} netto</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : !expired && snapshot.scope.length > 0 ? (
         <section className="proposal-section">
           <h2>Zakres bazowy</h2>
           <div className="proposal-scope-grid">
@@ -75,7 +103,9 @@ export default function ProposalClientView({
       {!expired && snapshot.options.length > 0 ? (
         <section className="proposal-section">
           <h2>Opcje rozbudowy</h2>
-          <p className="proposal-hint">To dodatki, nie braki w zakresie bazowym. Możesz zaznaczyć, co Cię interesuje.</p>
+          <p className="proposal-hint">
+            To dodatki, nie braki w zakresie bazowym. Możesz zaznaczyć, co Cię interesuje.
+          </p>
           <div className="proposal-option-grid">
             {snapshot.options.map((opt) => {
               const on = interestedOptionIds.includes(opt.id)
@@ -85,7 +115,11 @@ export default function ProposalClientView({
                   {opt.rationale ? <p>{opt.rationale}</p> : null}
                   <p className="proposal-option-price">+ {money(opt.netAfterDiscount)} netto</p>
                   {interactive && onToggleOption ? (
-                    <button type="button" className="proposal-option-toggle" onClick={() => onToggleOption(opt.id)}>
+                    <button
+                      type="button"
+                      className="proposal-option-toggle"
+                      onClick={() => onToggleOption(opt.id)}
+                    >
                       {on ? 'Zaznaczone — zainteresowanie' : 'Zaznacz zainteresowanie'}
                     </button>
                   ) : null}

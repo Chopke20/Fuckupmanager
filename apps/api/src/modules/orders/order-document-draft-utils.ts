@@ -91,6 +91,7 @@ export function buildDefaultDraft(order: Pick<Order, 'name'>, documentType: Docu
       lead: '',
       whyThisSet: '',
       options: [],
+      coreItems: [],
     })
   }
 

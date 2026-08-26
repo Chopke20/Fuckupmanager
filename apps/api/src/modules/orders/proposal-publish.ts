@@ -43,6 +43,16 @@ function pickLogoUrl(settings: {
   return dark ?? light
 }
 
+/** Logo pod konkretny skin proposal: MINIMAL = jasne tło → ciemne logo; DYNAMIC = ciemne tło → jasne logo. */
+function pickLogoUrlForSkin(
+  settings: { logoDarkBgUrl?: string | null; logoLightBgUrl?: string | null },
+  skin: ProposalDocumentDraft['skin']
+): string | null {
+  const dark = settings.logoDarkBgUrl?.trim() || null
+  const light = settings.logoLightBgUrl?.trim() || null
+  return skin === 'MINIMAL' ? light ?? dark : dark ?? light
+}
+
 function pickContact(
   settings: { projectContactsJson?: string | null; defaultProjectContactId?: string | null },
   preferredId?: string | null
@@ -162,7 +172,7 @@ export async function publishProposalExport(orderId: string) {
   const companyCode = getCurrentCompanyCode()
   const branding = {
     brandName: appSettings?.brandName?.trim() || 'Lama Stage',
-    logoUrl: pickLogoUrl(appSettings ?? {}),
+    logoUrl: pickLogoUrlForSkin(appSettings ?? {}, proposalDraft.skin) ?? pickLogoUrl(appSettings ?? {}),
     primaryColorHex: appSettings?.primaryColorHex ?? null,
   }
 

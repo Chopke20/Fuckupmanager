@@ -115,12 +115,27 @@ export const ProposalOptionRefSchema = z.object({
   rationale: z.string().max(500).default(''),
 });
 
+/**
+ * Operator-owned tekst konceptu sprzedażowego dla jednej grupy zakresu bazowego.
+ * Puste pole = w snapshotcie użyta zostanie propozycja z `suggestProposalConcept`.
+ * AI/reguły nigdy nie nadpisują cen ani ilości — tylko te trzy pola tekstowe.
+ */
+export const ProposalCoreItemOverrideSchema = z.object({
+  groupId: z.string().min(1).max(80),
+  title: z.string().max(120).default(''),
+  facts: z.array(z.string().max(160)).max(5).default([]),
+  benefit: z.string().max(400).default(''),
+});
+
+export const MAX_PROPOSAL_CORE_ITEMS = 20;
+
 export const ProposalDocumentDraftSchema = z.object({
   offerExportId: z.string().uuid().nullable().optional(),
   skin: ProposalSkinSchema.default('MINIMAL'),
   lead: z.string().max(800).default(''),
   whyThisSet: z.string().max(2000).default(''),
   options: z.array(ProposalOptionRefSchema).max(MAX_PROPOSAL_OPTIONS).default([]),
+  coreItems: z.array(ProposalCoreItemOverrideSchema).max(MAX_PROPOSAL_CORE_ITEMS).default([]),
 });
 
 export const ProposalClientSignalsSchema = z.object({
@@ -157,6 +172,7 @@ export type WarehouseDocumentDraft = z.infer<typeof WarehouseDocumentDraftSchema
 export type OrderDocumentDraft = z.infer<typeof OrderDocumentDraftSchema>;
 export type ProposalSkin = z.infer<typeof ProposalSkinSchema>;
 export type ProposalOptionRef = z.infer<typeof ProposalOptionRefSchema>;
+export type ProposalCoreItemOverride = z.infer<typeof ProposalCoreItemOverrideSchema>;
 export type ProposalDocumentDraft = z.infer<typeof ProposalDocumentDraftSchema>;
 export type ProposalClientSignals = z.infer<typeof ProposalClientSignalsSchema>;
 export type ProposalPublicEventType = z.infer<typeof ProposalPublicEventTypeSchema>;

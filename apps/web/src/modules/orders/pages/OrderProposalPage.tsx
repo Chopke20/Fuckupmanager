@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Copy, FileText } from 'lucide-react'
+import { ArrowLeft, Copy, FileText, RefreshCw } from 'lucide-react'
 import {
   MAX_PROPOSAL_OPTIONS,
   applyGlobalDiscountAndVat,
   computeProposalEquipmentNet,
   computeProposalProductionNet,
+  groupProposalScope,
   proposalOptionKey,
+  suggestProposalConcept,
+  type ProposalCoreItemOverride,
   type ProposalDocumentDraft,
   type ProposalOptionRef,
   type ProposalSkin,
@@ -27,7 +30,17 @@ function emptyDraft(): ProposalDocumentDraft {
     lead: '',
     whyThisSet: '',
     options: [],
+    coreItems: [],
   }
+}
+
+function upsertCoreItem(
+  items: ProposalCoreItemOverride[],
+  next: ProposalCoreItemOverride
+): ProposalCoreItemOverride[] {
+  const idx = items.findIndex((item) => item.groupId === next.groupId)
+  if (idx < 0) return [...items, next]
+  return items.map((item, i) => (i === idx ? next : item))
 }
 
 export default function OrderProposalPage() {
@@ -61,10 +74,12 @@ export default function OrderProposalPage() {
   }, [id, isLoading, loadAll])
 
   const typedOrder = order as Order | undefined
-  const blocks: Array<{ id: string; title: string }> = typedOrder?.offerBlocks ?? []
+  const blocks: Array<{ id: string; title: string; sortOrder?: number | null }> =
+    typedOrder?.offerBlocks ?? []
   const equipment: Array<{
     id: string
     name: string
+    category?: string | null
     offerBlockId?: string | null
     visibleInOffer?: boolean
     unitPrice: number
@@ -101,6 +116,48 @@ export default function OrderProposalPage() {
 
   const selectedKeys = new Set(draft.options.map((o) => proposalOptionKey(o.kind, o.targetId)))
 
+  const scopeGroups = useMemo(() => {
+    const excludedEquipmentIds = new Set<string>()
+    const excludedProductionIds = new Set<string>()
+    const excludedBlockIds = new Set<string>()
+    for (const opt of draft.options) {
+      if (opt.kind === 'BLOCK') excludedBlockIds.add(opt.targetId)
+      if (opt.kind === 'EQUIPMENT') excludedEquipmentIds.add(opt.targetId)
+      if (opt.kind === 'PRODUCTION') excludedProductionIds.add(opt.targetId)
+    }
+    return groupProposalScope({
+      blocks,
+      equipment,
+      production,
+      excludedEquipmentIds,
+      excludedProductionIds,
+      excludedBlockIds,
+    })
+  }, [blocks, draft.options, equipment, production])
+
+  const coreOverrideByGroup = useMemo(() => {
+    const map = new Map((draft.coreItems ?? []).map((item) => [item.groupId, item]))
+    return map
+  }, [draft.coreItems])
+
+  // Auto-wypełnij coreItems sugestią regułową, gdy draft ich jeszcze nie ma.
+  useEffect(() => {
+    if (scopeGroups.length === 0) return
+    const existing = draft.coreItems ?? []
+    const missing = scopeGroups.filter((g) => !existing.some((c) => c.groupId === g.id))
+    if (missing.length === 0) return
+    setDraft((prev) => {
+      const current = prev.coreItems ?? []
+      let next = current
+      for (const group of scopeGroups) {
+        if (current.some((c) => c.groupId === group.id)) continue
+        next = upsertCoreItem(next, suggestProposalConcept(group))
+      }
+      if (next === current) return prev
+      return { ...prev, coreItems: next }
+    })
+  }, [draft.coreItems, scopeGroups])
+
   const liveTotals = useMemo(() => {
     const optionEqIds = new Set<string>()
     const optionProdIds = new Set<string>()
@@ -113,8 +170,12 @@ export default function OrderProposalPage() {
       if (opt.kind === 'PRODUCTION') optionProdIds.add(opt.targetId)
     }
     const baseEq = equipment.filter((e) => e.visibleInOffer !== false && !optionEqIds.has(e.id))
-    const baseProd = production.filter((p) => p.visibleInOffer !== false && !optionProdIds.has(p.id) && !p.isTransport)
-    const baseTr = production.filter((p) => p.visibleInOffer !== false && !optionProdIds.has(p.id) && p.isTransport)
+    const baseProd = production.filter(
+      (p) => p.visibleInOffer !== false && !optionProdIds.has(p.id) && !p.isTransport
+    )
+    const baseTr = production.filter(
+      (p) => p.visibleInOffer !== false && !optionProdIds.has(p.id) && p.isTransport
+    )
     const net =
       baseEq.reduce((s, i) => s + computeProposalEquipmentNet(i), 0) +
       baseProd.reduce((s, i) => s + computeProposalProductionNet(i), 0) +
@@ -125,6 +186,28 @@ export default function OrderProposalPage() {
       vatRate: typedOrder?.vatRate ?? 23,
     })
   }, [draft.options, equipment, production, typedOrder?.discountGlobal, typedOrder?.vatRate])
+
+  const patchCoreItem = (groupId: string, patch: Partial<ProposalCoreItemOverride>) => {
+    setDraft((prev) => {
+      const group = scopeGroups.find((g) => g.id === groupId)
+      if (!group) return prev
+      const current =
+        prev.coreItems?.find((c) => c.groupId === groupId) ?? suggestProposalConcept(group)
+      return {
+        ...prev,
+        coreItems: upsertCoreItem(prev.coreItems ?? [], { ...current, ...patch, groupId }),
+      }
+    })
+  }
+
+  const resetCoreSuggestion = (groupId: string) => {
+    const group = scopeGroups.find((g) => g.id === groupId)
+    if (!group) return
+    setDraft((prev) => ({
+      ...prev,
+      coreItems: upsertCoreItem(prev.coreItems ?? [], suggestProposalConcept(group)),
+    }))
+  }
 
   const toggleOption = (kind: ProposalOptionRef['kind'], targetId: string) => {
     const key = proposalOptionKey(kind, targetId)
@@ -273,7 +356,9 @@ export default function OrderProposalPage() {
                   </button>
                 ))}
               </div>
-              <p className="text-xs text-muted-foreground">Dwa warianty startowe — do dalszego szlifu wizualnego.</p>
+              <p className="text-xs text-muted-foreground">
+                Minimal — jasny, korporacyjny. Dynamiczny — ciemny, energiczny (echo lamastage.pl).
+              </p>
             </section>
 
             <section className="border border-border rounded p-4 space-y-3">
@@ -292,6 +377,98 @@ export default function OrderProposalPage() {
                 maxLength={2000}
                 onChange={(e) => setDraft((d) => ({ ...d, whyThisSet: e.target.value }))}
               />
+            </section>
+
+            <section className="border border-border rounded p-4 space-y-3">
+              <h2 className="text-sm font-semibold">Core sprzedażowe</h2>
+              <p className="text-xs text-muted-foreground">
+                Maszynowa propozycja z oferty: fakty z liczbami + jedno zdanie korzyści. Ceny tylko z
+                pozycji zlecenia — możesz poprawić tekst przed publikacją.
+              </p>
+              {scopeGroups.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Brak pozycji w zakresie bazowym.</p>
+              ) : (
+                <div className="space-y-3">
+                  {scopeGroups.map((group) => {
+                    const suggestion = suggestProposalConcept(group)
+                    const override = coreOverrideByGroup.get(group.id)
+                    const title = override?.title ?? suggestion.title
+                    const facts = override?.facts?.length ? override.facts : suggestion.facts
+                    const benefit = override?.benefit ?? suggestion.benefit
+                    const netBefore = group.equipmentNet + group.productionNet + group.transportNet
+                    const money = applyGlobalDiscountAndVat({
+                      netBeforeGlobal: netBefore,
+                      discountGlobal: typedOrder?.discountGlobal ?? 0,
+                      vatRate: typedOrder?.vatRate ?? 23,
+                    })
+                    return (
+                      <div key={group.id} className="border border-border rounded p-3 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <input
+                            className="w-full bg-surface border border-border rounded px-2 py-1.5 text-sm font-medium"
+                            value={title}
+                            maxLength={120}
+                            onChange={(e) => patchCoreItem(group.id, { title: e.target.value })}
+                          />
+                          <button
+                            type="button"
+                            title="Zaproponuj ponownie"
+                            className="shrink-0 p-1.5 border border-border rounded text-muted-foreground hover:text-foreground"
+                            onClick={() => resetCoreSuggestion(group.id)}
+                          >
+                            <RefreshCw size={14} />
+                          </button>
+                        </div>
+                        <div className="space-y-1">
+                          {facts.map((fact, factIdx) => (
+                            <div key={`${group.id}-fact-${factIdx}`} className="flex gap-1">
+                              <input
+                                className="w-full bg-surface border border-border rounded px-2 py-1 text-sm"
+                                value={fact}
+                                maxLength={160}
+                                onChange={(e) => {
+                                  const next = [...facts]
+                                  next[factIdx] = e.target.value
+                                  patchCoreItem(group.id, { facts: next })
+                                }}
+                              />
+                              <button
+                                type="button"
+                                className="px-2 text-xs border border-border rounded"
+                                onClick={() =>
+                                  patchCoreItem(group.id, {
+                                    facts: facts.filter((_, i) => i !== factIdx),
+                                  })
+                                }
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                          {facts.length < 5 ? (
+                            <button
+                              type="button"
+                              className="text-xs text-primary"
+                              onClick={() => patchCoreItem(group.id, { facts: [...facts, ''] })}
+                            >
+                              + fakt
+                            </button>
+                          ) : null}
+                        </div>
+                        <textarea
+                          className="w-full bg-surface border border-border rounded px-2 py-1.5 text-sm min-h-[64px]"
+                          value={benefit}
+                          maxLength={400}
+                          onChange={(e) => patchCoreItem(group.id, { benefit: e.target.value })}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          {formatProposalMoney(money.netAfterDiscount, currency)} netto (z pozycji oferty)
+                        </p>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </section>
 
             <section className="border border-border rounded p-4 space-y-3">
