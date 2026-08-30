@@ -6,7 +6,9 @@ const pdfController = new PdfController()
 
 router.post('/offer/:orderId/preview', pdfController.previewOffer.bind(pdfController))
 router.post('/offer/:orderId/generate', pdfController.generateOffer.bind(pdfController))
+router.post('/offer/:orderId/excel', pdfController.exportOfferExcel.bind(pdfController))
 router.post('/offer/export/:exportId', pdfController.exportOfferFromSnapshot.bind(pdfController))
+router.post('/offer/export/:exportId/excel', pdfController.exportOfferExcelFromSnapshot.bind(pdfController))
 router.get('/warehouse/:orderId/generate', pdfController.generateWarehousePdf.bind(pdfController))
 router.get('/stage-plan/:orderId/generate', pdfController.generateStagePlanPdf.bind(pdfController))
 

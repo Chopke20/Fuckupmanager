@@ -23,6 +23,24 @@ export const pdfApi = {
       responseType: 'blob',
       headers: { Accept: 'application/pdf' },
     }),
+
+  /** Excel z bieżącego draftu oferty — bez podbijania wersji. */
+  exportOfferExcel: (orderId: string) =>
+    axios.post<Blob>(`${PDF_BASE}/offer/${orderId}/excel`, null, {
+      responseType: 'blob',
+      headers: {
+        Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      },
+    }),
+
+  /** Excel z zapisanego snapshotu oferty. */
+  offerExcelFromExport: (exportId: string) =>
+    axios.post<Blob>(`${PDF_BASE}/offer/export/${exportId}/excel`, null, {
+      responseType: 'blob',
+      headers: {
+        Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      },
+    }),
 };
 
 export const financeApi = {

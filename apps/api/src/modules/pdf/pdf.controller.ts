@@ -5,6 +5,7 @@ import { ZodError } from 'zod'
 import { AppError } from '../../shared/errors/AppError'
 import { OrderOfferSnapshotSchema, parseStagePlanJson, type OfferDocumentDraft, type OrderOfferSnapshot } from '@lama-stage/shared-types'
 import { buildOfferHtmlV5, type OrderLike } from './offer-v5-builder'
+import { buildOfferExcel, offerExcelFilename } from './offer-excel-builder'
 import { buildWarehousePdfHtml } from './warehouse-pdf-builder'
 import { buildStagePlanPdfHtml } from './stage-plan-pdf-builder'
 import {
@@ -325,6 +326,61 @@ export class PdfController {
     }
   }
 
+  /** Excel z bieżącego draftu oferty — bez podbijania wersji i bez snapshotu. */
+  async exportOfferExcel(req: Request, res: Response) {
+    try {
+      const orderId = req.params.orderId
+      if (!orderId) return res.status(400).json({ error: 'Brak ID zlecenia' })
+      const order = await loadOrderForPdf(orderId)
+      if (!order) return res.status(404).json({ error: 'Zlecenie nie znalezione' })
+      if (!order.client) {
+        return res.status(400).json({ error: 'Zlecenie nie ma przypisanego klienta — brak danych do oferty' })
+      }
+      let draftPayload = await loadOfferDraftPayload(prisma, orderId, order)
+      const nextVer = (order.offerVersion ?? 0) + 1
+      const offerNumberDisplay = getOfferNumberDisplay(order, nextVer)
+      const generatedAt = new Date().toISOString()
+      const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
+      const preferredContactId =
+        draftPayload && typeof draftPayload === 'object' && 'projectContactId' in (draftPayload as any)
+          ? String((draftPayload as any).projectContactId ?? '').trim() || null
+          : null
+      let projectContact = this.pickProjectContact(appSettings, preferredContactId)
+      const branding = { accentColorHex: null as string | null, logoUrl: null as string | null }
+      ;({ draftPayload, projectContact } = this.applyToinenMusicModeIfEnabled(
+        appSettings,
+        draftPayload,
+        branding,
+        projectContact,
+      ))
+      const snapshot = buildOrderOfferSnapshotFromOrder(order, draftPayload, {
+        generatedAt,
+        documentNumber: offerNumberDisplay,
+      })
+      const orderLike = orderOfferSnapshotToPdfOrderLike(snapshot)
+      const buffer = await buildOfferExcel({
+        order: orderLike,
+        offerNumberDisplay,
+        issuedAt: generatedAt,
+        projectContact,
+      })
+      const filename = offerExcelFilename(offerNumberDisplay)
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+      res.send(buffer)
+    } catch (error) {
+      if (error instanceof ZodError) {
+        console.error('Eksport Excel oferty — walidacja snapshotu:', error.flatten())
+        return res.status(400).json({
+          error:
+            'Dane zlecenia nie przechodzą walidacji oferty (np. brakujące pola klienta lub pozycji). Szczegóły w logu serwera.',
+        })
+      }
+      console.error('Błąd eksportu Excel oferty:', error)
+      res.status(500).json({ error: 'Błąd generowania pliku Excel oferty' })
+    }
+  }
+
   /**
    * Generuje PDF oferty i zapisuje snapshot (`OrderDocumentExport`), o ile treść oferty zmieniła się
    * względem ostatniego eksportu. Format numeru: `OFR-{YY}-{NNNN}-v{V}` (legacy snapshots: `N.V.YYYY`).
@@ -569,6 +625,73 @@ export class PdfController {
       }
       console.error('Błąd generowania PDF z eksportu:', error)
       res.status(500).json({ error: 'Błąd generowania oferty PDF z eksportu' })
+    }
+  }
+
+  async buildOfferExcelFromExportId(exportId: string): Promise<{ buffer: Buffer; filename: string }> {
+    const exportRecord = await prisma.orderDocumentExport.findUnique({
+      where: { id: exportId },
+    })
+    if (!exportRecord) {
+      throw new AppError('Eksport dokumentu nie znaleziony', 404, 'NOT_FOUND')
+    }
+    if (exportRecord.documentType !== 'OFFER') {
+      throw new AppError('Obsługiwany jest tylko eksport oferty (OFFER)', 400)
+    }
+    let snapshotRaw: unknown
+    try {
+      snapshotRaw = JSON.parse(exportRecord.snapshot)
+    } catch {
+      throw new AppError('Nie udało się odczytać snapshotu eksportu', 500)
+    }
+    const parsed = OrderOfferSnapshotSchema.safeParse(snapshotRaw)
+    const raw = snapshotRaw as Record<string, unknown>
+    let issuedAtFallback: string | undefined
+    if (typeof raw.generatedAt === 'string') {
+      issuedAtFallback = raw.generatedAt
+    } else {
+      const dd = raw.documentDraft
+      if (dd && typeof dd === 'object' && dd !== null && 'issuedAt' in dd) {
+        const v = (dd as { issuedAt?: unknown }).issuedAt
+        if (typeof v === 'string') issuedAtFallback = v
+      }
+    }
+    const issuedAt: string | undefined =
+      parsed.success && parsed.data.generatedAt ? parsed.data.generatedAt : issuedAtFallback
+    const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
+    let preferredContactId: string | null = null
+    const draftRaw = parsed.success ? parsed.data.documentDraft : raw.documentDraft
+    if (draftRaw && typeof draftRaw === 'object' && draftRaw !== null && 'projectContactId' in draftRaw) {
+      const v = (draftRaw as { projectContactId?: unknown }).projectContactId
+      preferredContactId = typeof v === 'string' && v.trim() ? v.trim() : null
+    }
+    const projectContact = this.pickProjectContact(appSettings, preferredContactId)
+    const orderLike: OrderLike = parsed.success
+      ? orderOfferSnapshotToPdfOrderLike(parsed.data)
+      : (raw as OrderLike)
+    const buffer = await buildOfferExcel({
+      order: orderLike,
+      offerNumberDisplay: exportRecord.documentNumber,
+      issuedAt,
+      projectContact,
+    })
+    return { buffer, filename: offerExcelFilename(exportRecord.documentNumber) }
+  }
+
+  async exportOfferExcelFromSnapshot(req: Request, res: Response) {
+    try {
+      const exportId = req.params.exportId
+      if (!exportId) return res.status(400).json({ error: 'Brak ID eksportu' })
+      const { buffer, filename } = await this.buildOfferExcelFromExportId(exportId)
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+      res.send(buffer)
+    } catch (error) {
+      if (error instanceof AppError) {
+        return res.status(error.statusCode).json({ error: error.message })
+      }
+      console.error('Błąd generowania Excel z eksportu:', error)
+      res.status(500).json({ error: 'Błąd generowania Excel oferty z eksportu' })
     }
   }
 

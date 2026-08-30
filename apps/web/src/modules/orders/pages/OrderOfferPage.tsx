@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback, Fragment } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, FileText, Eye, Download, Shield, Trash2 } from 'lucide-react';
+import { ArrowLeft, FileText, Eye, Download, Shield, Trash2, FileSpreadsheet } from 'lucide-react';
 import type { IssuerProfilePublic } from '@lama-stage/shared-types';
 import { useOrder, orderKeys } from '../hooks/useOrders';
 import { orderApi, OrderDocumentExportMeta } from '../api/order.api';
@@ -16,6 +16,37 @@ function parseFilenameFromContentDisposition(header: string | undefined, fallbac
   if (!header) return fallback;
   const m = /filename\*?=(?:UTF-8'')?"?([^";\n]+)"?/i.exec(header);
   return m?.[1]?.trim() || fallback;
+}
+
+function triggerBlobDownload(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function messageFromExportError(e: any, fallback: string): Promise<string> {
+  const data = e?.response?.data;
+  if (data instanceof Blob) {
+    try {
+      const text = await data.text();
+      const j = JSON.parse(text) as { error?: string };
+      if (typeof j?.error === 'string') return j.error;
+    } catch {
+      /* ignore */
+    }
+  } else if (data && typeof data === 'object') {
+    const err = (data as { error?: string | { message?: string } }).error;
+    if (typeof err === 'string') return err;
+    if (err && typeof err.message === 'string') return err.message;
+  } else if (typeof e?.message === 'string' && e.message !== 'Request failed with status code 500') {
+    return e.message;
+  }
+  return fallback;
 }
 
 type OfferDraft = {
@@ -89,6 +120,7 @@ export default function OrderOfferPage() {
   const [loadingExports, setLoadingExports] = useState(false);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [loadingGenerate, setLoadingGenerate] = useState(false);
+  const [loadingExcel, setLoadingExcel] = useState(false);
   const [exportBusyId, setExportBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -452,37 +484,39 @@ export default function OrderOfferPage() {
         res.headers['content-disposition'],
         'Oferta.pdf'
       );
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = name;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      triggerBlobDownload(blob, name);
       await queryClient.invalidateQueries({ queryKey: orderKeys.detail(id) });
       await reloadExports();
     } catch (e: any) {
-      let msg = 'Nie udało się wygenerować oferty PDF.';
-      const data = e?.response?.data;
-      if (data instanceof Blob) {
-        try {
-          const text = await data.text();
-          const j = JSON.parse(text) as { error?: string };
-          if (typeof j?.error === 'string') msg = j.error;
-        } catch {
-          /* ignore */
-        }
-      } else if (data && typeof data === 'object') {
-        const err = (data as { error?: string | { message?: string } }).error;
-        if (typeof err === 'string') msg = err;
-        else if (err && typeof err.message === 'string') msg = err.message;
-      } else if (typeof e?.message === 'string' && e.message !== 'Request failed with status code 500') {
-        msg = e.message;
-      }
-      setError(msg);
+      setError(await messageFromExportError(e, 'Nie udało się wygenerować oferty PDF.'));
     } finally {
       setLoadingGenerate(false);
+    }
+  };
+
+  const exportOfferExcel = async () => {
+    if (!id || !draft) return;
+    if (draft.currency === 'EUR' && (draft.exchangeRateEur == null || draft.exchangeRateEur <= 0)) {
+      setError('Dla waluty EUR podaj dodatni kurs EUR przed eksportem Excel.');
+      return;
+    }
+    setLoadingExcel(true);
+    setError(null);
+    setInfo(null);
+    try {
+      const saved = await orderApi.updateDocumentDraft<OfferDraft>(id, 'OFFER', draft);
+      setDraft(saved.payload);
+      const res = await pdfApi.exportOfferExcel(id);
+      const name = parseFilenameFromContentDisposition(
+        res.headers['content-disposition'],
+        'Oferta.xlsx'
+      );
+      triggerBlobDownload(res.data, name);
+      setInfo('Pobrano ofertę w Excelu (pozycje, sumy i formuły). Numer oferty nie został zmieniony.');
+    } catch (e: any) {
+      setError(await messageFromExportError(e, 'Nie udało się wyeksportować oferty do Excel.'));
+    } finally {
+      setLoadingExcel(false);
     }
   };
 
@@ -525,31 +559,26 @@ export default function OrderOfferPage() {
         res.headers['content-disposition'],
         'Oferta.pdf'
       );
-      const url = URL.createObjectURL(res.data);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = name;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      triggerBlobDownload(res.data, name);
     } catch (e: any) {
-      let msg = 'Nie udało się pobrać PDF.';
-      const data = e?.response?.data;
-      if (data instanceof Blob) {
-        try {
-          const text = await data.text();
-          const j = JSON.parse(text) as { error?: string };
-          if (typeof j?.error === 'string') msg = j.error;
-        } catch {
-          /* ignore */
-        }
-      } else if (data && typeof data === 'object') {
-        const err = (data as { error?: string | { message?: string } }).error;
-        if (typeof err === 'string') msg = err;
-        else if (err && typeof err.message === 'string') msg = err.message;
-      }
-      setError(msg);
+      setError(await messageFromExportError(e, 'Nie udało się pobrać PDF.'));
+    } finally {
+      setExportBusyId(null);
+    }
+  };
+
+  const downloadExportExcel = async (exportId: string) => {
+    setExportBusyId(exportId);
+    setError(null);
+    try {
+      const res = await pdfApi.offerExcelFromExport(exportId);
+      const name = parseFilenameFromContentDisposition(
+        res.headers['content-disposition'],
+        'Oferta.xlsx'
+      );
+      triggerBlobDownload(res.data, name);
+    } catch (e: any) {
+      setError(await messageFromExportError(e, 'Nie udało się pobrać Excel.'));
     } finally {
       setExportBusyId(null);
     }
@@ -595,7 +624,7 @@ export default function OrderOfferPage() {
           <button
             type="button"
             onClick={previewOfferPdf}
-            disabled={loadingPreview || loadingGenerate}
+            disabled={loadingPreview || loadingGenerate || loadingExcel}
             className="px-3 py-1.5 text-sm border border-border rounded hover:bg-surface-2 flex items-center gap-1.5 disabled:opacity-50"
           >
             <Eye size={16} />
@@ -603,8 +632,18 @@ export default function OrderOfferPage() {
           </button>
           <button
             type="button"
+            onClick={exportOfferExcel}
+            disabled={loadingPreview || loadingGenerate || loadingExcel}
+            className="px-3 py-1.5 text-sm border border-border rounded hover:bg-surface-2 flex items-center gap-1.5 disabled:opacity-50"
+            title="Pobierz ofertę jako Excel z formułami i sumami (bez nadawania numeru)"
+          >
+            <FileSpreadsheet size={16} />
+            {loadingExcel ? 'Excel…' : 'Eksport Excel'}
+          </button>
+          <button
+            type="button"
             onClick={generateOfferPdf}
-            disabled={loadingPreview || loadingGenerate}
+            disabled={loadingPreview || loadingGenerate || loadingExcel}
             className="px-3 py-1.5 text-sm border-2 border-primary text-primary rounded font-medium hover:bg-primary/10 flex items-center gap-1.5 disabled:opacity-50"
           >
             <FileText size={16} />
@@ -1100,7 +1139,16 @@ export default function OrderOfferPage() {
                         className="inline-flex items-center gap-1 px-2 py-1 rounded border border-border hover:bg-surface-2 text-xs disabled:opacity-50"
                       >
                         <Download size={14} />
-                        Pobierz
+                        PDF
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadExportExcel(exp.id)}
+                        disabled={exportBusyId !== null}
+                        className="inline-flex items-center gap-1 px-2 py-1 ml-1 rounded border border-border hover:bg-surface-2 text-xs disabled:opacity-50"
+                      >
+                        <FileSpreadsheet size={14} />
+                        Excel
                       </button>
                       <button
                         type="button"
