@@ -3,14 +3,18 @@ import type { StagePlan } from '@lama-stage/shared-types'
 
 export default function StagePlatformsOrderModal({
   open,
+  orderId,
+  orderLabel,
   initialPlan,
   onClose,
   onApply,
 }: {
   open: boolean
+  orderId?: string | null
+  orderLabel?: string
   initialPlan?: StagePlan | null
   onClose: () => void
-  onApply: (plan: StagePlan) => void
+  onApply: (plan: StagePlan) => void | Promise<void>
 }) {
   if (!open) return null
 
@@ -28,9 +32,14 @@ export default function StagePlatformsOrderModal({
         aria-labelledby="stage-platforms-dialog-title"
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <h2 id="stage-platforms-dialog-title" className="text-lg font-bold">
-            Scena z podestów
-          </h2>
+          <div>
+            <h2 id="stage-platforms-dialog-title" className="text-lg font-bold">
+              Scena z podestów
+            </h2>
+            {orderLabel ? (
+              <p className="mt-0.5 text-xs text-muted-foreground">Zlecenie: {orderLabel}</p>
+            ) : null}
+          </div>
           <button
             type="button"
             onClick={onClose}
@@ -41,11 +50,11 @@ export default function StagePlatformsOrderModal({
         </div>
         <div className="overflow-y-auto p-4">
           <StagePlatformVisualizer
+            key={orderId ?? 'new-order'}
             initialPlan={initialPlan}
             applyLabel="Dodaj podesty i obicie do zlecenia"
             onApply={(plan) => {
-              onApply(plan)
-              onClose()
+              void Promise.resolve(onApply(plan)).then(() => onClose())
             }}
           />
         </div>

@@ -1,8 +1,15 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
+import type { StagePlan } from '@lama-stage/shared-types'
 import StagePlatformVisualizer from '../components/StagePlatformVisualizer'
+import StagePlanProjectBar from '../components/StagePlanProjectBar'
+import { useStagePlanProjectSession } from '../hooks/useStagePlanProjectSession'
 
 export default function StagePlatformsCalculatorPage() {
+  const session = useStagePlanProjectSession()
+  const [currentPlan, setCurrentPlan] = useState<StagePlan | null>(null)
+
   return (
     <div className="space-y-6">
       <div>
@@ -15,13 +22,27 @@ export default function StagePlatformsCalculatorPage() {
         </Link>
         <h1 className="mt-2 text-2xl font-bold">Edytor sceny z podestów</h1>
         <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          Układasz rzut z blatów 2×1 i 1×1 — prostokątem na start albo dowolnym kształtem,
-          przeciągając blaty po siatce lub swobodnie. Z układu wychodzą nogi (zawsze cztery na
-          podest), obicie boków w mb i m², podłoga w m², schody i barierki na wybranych
-          krawędziach. Ze zlecenia wstawisz te ilości prosto do wykazu sprzętu.
+          Układasz rzut z blatów 2×1 i 1×1 — projekty zapisują się automatycznie. Przy wejściu z
+          Toolbox otwiera się ostatni projekt. Ze zlecenia edytujesz plan przypisany do tego
+          zlecenia.
         </p>
       </div>
-      <StagePlatformVisualizer />
+
+      {session.loading ? (
+        <p className="text-sm text-muted-foreground">Wczytywanie projektu…</p>
+      ) : (
+        <>
+          <StagePlanProjectBar session={session} currentPlan={currentPlan} />
+          <StagePlatformVisualizer
+            key={session.project?.id ?? 'loading'}
+            initialPlan={session.initialPlan}
+            onPlanChange={(plan) => {
+              setCurrentPlan(plan)
+              session.handlePlanChange(plan)
+            }}
+          />
+        </>
+      )}
     </div>
   )
 }

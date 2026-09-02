@@ -26,7 +26,7 @@ describe('calculateTechnicianCashQuote', () => {
       vatPercent: 23,
       taxRegimeId: 'pit_linear',
       payoutKind: 'cash_not_deductible',
-      roundClientGrossUp: false,
+      roundClientNetUp: false,
     })
     expect(result.ok).toBe(true)
     if (!result.ok) return
@@ -45,7 +45,7 @@ describe('calculateTechnicianCashQuote', () => {
       vatPercent: 23,
       taxRegimeId: 'pit_scale_12',
       payoutKind: 'cash_not_deductible',
-      roundClientGrossUp: false,
+      roundClientNetUp: false,
     })
     const taxOnly = calculateTechnicianCashQuote({
       cashToTechnician: 1000,
@@ -55,7 +55,7 @@ describe('calculateTechnicianCashQuote', () => {
       healthPercent: 0,
       healthDeductibleShare: 0,
       payoutKind: 'cash_not_deductible',
-      roundClientGrossUp: false,
+      roundClientNetUp: false,
     })
     expect(withHealth.ok && taxOnly.ok).toBe(true)
     if (!withHealth.ok || !taxOnly.ok) return
@@ -69,7 +69,7 @@ describe('calculateTechnicianCashQuote', () => {
       vatPercent: 23,
       taxRegimeId: 'cit_9',
       payoutKind: 'cash_not_deductible',
-      roundClientGrossUp: false,
+      roundClientNetUp: false,
     })
     expect(result.ok).toBe(true)
     if (!result.ok) return
@@ -86,7 +86,7 @@ describe('calculateTechnicianCashQuote', () => {
       healthPercent: 0,
       healthDeductibleShare: 0,
       payoutKind: 'cash_not_deductible',
-      roundClientGrossUp: false,
+      roundClientNetUp: false,
     })
     expect(result.ok).toBe(true)
     if (!result.ok) return
@@ -102,7 +102,7 @@ describe('calculateTechnicianCashQuote', () => {
       taxRegimeId: 'pit_linear',
       keepAfterTax: 0,
       payoutKind: 'deductible_cost',
-      roundClientGrossUp: false,
+      roundClientNetUp: false,
     })
     expect(result.ok).toBe(true)
     if (!result.ok) return
@@ -119,7 +119,7 @@ describe('calculateTechnicianCashQuote', () => {
       taxRegimeId: 'pit_linear',
       keepAfterTax: 100,
       payoutKind: 'deductible_cost',
-      roundClientGrossUp: false,
+      roundClientNetUp: false,
     })
     expect(result.ok).toBe(true)
     if (!result.ok) return
@@ -139,7 +139,7 @@ describe('calculateTechnicianCashQuote', () => {
       healthPercent: 0,
       healthDeductibleShare: 0,
       payoutKind: 'cash_not_deductible',
-      roundClientGrossUp: false,
+      roundClientNetUp: false,
     })
     expect(result.ok).toBe(true)
     if (!result.ok) return
@@ -147,25 +147,25 @@ describe('calculateTechnicianCashQuote', () => {
     expect(result.invoiceGross).toBe(1230)
   })
 
-  it('zaokrągla brutto w górę i zostawia co najmniej żądaną gotówkę (liniowy)', () => {
+  it('zaokrągla netto w górę i zostawia co najmniej żądaną gotówkę (liniowy)', () => {
     const exact = calculateTechnicianCashQuote({
       cashToTechnician: 1000,
       vatPercent: 23,
       taxRegimeId: 'pit_linear',
       payoutKind: 'cash_not_deductible',
-      roundClientGrossUp: false,
+      roundClientNetUp: false,
     })
     const rounded = calculateTechnicianCashQuote({
       cashToTechnician: 1000,
       vatPercent: 23,
       taxRegimeId: 'pit_linear',
       payoutKind: 'cash_not_deductible',
-      roundClientGrossUp: true,
+      roundClientNetUp: true,
     })
     expect(exact.ok && rounded.ok).toBe(true)
     if (!exact.ok || !rounded.ok) return
-    expect(Number.isInteger(rounded.invoiceGross)).toBe(true)
-    expect(rounded.invoiceGross).toBeGreaterThanOrEqual(Math.ceil(exact.invoiceGross - 1e-9))
+    expect(Number.isInteger(rounded.invoiceNet)).toBe(true)
+    expect(rounded.invoiceNet).toBeGreaterThanOrEqual(Math.ceil(exact.invoiceNet - 1e-9))
     const leftover =
       rounded.invoiceNet - rounded.incomeTaxAmount - rounded.healthAmount
     expect(leftover).toBeGreaterThanOrEqual(1000)

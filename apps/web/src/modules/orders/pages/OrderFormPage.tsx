@@ -37,6 +37,7 @@ import OrderRecurringSection from '../components/OrderRecurringSection';
 import ConfirmationModal from '../../../shared/components/ConfirmationModal';
 import StagePlatformsOrderModal from '../components/StagePlatformsOrderModal';
 import { applyStagePlanToEquipmentItems } from '../../toolbox/utils/applyStagePlanToOrder';
+import { upsertStagePlanProjectForOrder } from '../../toolbox/api/stagePlanProjects.api';
 import { useEquipment } from '../../equipment/hooks/useEquipment';
 
 const UNSAVED_LEAVE_MSG =
@@ -431,8 +432,19 @@ export default function OrderFormPage() {
     typeof formData?.stagePlanJson === 'string' ? formData.stagePlanJson : null
   )
 
+  const stageOrderLabel = useMemo(() => {
+    const name = (formData?.name || order?.name || '').trim()
+    if (!name) return undefined
+    const year = (order as Order | undefined)?.orderYear
+    const number = (order as Order | undefined)?.orderNumber
+    if (isEditing && year != null && number != null) {
+      return `${formatOrderNumber(year, number)} · ${name}`
+    }
+    return name
+  }, [formData?.name, order, isEditing])
+
   const handleApplyStagePlan = useCallback(
-    (plan: StagePlan) => {
+    async (plan: StagePlan) => {
       const blocks = offerBlocksRaw as Partial<OrderOfferBlock>[]
       const firstBlockId = blocks[0]?.id ?? null
       const next = applyStagePlanToEquipmentItems({
@@ -444,8 +456,27 @@ export default function OrderFormPage() {
       })
       setValue('stagePlanJson', serializeStagePlan(plan), { shouldDirty: true })
       handleEquipmentChange(next)
+      if (isEditing && id) {
+        const label = (getValues('name') || order?.name || 'Zlecenie').trim()
+        try {
+          await upsertStagePlanProjectForOrder(id, { name: label, plan })
+        } catch {
+          // Plan jest w formularzu zlecenia; zapis projektu jest dodatkiem.
+        }
+      }
     },
-    [equipmentItems, equipmentCatalog, orderDays, offerBlocksRaw, setValue, handleEquipmentChange]
+    [
+      equipmentItems,
+      equipmentCatalog,
+      orderDays,
+      offerBlocksRaw,
+      setValue,
+      handleEquipmentChange,
+      isEditing,
+      id,
+      getValues,
+      order?.name,
+    ]
   )
 
   const buildPayload = (data: Partial<Order>): CreateOrderDto | UpdateOrderDto => {
@@ -1188,6 +1219,8 @@ export default function OrderFormPage() {
 
       <StagePlatformsOrderModal
         open={stageModalOpen}
+        orderId={isEditing ? id : null}
+        orderLabel={stageOrderLabel}
         initialPlan={savedStagePlan}
         onClose={() => setStageModalOpen(false)}
         onApply={handleApplyStagePlan}

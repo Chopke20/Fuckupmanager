@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Copy, Redo2, RotateCw, Trash2, Undo2 } from 'lucide-react'
 import {
   claddingMaterialLabel,
@@ -24,6 +24,7 @@ export interface StagePlatformVisualizerProps {
   initialPlan?: StagePlan | null
   applyLabel?: string
   onApply?: (plan: StagePlan) => void
+  onPlanChange?: (plan: StagePlan) => void
 }
 
 const TOOLS: Array<{ id: StagePlanTool; label: string; hint: string }> = [
@@ -52,6 +53,7 @@ export default function StagePlatformVisualizer({
   initialPlan = null,
   applyLabel,
   onApply,
+  onPlanChange,
 }: StagePlatformVisualizerProps) {
   const editor = useStagePlanEditor(initialPlan)
   const [tool, setTool] = useState<StagePlanTool>('select')
@@ -59,6 +61,15 @@ export default function StagePlatformVisualizer({
   const [rectDepth, setRectDepth] = useState('4')
   const [rectAlongFront, setRectAlongFront] = useState(true)
   const { plan } = editor
+  const skipInitialPlanChangeRef = useRef(true)
+
+  useEffect(() => {
+    if (skipInitialPlanChangeRef.current) {
+      skipInitialPlanChangeRef.current = false
+      return
+    }
+    onPlanChange?.(plan)
+  }, [plan, onPlanChange])
 
   const activeTool = TOOLS.find((item) => item.id === tool)
   const hasSelection = editor.selectedDeckIds.length > 0

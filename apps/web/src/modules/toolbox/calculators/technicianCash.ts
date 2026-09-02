@@ -141,7 +141,7 @@ export interface TechnicianCashInput {
   healthDeductibleShare?: number
   keepAfterTax?: number
   payoutKind: TechnicianPayoutKind
-  roundClientGrossUp?: boolean
+  roundClientNetUp?: boolean
 }
 
 export interface TechnicianCashResult {
@@ -156,6 +156,7 @@ export interface TechnicianCashResult {
   healthAmount: number
   totalPublicBurden: number
   companyKeep: number
+  multiplierNetPerCash: number
   multiplierGrossPerCash: number
   incomeTaxPercent: number
   healthPercent: number
@@ -294,15 +295,14 @@ export function calculateTechnicianCashQuote(input: TechnicianCashInput): Techni
     invoiceNet = needAfterCharges / keepFraction
   }
 
-  let invoiceGross = invoiceNet * (1 + vatRate)
-  if (input.roundClientGrossUp) {
-    invoiceGross = Math.ceil(invoiceGross - MONEY_EPS)
+  if (input.roundClientNetUp) {
+    invoiceNet = Math.ceil(invoiceNet - MONEY_EPS)
   } else {
-    invoiceGross = roundMoney(invoiceGross)
+    invoiceNet = roundMoney(invoiceNet)
   }
 
-  const vatAmount = roundMoney(invoiceGross * (vatRate / (1 + vatRate || 1)))
-  invoiceNet = roundMoney(invoiceGross - vatAmount)
+  const invoiceGross = roundMoney(invoiceNet * (1 + vatRate))
+  const vatAmount = roundMoney(invoiceGross - invoiceNet)
 
   let incomeTaxAmount: number
   let healthAmount: number
@@ -332,7 +332,8 @@ export function calculateTechnicianCashQuote(input: TechnicianCashInput): Techni
   }
 
   const cashToTechnician = roundMoney(totalCash)
-  const multiplier = cashToTechnician > 0 ? invoiceGross / cashToTechnician : 0
+  const multiplierNet = cashToTechnician > 0 ? invoiceNet / cashToTechnician : 0
+  const multiplierGross = cashToTechnician > 0 ? invoiceGross / cashToTechnician : 0
 
   return {
     ok: true,
@@ -341,12 +342,13 @@ export function calculateTechnicianCashQuote(input: TechnicianCashInput): Techni
     cashToTechnician,
     invoiceNet,
     vatAmount,
-    invoiceGross: roundMoney(invoiceGross),
+    invoiceGross,
     incomeTaxAmount,
     healthAmount,
     totalPublicBurden: roundMoney(vatAmount + incomeTaxAmount + healthAmount),
     companyKeep,
-    multiplierGrossPerCash: Math.round(multiplier * 1000) / 1000,
+    multiplierNetPerCash: Math.round(multiplierNet * 1000) / 1000,
+    multiplierGrossPerCash: Math.round(multiplierGross * 1000) / 1000,
     incomeTaxPercent,
     healthPercent,
     healthDeductibleShare,

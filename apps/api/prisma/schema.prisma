@@ -189,6 +189,7 @@ model Order {
 
   documentExports OrderDocumentExport[]
   documentDrafts  OrderDocumentDraft[]
+  stagePlanProject StagePlanProject?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -501,4 +502,18 @@ model AppSettings {
   updatedAt          DateTime @updatedAt
 
   @@map("app_settings")
+}
+
+model StagePlanProject {
+  id       String  @id @default(uuid())
+  name     String
+  planJson String  @db.Text
+  orderId  String? @unique
+  order    Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([updatedAt])
+  @@map("stage_plan_projects")
 }

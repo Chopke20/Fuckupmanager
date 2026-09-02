@@ -48,7 +48,7 @@ export default function TechnicianCashCalculatorPage() {
   const [customHealth, setCustomHealth] = useState(4.9)
   const [customHealthDeduct, setCustomHealthDeduct] = useState(1)
   const [payoutKind, setPayoutKind] = useState<TechnicianPayoutKind>('cash_not_deductible')
-  const [roundClientGrossUp, setRoundClientGrossUp] = useState(true)
+  const [roundClientNetUp, setRoundClientNetUp] = useState(true)
   const [copied, setCopied] = useState(false)
 
   const regime = getTaxRegime(taxRegimeId)
@@ -66,7 +66,7 @@ export default function TechnicianCashCalculatorPage() {
       healthPercent: isCustom ? customHealth : undefined,
       healthDeductibleShare: isCustom ? customHealthDeduct : undefined,
       payoutKind,
-      roundClientGrossUp,
+      roundClientNetUp,
     })
   }, [
     cashRaw,
@@ -78,12 +78,12 @@ export default function TechnicianCashCalculatorPage() {
     customHealth,
     customHealthDeduct,
     payoutKind,
-    roundClientGrossUp,
+    roundClientNetUp,
   ])
 
-  const onCopyGross = async () => {
+  const onCopyNet = async () => {
     if (!quote.ok) return
-    const text = quote.invoiceGross.toFixed(2).replace('.', ',')
+    const text = quote.invoiceNet.toFixed(2).replace('.', ',')
     try {
       await navigator.clipboard.writeText(text)
       setCopied(true)
@@ -110,7 +110,7 @@ export default function TechnicianCashCalculatorPage() {
           </Link>
           <h1 className="mt-2 text-2xl font-bold">Pracownik(złodziej)— gotówka po podatkach</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Podajesz, ile technik ma dostać gotówką. Kalkulator liczy, ile wystawić klientowi, żeby po VAT,
+            Podajesz, ile technik ma dostać gotówką. Kalkulator liczy netto dla klienta, żeby po VAT,
             podatku dochodowym i składce zdrowotnej ta kwota została. Domyślnie: S.C. / JDG na podatku liniowym.
           </p>
         </div>
@@ -327,10 +327,10 @@ export default function TechnicianCashCalculatorPage() {
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
-              checked={roundClientGrossUp}
-              onChange={(e) => setRoundClientGrossUp(e.target.checked)}
+              checked={roundClientNetUp}
+              onChange={(e) => setRoundClientNetUp(e.target.checked)}
             />
-            Zaokrąglij brutto w górę do pełnych złotych
+            Zaokrąglij netto w górę do pełnych złotych
           </label>
         </form>
 
@@ -342,23 +342,26 @@ export default function TechnicianCashCalculatorPage() {
               <div>
                 <div className="text-xs uppercase tracking-wider text-muted-foreground">Policz klientowi</div>
                 <div className="mt-1 text-3xl font-bold tabular-nums text-primary">
-                  {formatPln(quote.invoiceGross)}
+                  {formatPln(quote.invoiceNet)}
                 </div>
                 <div className="mt-1 text-sm text-muted-foreground">
-                  brutto · {regime.shortLabel} · mnożnik{' '}
-                  {quote.multiplierGrossPerCash.toLocaleString('pl-PL')} × gotówka
+                  netto · {regime.shortLabel} · mnożnik{' '}
+                  {quote.multiplierNetPerCash.toLocaleString('pl-PL')} × gotówka
+                </div>
+                <div className="mt-0.5 text-sm text-muted-foreground">
+                  brutto: {formatPln(quote.invoiceGross)}
                 </div>
                 <button
                   type="button"
-                  onClick={onCopyGross}
+                  onClick={onCopyNet}
                   className="mt-3 rounded border border-border px-2.5 py-1 text-xs hover:bg-surface-2"
                 >
-                  {copied ? 'Skopiowano brutto' : 'Kopiuj brutto'}
+                  {copied ? 'Skopiowano netto' : 'Kopiuj netto'}
                 </button>
               </div>
 
               <div className="space-y-1.5 border-t border-border pt-3">
-                <Row label="Netto na fakturze" value={formatPln(quote.invoiceNet)} />
+                <Row label="Brutto na fakturze" value={formatPln(quote.invoiceGross)} />
                 <Row label={`VAT (${vatPercent}%)`} value={formatPln(quote.vatAmount)} muted />
                 <Row
                   label={`Podatek dochodowy (${quote.incomeTaxPercent}%)`}
