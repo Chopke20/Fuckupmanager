@@ -132,6 +132,7 @@ function mapApiOrderToFormValues(o: any): Partial<Order> {
           orderId: b?.orderId,
           title: b?.title ?? '',
           sortOrder: typeof b?.sortOrder === 'number' ? b.sortOrder : idx,
+          stagePlanJson: b?.stagePlanJson ?? null,
         }))
       : [],
   };
@@ -191,7 +192,7 @@ export default function OrderFormPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [dismissedHints, setDismissedHints] = useState<Set<string>>(new Set());
   const [unsavedModalOpen, setUnsavedModalOpen] = useState(false);
-  const [stageModalOpen, setStageModalOpen] = useState(false);
+  const [stageModal, setStageModal] = useState<{ offerBlockId: string | null; blockTitle?: string } | null>(null);
   const [pendingNav, setPendingNav] = useState<null | { kind: 'path'; to: string } | { kind: 'blocker' }>(null);
   const submitInFlightRef = useRef(false);
   const allowNextNavigationRef = useRef(false);
@@ -432,6 +433,14 @@ export default function OrderFormPage() {
     typeof formData?.stagePlanJson === 'string' ? formData.stagePlanJson : null
   )
 
+  const stageModalInitialPlan = useMemo(() => {
+    if (!stageModal?.offerBlockId) return savedStagePlan
+    const block = (offerBlocksRaw as Partial<OrderOfferBlock>[]).find(
+      (item) => item.id === stageModal.offerBlockId
+    )
+    return parseStagePlanJson(typeof block?.stagePlanJson === 'string' ? block.stagePlanJson : null)
+  }, [stageModal?.offerBlockId, offerBlocksRaw, savedStagePlan])
+
   const stageOrderLabel = useMemo(() => {
     const name = (formData?.name || order?.name || '').trim()
     if (!name) return undefined
@@ -445,31 +454,45 @@ export default function OrderFormPage() {
 
   const handleApplyStagePlan = useCallback(
     async (plan: StagePlan) => {
-      const blocks = offerBlocksRaw as Partial<OrderOfferBlock>[]
-      const firstBlockId = blocks[0]?.id ?? null
+      const offerBlockId = stageModal?.offerBlockId ?? null
+      const serialized = serializeStagePlan(plan)
       const next = applyStagePlanToEquipmentItems({
         existing: equipmentItems as Partial<OrderEquipmentItem>[],
         plan,
         catalog: equipmentCatalog,
         days: Math.max(1, orderDays),
-        offerBlockId: blocks.length > 0 ? firstBlockId : null,
+        offerBlockId,
       })
-      setValue('stagePlanJson', serializeStagePlan(plan), { shouldDirty: true })
       handleEquipmentChange(next)
+
+      if (offerBlockId) {
+        const nextBlocks = (offerBlocksRaw as Partial<OrderOfferBlock>[]).map((block) =>
+          block.id === offerBlockId ? { ...block, stagePlanJson: serialized } : block
+        )
+        handleOfferBlocksChange(nextBlocks)
+      } else {
+        setValue('stagePlanJson', serialized, { shouldDirty: true })
+      }
+
       if (isEditing && id) {
-        const label = (getValues('name') || order?.name || 'Zlecenie').trim()
+        const orderName = (getValues('name') || order?.name || 'Zlecenie').trim()
+        const blockTitle = stageModal?.blockTitle?.trim()
+        const label = offerBlockId && blockTitle ? `${orderName} · ${blockTitle}` : orderName
         try {
-          await upsertStagePlanProjectForOrder(id, { name: label, plan })
+          await upsertStagePlanProjectForOrder(id, { name: label, plan, offerBlockId })
         } catch {
           // Plan jest w formularzu zlecenia; zapis projektu jest dodatkiem.
         }
       }
     },
     [
+      stageModal?.offerBlockId,
+      stageModal?.blockTitle,
       equipmentItems,
       equipmentCatalog,
       orderDays,
       offerBlocksRaw,
+      handleOfferBlocksChange,
       setValue,
       handleEquipmentChange,
       isEditing,
@@ -478,6 +501,10 @@ export default function OrderFormPage() {
       order?.name,
     ]
   )
+
+  const openStagePlanModal = useCallback((offerBlockId: string | null, blockTitle?: string) => {
+    setStageModal({ offerBlockId, blockTitle })
+  }, [])
 
   const buildPayload = (data: Partial<Order>): CreateOrderDto | UpdateOrderDto => {
     const toIso = (value: unknown) => {
@@ -582,6 +609,7 @@ export default function OrderFormPage() {
         id: isValidUuid(block?.id) ? block.id : randomClientUuid(),
         title: clampOrderOfferBlockTitle(block?.title),
         sortOrder: toNumber(block?.sortOrder, idx),
+        stagePlanJson: typeof block?.stagePlanJson === 'string' ? block.stagePlanJson : null,
       }))
 
     const normalizeProductionItems = (list: any[] | undefined) =>
@@ -1026,16 +1054,6 @@ export default function OrderFormPage() {
                 </section>
 
                 <section id="offer-blocks" className="scroll-mt-24 mb-6">
-                  <div className="mb-3 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => setStageModalOpen(true)}
-                      className="inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1.5 text-xs hover:bg-surface-2"
-                    >
-                      <LayoutGrid size={14} />
-                      Złóż scenę z podestów
-                    </button>
-                  </div>
                   <OrderOfferBlocksEditor
                     blocks={(offerBlocksRaw as Partial<OrderOfferBlock>[]) ?? []}
                     onBlocksChange={handleOfferBlocksChange}
@@ -1048,6 +1066,7 @@ export default function OrderFormPage() {
                     orderDateFrom={typeof formData.dateFrom === 'string' ? formData.dateFrom : undefined}
                     orderDateTo={typeof formData.dateTo === 'string' ? formData.dateTo : undefined}
                     orderSpanDays={orderDays}
+                    onOpenStagePlan={(blockId, blockTitle) => openStagePlanModal(blockId, blockTitle)}
                   />
                 </section>
 
@@ -1061,7 +1080,7 @@ export default function OrderFormPage() {
                         </h2>
                         <button
                           type="button"
-                          onClick={() => setStageModalOpen(true)}
+                          onClick={() => openStagePlanModal(null)}
                           className="inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1.5 text-xs hover:bg-surface-2"
                         >
                           <LayoutGrid size={14} />
@@ -1218,11 +1237,16 @@ export default function OrderFormPage() {
       </form>
 
       <StagePlatformsOrderModal
-        open={stageModalOpen}
+        open={stageModal !== null}
         orderId={isEditing ? id : null}
-        orderLabel={stageOrderLabel}
-        initialPlan={savedStagePlan}
-        onClose={() => setStageModalOpen(false)}
+        offerBlockId={stageModal?.offerBlockId ?? null}
+        orderLabel={
+          stageModal?.offerBlockId && stageModal.blockTitle
+            ? `${stageOrderLabel ?? 'Zlecenie'} · ${stageModal.blockTitle}`
+            : stageOrderLabel
+        }
+        initialPlan={stageModalInitialPlan}
+        onClose={() => setStageModal(null)}
         onApply={handleApplyStagePlan}
       />
 

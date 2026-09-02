@@ -153,7 +153,11 @@ export class OrdersService {
       if (currentIds.has(block.id)) {
         await tx.orderOfferBlock.update({
           where: { id: block.id },
-          data: { title, sortOrder },
+          data: {
+            title,
+            sortOrder,
+            ...(block.stagePlanJson !== undefined && { stagePlanJson: block.stagePlanJson }),
+          },
         })
       } else {
         await tx.orderOfferBlock.create({
@@ -162,6 +166,7 @@ export class OrdersService {
             orderId,
             title,
             sortOrder,
+            stagePlanJson: block.stagePlanJson ?? null,
           },
         })
       }
@@ -519,6 +524,7 @@ export class OrdersService {
         id: nextId,
         title: block.title,
         sortOrder: block.sortOrder ?? idx,
+        stagePlanJson: block.stagePlanJson ?? undefined,
       }
     })
 

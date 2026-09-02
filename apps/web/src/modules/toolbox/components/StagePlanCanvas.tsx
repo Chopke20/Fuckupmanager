@@ -44,9 +44,11 @@ interface DragState {
 export default function StagePlanCanvas({
   editor,
   tool,
+  onToolDone,
 }: {
   editor: StagePlanEditor
   tool: StagePlanTool
+  onToolDone?: () => void
 }) {
   const { plan } = editor
   const palette = STAGE_PALETTES.dark
@@ -281,8 +283,9 @@ export default function StagePlanCanvas({
       const stair = createStageStair(edge.side, horizontal ? edge.y1 : edge.x1, posM, width)
       editor.commit((prev) => ({ ...prev, stairs: [...prev.stairs, stair] }))
       editor.selectStair(stair.id)
+      onToolDone?.()
     },
-    [editor, pointToMeters, snapAlongEdge, tool]
+    [editor, onToolDone, pointToMeters, snapAlongEdge, tool]
   )
 
   const handleKeyDown = useCallback(

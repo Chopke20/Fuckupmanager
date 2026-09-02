@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { useCreateEquipment, useEquipmentCategories, useUpdateEquipment } from '../hooks/useEquipment'
 import { equipmentApi } from '../api/equipment.api'
-import { CreateEquipmentDto, UpdateEquipmentDto, Equipment, EQUIPMENT_CATEGORIES } from '@lama-stage/shared-types'
+import { CreateEquipmentDto, UpdateEquipmentDto, Equipment, EQUIPMENT_CATEGORIES, STAGE_PLAN_CATALOG_KEY_LABELS } from '@lama-stage/shared-types'
 
 interface EquipmentFormModalProps {
   isOpen: boolean
@@ -58,6 +58,7 @@ export default function EquipmentFormModal({
     technicalNotes: '',
     imageUrl: '',
     visibleInOffer: true,
+    stagePlanKey: null,
     pricingRule: { day1: 1.0, nextDays: 0.5 },
   })
 
@@ -91,6 +92,7 @@ export default function EquipmentFormModal({
         technicalNotes: equipment.technicalNotes || '',
         imageUrl: equipment.imageUrl || '',
         visibleInOffer: equipment.visibleInOffer,
+        stagePlanKey: equipment.stagePlanKey ?? null,
         pricingRule: equipment.pricingRule || { day1: 1.0, nextDays: 0.5 },
       })
     } else {
@@ -106,6 +108,7 @@ export default function EquipmentFormModal({
         technicalNotes: '',
         imageUrl: '',
         visibleInOffer: true,
+        stagePlanKey: null,
         pricingRule: { day1: 1.0, nextDays: 0.5 },
       })
     }
@@ -396,6 +399,32 @@ export default function EquipmentFormModal({
             </div>
 
             <div className="space-y-2.5">
+              {!isResource && normalizeCategoryName(formData.category) === 'Scena' ? (
+                <div>
+                  <label className="mb-1 block text-sm font-medium" htmlFor="stagePlanKey">
+                    Rola w generatorze sceny
+                  </label>
+                  <select
+                    id="stagePlanKey"
+                    value={formData.stagePlanKey ?? ''}
+                    onChange={(event) =>
+                      setFormData({
+                        ...formData,
+                        stagePlanKey: event.target.value.trim() || null,
+                      })
+                    }
+                    className="w-full rounded border border-border bg-surface-2 px-2.5 py-1.5 text-sm"
+                  >
+                    <option value="">— brak —</option>
+                    {Object.entries(STAGE_PLAN_CATALOG_KEY_LABELS).map(([key, label]) => (
+                      <option key={key} value={key}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
+
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"

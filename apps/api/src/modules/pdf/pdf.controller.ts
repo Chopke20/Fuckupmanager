@@ -870,10 +870,46 @@ export class PdfController {
     }
   }
 
+  async generateStagePlanPreviewPdf(req: Request, res: Response) {
+    try {
+      const planJson = typeof req.body?.planJson === 'string' ? req.body.planJson : ''
+      const title =
+        typeof req.body?.title === 'string' && req.body.title.trim()
+          ? req.body.title.trim()
+          : 'Plan sceny'
+      const plan = parseStagePlanJson(planJson)
+      if (!plan) {
+        return res.status(400).json({ error: 'Nieprawidłowy plan sceny (JSON).' })
+      }
+
+      const generatedAt = new Date().toISOString()
+      const html = buildStagePlanPdfHtml({
+        documentNumberDisplay: title,
+        orderName: title,
+        issuedAt: generatedAt,
+        plan,
+      })
+      const pdfBuffer = await this.renderPdf(html)
+      const safeName =
+        title.replace(/[^\w\sąćęłńóśźżĄĆĘŁŃÓŚŹŻ-]/g, '').trim() || 'Plan-sceny'
+      res.setHeader('Content-Type', 'application/pdf')
+      res.setHeader('Content-Disposition', `attachment; filename="${safeName}.pdf"`)
+      res.send(pdfBuffer)
+    } catch (error) {
+      console.error('Błąd generowania PDF podglądu planu sceny:', error)
+      res.status(500).json({ error: 'Błąd generowania PDF planu sceny' })
+    }
+  }
+
   async generateStagePlanPdf(req: Request, res: Response) {
     try {
       const { orderId } = req.params
       if (!orderId) return res.status(400).json({ error: 'Brak ID zlecenia' })
+
+      const blockId =
+        typeof req.query.blockId === 'string' && req.query.blockId.trim()
+          ? req.query.blockId.trim()
+          : null
 
       const order = await prisma.order.findFirst({
         where: { id: orderId, isDeleted: false },
@@ -881,7 +917,22 @@ export class PdfController {
       })
       if (!order) return res.status(404).json({ error: 'Zlecenie nie znalezione' })
 
-      const plan = parseStagePlanJson(order.stagePlanJson)
+      let planJson = order.stagePlanJson
+      let orderName = order.name
+      if (blockId) {
+        const block = await prisma.orderOfferBlock.findFirst({
+          where: { id: blockId, orderId },
+        })
+        if (!block?.stagePlanJson) {
+          return res.status(400).json({
+            error: 'Brak zapisanego planu sceny w tym bloku oferty.',
+          })
+        }
+        planJson = block.stagePlanJson
+        orderName = `${order.name} — ${block.title}`
+      }
+
+      const plan = parseStagePlanJson(planJson)
       if (!plan) {
         return res.status(400).json({ error: 'Brak zapisanego planu sceny — złóż scenę w zleceniu.' })
       }
@@ -939,7 +990,7 @@ export class PdfController {
 
       const html = buildStagePlanPdfHtml({
         documentNumberDisplay,
-        orderName: order.name,
+        orderName,
         orderNumber,
         orderYear,
         venue: order.venue,

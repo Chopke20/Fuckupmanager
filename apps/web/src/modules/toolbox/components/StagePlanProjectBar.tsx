@@ -1,8 +1,8 @@
 import { FormEvent, useEffect, useState } from 'react'
-import { FolderOpen, Plus, Save } from 'lucide-react'
+import { Download, FolderOpen, Plus, Save } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { StagePlan } from '@lama-stage/shared-types'
-import { orderProjectLabel } from '../api/stagePlanProjects.api'
+import { orderProjectLabel, downloadStagePlanPreviewPdf } from '../api/stagePlanProjects.api'
 import type { StagePlanProjectSession } from '../hooks/useStagePlanProjectSession'
 
 function formatWhen(iso: string): string {
@@ -17,6 +17,33 @@ function formatWhen(iso: string): string {
   })
 }
 
+function SaveStatusDot({
+  status,
+  lastSavedAt,
+  error,
+}: {
+  status: 'ok' | 'error'
+  lastSavedAt: number | null
+  error: string | null
+}) {
+  const title =
+    status === 'error'
+      ? error ?? 'Błąd zapisu'
+      : lastSavedAt
+        ? `Zapisano ${formatWhen(new Date(lastSavedAt).toISOString())}`
+        : 'Zapisano'
+
+  return (
+    <span
+      className={`inline-block h-2 w-2 shrink-0 rounded-full ${
+        status === 'ok' ? 'bg-emerald-500' : 'bg-red-500'
+      }`}
+      title={title}
+      aria-label={title}
+    />
+  )
+}
+
 export default function StagePlanProjectBar({
   session,
   currentPlan,
@@ -26,6 +53,7 @@ export default function StagePlanProjectBar({
 }) {
   const [nameDraft, setNameDraft] = useState(session.project?.name ?? '')
   const [saveAsName, setSaveAsName] = useState('')
+  const [pdfLoading, setPdfLoading] = useState(false)
 
   useEffect(() => {
     setNameDraft(session.project?.name ?? '')
@@ -52,6 +80,16 @@ export default function StagePlanProjectBar({
     e.preventDefault()
     if (!currentPlan || !saveAsName.trim()) return
     void session.saveAs(saveAsName.trim(), currentPlan)
+  }
+
+  const onDownloadPdf = async () => {
+    if (!currentPlan) return
+    setPdfLoading(true)
+    try {
+      await downloadStagePlanPreviewPdf(currentPlan, session.project?.name ?? 'Plan sceny')
+    } finally {
+      setPdfLoading(false)
+    }
   }
 
   return (
@@ -86,7 +124,7 @@ export default function StagePlanProjectBar({
           <button
             type="button"
             onClick={onSave}
-            disabled={session.saving || !currentPlan}
+            disabled={session.busy || !currentPlan}
             className="inline-flex items-center gap-1 rounded border border-border px-2.5 py-1.5 text-xs hover:bg-surface-2 disabled:opacity-50"
           >
             <Save size={14} />
@@ -95,10 +133,19 @@ export default function StagePlanProjectBar({
           <button
             type="button"
             onClick={() => session.setSaveAsOpen(true)}
-            disabled={session.saving || !currentPlan}
+            disabled={session.busy || !currentPlan}
             className="rounded border border-border px-2.5 py-1.5 text-xs hover:bg-surface-2 disabled:opacity-50"
           >
             Zapisz jako…
+          </button>
+          <button
+            type="button"
+            onClick={() => void onDownloadPdf()}
+            disabled={!currentPlan || pdfLoading}
+            className="inline-flex items-center gap-1 rounded border border-border px-2.5 py-1.5 text-xs hover:bg-surface-2 disabled:opacity-50"
+          >
+            <Download size={14} />
+            {pdfLoading ? 'PDF…' : 'Pobierz PDF'}
           </button>
           <button
             type="button"
@@ -106,7 +153,8 @@ export default function StagePlanProjectBar({
               void session.refreshProjects()
               session.setPickerOpen(true)
             }}
-            className="inline-flex items-center gap-1 rounded border border-border px-2.5 py-1.5 text-xs hover:bg-surface-2"
+            disabled={session.busy}
+            className="inline-flex items-center gap-1 rounded border border-border px-2.5 py-1.5 text-xs hover:bg-surface-2 disabled:opacity-50"
           >
             <FolderOpen size={14} />
             Otwórz
@@ -114,20 +162,19 @@ export default function StagePlanProjectBar({
           <button
             type="button"
             onClick={() => void session.createNewProject()}
-            disabled={session.saving}
+            disabled={session.busy}
             className="inline-flex items-center gap-1 rounded border border-border px-2.5 py-1.5 text-xs hover:bg-surface-2 disabled:opacity-50"
           >
             <Plus size={14} />
             Nowy
           </button>
-        </div>
-
-        <div className="w-full text-xs text-muted-foreground sm:w-auto sm:text-right">
-          {session.saving ? 'Zapisywanie…' : 'Autozapis co ~1,5 s'}
+          <SaveStatusDot
+            status={session.saveStatus}
+            lastSavedAt={session.lastSavedAt}
+            error={session.error}
+          />
         </div>
       </div>
-
-      {session.error ? <p className="text-sm text-red-400">{session.error}</p> : null}
 
       {session.pickerOpen ? (
         <div
@@ -218,7 +265,7 @@ export default function StagePlanProjectBar({
               </button>
               <button
                 type="submit"
-                disabled={!saveAsName.trim() || session.saving}
+                disabled={!saveAsName.trim() || session.busy}
                 className="rounded border-2 border-primary px-3 py-1.5 text-xs font-medium text-primary disabled:opacity-50"
               >
                 Zapisz

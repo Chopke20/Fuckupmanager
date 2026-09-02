@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   buildStagePlan,
   emptyStagePlanInput,
@@ -18,6 +18,7 @@ import {
 } from '../api/stagePlanProjects.api'
 
 const AUTOSAVE_MS = 1500
+const STALE_PENDING_MS = 15_000
 
 function defaultPlanJson(): string {
   return serializeStagePlan(
@@ -47,6 +48,9 @@ function writeLastProjectId(companyCode: string, projectId: string) {
 export interface StagePlanProjectSession {
   loading: boolean
   saving: boolean
+  busy: boolean
+  saveStatus: 'ok' | 'error'
+  lastSavedAt: number | null
   error: string | null
   project: StagePlanProject | null
   initialPlan: StagePlan | null
@@ -70,12 +74,17 @@ export function useStagePlanProjectSession(): StagePlanProjectSession {
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [consecutiveFailures, setConsecutiveFailures] = useState(0)
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null)
+  const [pendingSince, setPendingSince] = useState<number | null>(null)
   const [project, setProject] = useState<StagePlanProject | null>(null)
   const [initialPlan, setInitialPlan] = useState<StagePlan | null>(null)
   const [projects, setProjects] = useState<StagePlanProject[]>([])
   const [pickerOpen, setPickerOpen] = useState(false)
   const [saveAsOpen, setSaveAsOpen] = useState(false)
+  const [nowTick, setNowTick] = useState(() => Date.now())
 
   const projectRef = useRef<StagePlanProject | null>(null)
   const pendingPlanRef = useRef<StagePlan | null>(null)
@@ -83,6 +92,17 @@ export function useStagePlanProjectSession(): StagePlanProjectSession {
   const skipAutosaveRef = useRef(true)
 
   projectRef.current = project
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowTick(Date.now()), 5000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  const saveStatus: 'ok' | 'error' = useMemo(() => {
+    if (consecutiveFailures >= 2) return 'error'
+    if (pendingSince != null && nowTick - pendingSince >= STALE_PENDING_MS) return 'error'
+    return 'ok'
+  }, [consecutiveFailures, pendingSince, nowTick])
 
   const refreshProjects = useCallback(async () => {
     const list = await listStagePlanProjects()
@@ -94,6 +114,7 @@ export function useStagePlanProjectSession(): StagePlanProjectSession {
     (next: StagePlanProject) => {
       skipAutosaveRef.current = true
       pendingPlanRef.current = null
+      setPendingSince(null)
       setProject(next)
       setInitialPlan(parseStagePlanJson(next.planJson))
       writeLastProjectId(companyCode, next.id)
@@ -136,8 +157,10 @@ export function useStagePlanProjectSession(): StagePlanProjectSession {
       }
 
       activateProject(chosen)
+      setLastSavedAt(Date.now())
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Nie udało się wczytać projektów.')
+      setConsecutiveFailures((value) => value + 1)
     } finally {
       setLoading(false)
     }
@@ -150,7 +173,6 @@ export function useStagePlanProjectSession(): StagePlanProjectSession {
   const persistPlan = useCallback(async (plan: StagePlan, target = projectRef.current) => {
     if (!target) return
     setSaving(true)
-    setError(null)
     try {
       const updated = await updateStagePlanProject(target.id, {
         planJson: serializeStagePlan(plan),
@@ -160,8 +182,14 @@ export function useStagePlanProjectSession(): StagePlanProjectSession {
         const rest = prev.filter((item) => item.id !== updated.id)
         return [updated, ...rest]
       })
+      setError(null)
+      setConsecutiveFailures(0)
+      setLastSavedAt(Date.now())
+      setPendingSince(null)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Nie udało się zapisać projektu.')
+      const message = e instanceof Error ? e.message : 'Nie udało się zapisać projektu.'
+      setError(message)
+      setConsecutiveFailures((value) => value + 1)
     } finally {
       setSaving(false)
     }
@@ -170,6 +198,7 @@ export function useStagePlanProjectSession(): StagePlanProjectSession {
   const scheduleAutosave = useCallback(
     (plan: StagePlan) => {
       pendingPlanRef.current = plan
+      setPendingSince((value) => value ?? Date.now())
       if (autosaveTimerRef.current != null) {
         window.clearTimeout(autosaveTimerRef.current)
       }
@@ -214,7 +243,7 @@ export function useStagePlanProjectSession(): StagePlanProjectSession {
 
   const saveAs = useCallback(
     async (name: string, plan: StagePlan) => {
-      setSaving(true)
+      setBusy(true)
       setError(null)
       try {
         const created = await createStagePlanProject({
@@ -223,11 +252,13 @@ export function useStagePlanProjectSession(): StagePlanProjectSession {
         })
         setProjects((prev) => [created, ...prev])
         activateProject(created)
+        setLastSavedAt(Date.now())
         setSaveAsOpen(false)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Nie udało się zapisać projektu.')
+        setConsecutiveFailures((value) => value + 1)
       } finally {
-        setSaving(false)
+        setBusy(false)
       }
     },
     [activateProject]
@@ -235,27 +266,27 @@ export function useStagePlanProjectSession(): StagePlanProjectSession {
 
   const openProject = useCallback(
     async (id: string) => {
-      setSaving(true)
-      setError(null)
+      setBusy(true)
       try {
         if (pendingPlanRef.current && projectRef.current && !skipAutosaveRef.current) {
           await persistPlan(pendingPlanRef.current)
         }
         const loaded = await getStagePlanProject(id)
         activateProject(loaded)
+        setLastSavedAt(Date.now())
         setPickerOpen(false)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Nie udało się otworzyć projektu.')
+        setConsecutiveFailures((value) => value + 1)
       } finally {
-        setSaving(false)
+        setBusy(false)
       }
     },
     [activateProject, persistPlan]
   )
 
   const createNewProject = useCallback(async () => {
-    setSaving(true)
-    setError(null)
+    setBusy(true)
     try {
       if (pendingPlanRef.current && projectRef.current && !skipAutosaveRef.current) {
         await persistPlan(pendingPlanRef.current)
@@ -267,31 +298,37 @@ export function useStagePlanProjectSession(): StagePlanProjectSession {
       })
       setProjects((prev) => [created, ...prev])
       activateProject(created)
+      setLastSavedAt(Date.now())
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Nie udało się utworzyć projektu.')
+      setConsecutiveFailures((value) => value + 1)
     } finally {
-      setSaving(false)
+      setBusy(false)
     }
   }, [activateProject, persistPlan, projects.length])
 
   const renameProject = useCallback(async (name: string) => {
     if (!projectRef.current) return
-    setSaving(true)
-    setError(null)
+    setBusy(true)
     try {
       const updated = await updateStagePlanProject(projectRef.current.id, { name: name.trim() })
       setProject(updated)
       setProjects((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
+      setError(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Nie udało się zmienić nazwy.')
+      setConsecutiveFailures((value) => value + 1)
     } finally {
-      setSaving(false)
+      setBusy(false)
     }
   }, [])
 
   return {
     loading,
     saving,
+    busy,
+    saveStatus,
+    lastSavedAt,
     error,
     project,
     initialPlan,

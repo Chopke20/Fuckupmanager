@@ -6,6 +6,7 @@ import {
   computeStageBounds,
   computeStageJunctions,
   computeStageOutline,
+  computeStagePerimeterClamps,
   findEdgeCovering,
   intervalsLength,
   type StageRect,
@@ -130,6 +131,18 @@ describe('styki i zbiegi', () => {
     ])
     expect(junctions.quad).toBe(1)
     expect(junctions.dual).toBe(4)
+  })
+
+  it('liczy klamry blatów tylko po obwodzie', () => {
+    expect(computeStagePerimeterClamps([{ x: 0, y: 0, w: 2, h: 1 }])).toBe(0)
+    expect(
+      computeStagePerimeterClamps([
+        { x: 0, y: 0, w: 2, h: 1 },
+        { x: 2, y: 0, w: 2, h: 1 },
+      ])
+    ).toBe(1)
+    expect(computeStagePerimeterClamps(RECT_6x4)).toBe(10)
+    expect(computeStagePerimeterClamps(L_SHAPE)).toBeLessThan(computeSharedEdgeMeters(L_SHAPE))
   })
 })
 

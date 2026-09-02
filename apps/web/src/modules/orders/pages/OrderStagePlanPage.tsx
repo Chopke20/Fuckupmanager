@@ -6,16 +6,65 @@ import { formatOrderNumber } from '../utils/orderNumberFormat'
 import { formatMeters, parseStagePlanJson, renderStagePlanSvg } from '@lama-stage/shared-types'
 import { downloadOrderStagePlanPdf, getOrderStagePlanPdfPreviewUrl } from '../api/order.api'
 
+interface StagePlanOption {
+  id: string
+  label: string
+  planJson: string
+  blockId: string | null
+}
+
 export default function OrderStagePlanPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { data: order, isLoading, isError } = useOrder(id || '')
   const [pdfLoading, setPdfLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [selectedPlanId, setSelectedPlanId] = useState<string>('')
 
-  const plan = useMemo(() => parseStagePlanJson(order?.stagePlanJson ?? null), [order?.stagePlanJson])
+  const planOptions = useMemo((): StagePlanOption[] => {
+    if (!order) return []
+    const options: StagePlanOption[] = []
+    if (order.stagePlanJson) {
+      options.push({
+        id: 'order',
+        label: 'Plan zlecenia (główny wykaz)',
+        planJson: order.stagePlanJson,
+        blockId: null,
+      })
+    }
+    for (const block of order.offerBlocks ?? []) {
+      if (block.stagePlanJson) {
+        options.push({
+          id: block.id,
+          label: `Blok: ${block.title}`,
+          planJson: block.stagePlanJson,
+          blockId: block.id,
+        })
+      }
+    }
+    return options
+  }, [order])
+
+  useEffect(() => {
+    if (planOptions.length === 0) {
+      setSelectedPlanId('')
+      return
+    }
+    if (!planOptions.some((option) => option.id === selectedPlanId)) {
+      setSelectedPlanId(planOptions[0]!.id)
+    }
+  }, [planOptions, selectedPlanId])
+
+  const selectedOption = planOptions.find((option) => option.id === selectedPlanId) ?? null
+  const plan = useMemo(
+    () => parseStagePlanJson(selectedOption?.planJson ?? null),
+    [selectedOption?.planJson]
+  )
   const svg = plan ? renderStagePlanSvg(plan, { theme: 'dark' }) : ''
-  const previewUrl = id ? getOrderStagePlanPdfPreviewUrl(id) : ''
+  const previewUrl =
+    id && selectedOption
+      ? getOrderStagePlanPdfPreviewUrl(id, selectedOption.blockId)
+      : ''
 
   const orderNumberDisplay = useMemo(() => {
     if (!order) return '—'
@@ -25,14 +74,14 @@ export default function OrderStagePlanPage() {
 
   useEffect(() => {
     setError(null)
-  }, [id])
+  }, [id, selectedPlanId])
 
   const handleDownload = async () => {
-    if (!id) return
+    if (!id || !selectedOption) return
     setPdfLoading(true)
     setError(null)
     try {
-      await downloadOrderStagePlanPdf(id)
+      await downloadOrderStagePlanPdf(id, selectedOption.blockId)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Nie udało się pobrać PDF.')
     } finally {
@@ -93,6 +142,27 @@ export default function OrderStagePlanPage() {
         </div>
         <div className="space-y-4 p-4">
           <h1 className="text-lg font-bold">Plan sceny — rzut z góry</h1>
+
+          {planOptions.length > 1 ? (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="stage-plan-select">
+                Wybierz plan
+              </label>
+              <select
+                id="stage-plan-select"
+                value={selectedPlanId}
+                onChange={(event) => setSelectedPlanId(event.target.value)}
+                className="w-full max-w-md rounded border border-border bg-background px-2 py-1.5 text-sm"
+              >
+                {planOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+
           {!plan ? (
             <p className="text-sm text-muted-foreground">
               W tym zleceniu nie ma jeszcze złożonej sceny. Wróć do formularza i użyj przycisku „Złóż scenę z
@@ -113,7 +183,7 @@ export default function OrderStagePlanPage() {
                 </thead>
                 <tbody>
                   {plan.bom.map((line) => (
-                    <tr key={line.key} className="border-b border-border/50">
+                    <tr key={line.catalogKey} className="border-b border-border/50">
                       <td className="py-1.5 pr-2">{line.name}</td>
                       <td className="py-1.5 text-right tabular-nums">
                         {formatMeters(line.quantity)} {line.unit}

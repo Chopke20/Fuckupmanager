@@ -290,6 +290,74 @@ export function computeSharedEdgeMeters(decks: StageRect[], tol = STAGE_TOL_M): 
   return round2(meters)
 }
 
+function deckSpanOnOutlineEdge(
+  deck: StageRect,
+  edge: StageEdge,
+  tol: number
+): [number, number] | null {
+  const horizontal = edge.side === 'front' || edge.side === 'back'
+  const edgeLo = horizontal ? Math.min(edge.x1, edge.x2) : Math.min(edge.y1, edge.y2)
+  const edgeHi = horizontal ? Math.max(edge.x1, edge.x2) : Math.max(edge.y1, edge.y2)
+
+  if (edge.side === 'front') {
+    if (Math.abs(deck.y - edge.y1) > tol) return null
+    const a = Math.max(deck.x, edgeLo)
+    const b = Math.min(deck.x + deck.w, edgeHi)
+    return a + tol < b ? [a, b] : null
+  }
+  if (edge.side === 'back') {
+    if (Math.abs(deck.y + deck.h - edge.y1) > tol) return null
+    const a = Math.max(deck.x, edgeLo)
+    const b = Math.min(deck.x + deck.w, edgeHi)
+    return a + tol < b ? [a, b] : null
+  }
+  if (edge.side === 'left') {
+    if (Math.abs(deck.x - edge.x1) > tol) return null
+    const a = Math.max(deck.y, edgeLo)
+    const b = Math.min(deck.y + deck.h, edgeHi)
+    return a + tol < b ? [a, b] : null
+  }
+  if (Math.abs(deck.x + deck.w - edge.x1) > tol) return null
+  const a = Math.max(deck.y, edgeLo)
+  const b = Math.min(deck.y + deck.h, edgeHi)
+  return a + tol < b ? [a, b] : null
+}
+
+/**
+ * Klamry blatów — tylko styki skrajnych blatów po obwodzie sceny (w sztukach).
+ * Przy jednym rzędzie blatów liczymy tylko front (tył duplikuje te same szwy).
+ */
+export function computeStagePerimeterClamps(decks: StageRect[], tol = STAGE_TOL_M): number {
+  if (decks.length <= 1) return 0
+  const bounds = computeStageBounds(decks)
+  const singleRow = bounds.depthM <= Math.max(...decks.map((deck) => deck.h)) + tol
+  const outline = computeStageOutline(decks, tol)
+  let total = 0
+
+  for (const edge of outline) {
+    if (singleRow && edge.side === 'back') continue
+
+    const spans: Array<{ start: number; end: number }> = []
+    for (const deck of decks) {
+      const span = deckSpanOnOutlineEdge(deck, edge, tol)
+      if (!span) continue
+      const [a, b] = span
+      if (b - a <= tol) continue
+      spans.push({ start: roundM(a), end: roundM(b) })
+    }
+    if (spans.length <= 1) continue
+    spans.sort((left, right) => left.start - right.start || left.end - right.end)
+    for (let i = 0; i < spans.length - 1; i += 1) {
+      const current = spans[i]
+      const next = spans[i + 1]
+      if (!current || !next) continue
+      if (Math.abs(current.end - next.start) <= tol) total += 1
+    }
+  }
+
+  return total
+}
+
 /**
  * Zbiegi narożników podestów. Dwa spotykające się narożniki wymagają klamry
  * podwójnej, trzy lub cztery — poczwórnej.

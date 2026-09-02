@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import type { StagePlan } from '@lama-stage/shared-types'
@@ -9,6 +9,14 @@ import { useStagePlanProjectSession } from '../hooks/useStagePlanProjectSession'
 export default function StagePlatformsCalculatorPage() {
   const session = useStagePlanProjectSession()
   const [currentPlan, setCurrentPlan] = useState<StagePlan | null>(null)
+
+  const handlePlanChange = useCallback(
+    (plan: StagePlan) => {
+      setCurrentPlan(plan)
+      session.handlePlanChange(plan)
+    },
+    [session.handlePlanChange]
+  )
 
   return (
     <div className="space-y-6">
@@ -36,10 +44,7 @@ export default function StagePlatformsCalculatorPage() {
           <StagePlatformVisualizer
             key={session.project?.id ?? 'loading'}
             initialPlan={session.initialPlan}
-            onPlanChange={(plan) => {
-              setCurrentPlan(plan)
-              session.handlePlanChange(plan)
-            }}
+            onPlanChange={handlePlanChange}
           />
         </>
       )}

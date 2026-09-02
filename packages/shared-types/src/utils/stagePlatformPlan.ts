@@ -16,6 +16,7 @@ import {
   computeStageBounds,
   computeStageJunctions,
   computeStageOutline,
+  computeStagePerimeterClamps,
   findEdgeCovering,
   round2,
   roundM,
@@ -96,11 +97,51 @@ export interface StageEdgeSelection {
 
 export interface StageBomLine {
   key: string
+  /** Stabilny klucz mapowania na rekord sprzętu (`Equipment.stagePlanKey`). */
+  catalogKey: string
   name: string
   quantity: number
   unit: StageBomUnit
   group: 'decks' | 'legs' | 'clamps' | 'cladding' | 'floor' | 'accessories'
   offer: boolean
+}
+
+export function resolveStageBomCatalogKey(
+  key: string,
+  ctx: {
+    legHeightCm: number
+    claddingMaterial: StageCladdingMaterial
+    floorMaterial: StageFloorMaterial
+  }
+): string {
+  switch (key) {
+    case 'legs':
+      return `legs-${ctx.legHeightCm}`
+    case 'cladding':
+      return ctx.claddingMaterial === 'skirt' ? 'cladding-skirt' : 'cladding-hips'
+    case 'floor':
+      return ctx.floorMaterial === 'carpet' ? 'floor-carpet' : 'floor-hips'
+    case 'stairs':
+      return `stairs-${ctx.legHeightCm}`
+    default:
+      return key
+  }
+}
+
+export const STAGE_PLAN_CATALOG_KEY_LABELS: Record<string, string> = {
+  'deck-2x1': 'Podest 2×1 m',
+  'deck-1x1': 'Podest 1×1 m',
+  'deck-clamps': 'Klamry blatów',
+  'dual-leg-clamps': 'Klamry nóg podwójne',
+  'quad-leg-clamps': 'Klamry nóg poczwórne',
+  braces: 'Stężenia',
+  'cladding-skirt': 'Obicie — kotara (mb)',
+  'cladding-hips': 'Obicie — HIPS (m²)',
+  'floor-carpet': 'Wykładzina na podestach',
+  'floor-hips': 'Podłoga HIPS',
+  railings: 'Barierki',
+  ...Object.fromEntries(STAGE_LEG_HEIGHTS_CM.map((h) => [`legs-${h}`, `Nogi ${h} cm`])),
+  ...Object.fromEntries(STAGE_LEG_HEIGHTS_CM.map((h) => [`stairs-${h}`, `Schody ${h} cm`])),
 }
 
 /** Część planu, którą redaguje operator. To ona jest zapisywana w zleceniu. */
@@ -322,8 +363,17 @@ export function createDefaultStagePlan(): StagePlan {
   return buildStagePlan({ ...emptyStagePlanInput(), decks: fillRectWithDecks(6, 4, true) })
 }
 
-function pushBom(bom: StageBomLine[], line: StageBomLine) {
-  if (line.quantity > 0) bom.push(line)
+function pushBom(
+  bom: StageBomLine[],
+  line: Omit<StageBomLine, 'catalogKey'>,
+  catalogCtx: {
+    legHeightCm: number
+    claddingMaterial: StageCladdingMaterial
+    floorMaterial: StageFloorMaterial
+  }
+) {
+  const catalogKey = resolveStageBomCatalogKey(line.key, catalogCtx)
+  if (line.quantity > 0) bom.push({ ...line, catalogKey })
 }
 
 function prunedSelection(
@@ -348,11 +398,16 @@ export function buildStagePlan(input: StagePlanInput): StagePlan {
   const areaM2 = computeStageAreaM2(decks)
   const issues = analyzeStageLayout(decks)
   const junctions = computeStageJunctions(decks)
-  const shared = computeSharedEdgeMeters(decks)
+  const perimeterClamps = computeStagePerimeterClamps(decks)
 
   const cladding = prunedSelection(input.cladding, edges)
   const railings = prunedSelection(input.railings, edges)
   const height = Math.round(input.legHeightCm)
+  const catalogCtx = {
+    legHeightCm: height,
+    claddingMaterial: input.claddingMaterial,
+    floorMaterial: input.floorMaterial,
+  }
   const accessoriesAllowed = height >= STAGE_ACCESSORY_MIN_CM
 
   const decks2x1 = decks.filter((deck) => deck.kind === '2x1').length
@@ -454,118 +509,170 @@ export function buildStagePlan(input: StagePlanInput): StagePlan {
   )
 
   const bom: StageBomLine[] = []
-  pushBom(bom, {
-    key: 'deck-2x1',
-    name: 'Podest sceniczny 2×1 m',
-    quantity: decks2x1,
-    unit: 'szt.',
-    group: 'decks',
-    offer: true,
-  })
-  pushBom(bom, {
-    key: 'deck-1x1',
-    name: 'Podest sceniczny 1×1 m',
-    quantity: decks1x1,
-    unit: 'szt.',
-    group: 'decks',
-    offer: true,
-  })
-  pushBom(bom, {
-    key: 'legs',
-    name: `Nogi do podestów ${height} cm`,
-    quantity: legs,
-    unit: 'szt.',
-    group: 'legs',
-    offer: true,
-  })
-  pushBom(bom, {
-    key: 'deck-clamps',
-    name: 'Klamry / szybkozłączki blatów',
-    quantity: Math.ceil(shared),
-    unit: 'szt.',
-    group: 'clamps',
-    offer: false,
-  })
-  pushBom(bom, {
-    key: 'dual-leg-clamps',
-    name: 'Klamry nóg podwójne',
-    quantity: dualLegClamps,
-    unit: 'szt.',
-    group: 'clamps',
-    offer: false,
-  })
-  pushBom(bom, {
-    key: 'quad-leg-clamps',
-    name: 'Klamry nóg poczwórne',
-    quantity: quadLegClamps,
-    unit: 'szt.',
-    group: 'clamps',
-    offer: false,
-  })
-  pushBom(bom, {
-    key: 'braces',
-    name: 'Stężenia ukośne / poziome',
-    quantity: braces,
-    unit: 'szt.',
-    group: 'clamps',
-    offer: false,
-  })
-  if (input.claddingMaterial === 'skirt') {
-    pushBom(bom, {
-      key: 'cladding',
-      name: `Obicie — kotara (${edgeSelectionLabel(cladding, edges)}, h=${height} cm, ${formatMeters(claddingM2)} m²)`,
-      quantity: claddingMb,
-      unit: 'mb',
-      group: 'cladding',
+  pushBom(
+    bom,
+    {
+      key: 'deck-2x1',
+      name: 'Podest sceniczny 2×1 m',
+      quantity: decks2x1,
+      unit: 'szt.',
+      group: 'decks',
       offer: true,
-    })
+    },
+    catalogCtx
+  )
+  pushBom(
+    bom,
+    {
+      key: 'deck-1x1',
+      name: 'Podest sceniczny 1×1 m',
+      quantity: decks1x1,
+      unit: 'szt.',
+      group: 'decks',
+      offer: true,
+    },
+    catalogCtx
+  )
+  pushBom(
+    bom,
+    {
+      key: 'legs',
+      name: `Nogi do podestów ${height} cm`,
+      quantity: legs,
+      unit: 'szt.',
+      group: 'legs',
+      offer: false,
+    },
+    catalogCtx
+  )
+  pushBom(
+    bom,
+    {
+      key: 'deck-clamps',
+      name: 'Klamry / szybkozłączki blatów',
+      quantity: perimeterClamps,
+      unit: 'szt.',
+      group: 'clamps',
+      offer: false,
+    },
+    catalogCtx
+  )
+  pushBom(
+    bom,
+    {
+      key: 'dual-leg-clamps',
+      name: 'Klamry nóg podwójne',
+      quantity: dualLegClamps,
+      unit: 'szt.',
+      group: 'clamps',
+      offer: false,
+    },
+    catalogCtx
+  )
+  pushBom(
+    bom,
+    {
+      key: 'quad-leg-clamps',
+      name: 'Klamry nóg poczwórne',
+      quantity: quadLegClamps,
+      unit: 'szt.',
+      group: 'clamps',
+      offer: false,
+    },
+    catalogCtx
+  )
+  pushBom(
+    bom,
+    {
+      key: 'braces',
+      name: 'Stężenia ukośne / poziome',
+      quantity: braces,
+      unit: 'szt.',
+      group: 'clamps',
+      offer: false,
+    },
+    catalogCtx
+  )
+  if (input.claddingMaterial === 'skirt') {
+    pushBom(
+      bom,
+      {
+        key: 'cladding',
+        name: `Obicie — kotara (${edgeSelectionLabel(cladding, edges)}, h=${height} cm, ${formatMeters(claddingM2)} m²)`,
+        quantity: claddingMb,
+        unit: 'mb',
+        group: 'cladding',
+        offer: true,
+      },
+      catalogCtx
+    )
   }
   if (input.claddingMaterial === 'hips') {
-    pushBom(bom, {
-      key: 'cladding',
-      name: `Obicie — HIPS (${edgeSelectionLabel(cladding, edges)}, h=${height} cm, ${formatMeters(claddingMb)} mb)`,
-      quantity: claddingM2,
-      unit: 'm²',
-      group: 'cladding',
-      offer: true,
-    })
+    pushBom(
+      bom,
+      {
+        key: 'cladding',
+        name: `Obicie — HIPS (${edgeSelectionLabel(cladding, edges)}, h=${height} cm, ${formatMeters(claddingMb)} mb)`,
+        quantity: claddingM2,
+        unit: 'm²',
+        group: 'cladding',
+        offer: true,
+      },
+      catalogCtx
+    )
   }
   if (input.floorMaterial === 'carpet') {
-    pushBom(bom, {
-      key: 'floor',
-      name: 'Wykładzina na podestach',
-      quantity: areaM2,
-      unit: 'm²',
-      group: 'floor',
-      offer: true,
-    })
+    pushBom(
+      bom,
+      {
+        key: 'floor',
+        name: 'Wykładzina na podestach',
+        quantity: areaM2,
+        unit: 'm²',
+        group: 'floor',
+        offer: true,
+      },
+      catalogCtx
+    )
   }
   if (input.floorMaterial === 'hips') {
-    pushBom(bom, {
-      key: 'floor',
-      name: 'Podłoga HIPS na podestach',
-      quantity: areaM2,
-      unit: 'm²',
-      group: 'floor',
-      offer: true,
-    })
+    pushBom(
+      bom,
+      {
+        key: 'floor',
+        name: 'Podłoga HIPS na podestach',
+        quantity: areaM2,
+        unit: 'm²',
+        group: 'floor',
+        offer: true,
+      },
+      catalogCtx
+    )
   }
-  pushBom(bom, {
-    key: 'stairs',
-    name: `Schody na scenę (${height} cm, ${stepsPerStair} ${stepsPerStair === 1 ? 'stopień' : 'stopni'})`,
-    quantity: stairs.length,
-    unit: 'szt.',
-    group: 'accessories',
-    offer: true,
-  })
-  pushBom(bom, {
-    key: 'railings',
-    name: `Barierki (${edgeSelectionLabel(railings, edges)})`,
-    quantity: railingMb,
-    unit: 'mb',
-    group: 'accessories',
-    offer: true,
-  })
+  pushBom(
+    bom,
+    {
+      key: 'stairs',
+      name: `Schody na scenę (${height} cm, ${stepsPerStair} ${stepsPerStair === 1 ? 'stopień' : 'stopni'})`,
+      quantity: stairs.length,
+      unit: 'szt.',
+      group: 'accessories',
+      offer: true,
+    },
+    catalogCtx
+  )
+  pushBom(
+    bom,
+    {
+      key: 'railings',
+      name: `Barierki (${edgeSelectionLabel(railings, edges)})`,
+      quantity: railingMb,
+      unit: 'mb',
+      group: 'accessories',
+      offer: true,
+    },
+    catalogCtx
+  )
 
   return {
     version: 2,
@@ -590,7 +697,7 @@ export function buildStagePlan(input: StagePlanInput): StagePlan {
       decks1x1,
       decksTotal,
       legs,
-      deckClamps: Math.ceil(shared),
+      deckClamps: perimeterClamps,
       dualLegClamps,
       quadLegClamps,
       braces,

@@ -189,7 +189,7 @@ model Order {
 
   documentExports OrderDocumentExport[]
   documentDrafts  OrderDocumentDraft[]
-  stagePlanProject StagePlanProject?
+  stagePlanProjects StagePlanProject[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -205,16 +205,18 @@ model Order {
 
 /// Nazwany blok oferty (sprzęt + produkcja + transport) — opcjonalny układ w PDF.
 model OrderOfferBlock {
-  id        String   @id @default(uuid())
-  orderId   String
-  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  title     String
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String   @id @default(uuid())
+  orderId       String
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  title         String
+  sortOrder     Int      @default(0)
+  stagePlanJson String?  @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   equipmentItems  OrderEquipmentItem[]
   productionItems OrderProductionItem[]
+  stagePlanProjects StagePlanProject[]
 
   @@index([orderId, sortOrder])
   @@map("order_offer_blocks")
@@ -265,6 +267,7 @@ model Equipment {
   technicalNotes String?
   imageUrl      String?
   visibleInOffer Boolean @default(true)
+  stagePlanKey   String?  @unique
   pricingRule   String?
   isDeleted     Boolean  @default(false)
   deletedAt     DateTime?
@@ -505,15 +508,18 @@ model AppSettings {
 }
 
 model StagePlanProject {
-  id       String  @id @default(uuid())
-  name     String
-  planJson String  @db.Text
-  orderId  String? @unique
-  order    Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  id           String           @id @default(uuid())
+  name         String
+  planJson     String           @db.Text
+  orderId      String?
+  order        Order?           @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  offerBlockId String?
+  offerBlock   OrderOfferBlock? @relation(fields: [offerBlockId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([updatedAt])
+  @@index([orderId, offerBlockId])
   @@map("stage_plan_projects")
 }

@@ -4,6 +4,7 @@ import type { StagePlan } from '@lama-stage/shared-types'
 export default function StagePlatformsOrderModal({
   open,
   orderId,
+  offerBlockId,
   orderLabel,
   initialPlan,
   onClose,
@@ -11,6 +12,7 @@ export default function StagePlatformsOrderModal({
 }: {
   open: boolean
   orderId?: string | null
+  offerBlockId?: string | null
   orderLabel?: string
   initialPlan?: StagePlan | null
   onClose: () => void
@@ -50,7 +52,7 @@ export default function StagePlatformsOrderModal({
         </div>
         <div className="overflow-y-auto p-4">
           <StagePlatformVisualizer
-            key={orderId ?? 'new-order'}
+            key={`${orderId ?? 'new-order'}-${offerBlockId ?? 'order'}`}
             initialPlan={initialPlan}
             applyLabel="Dodaj podesty i obicie do zlecenia"
             onApply={(plan) => {

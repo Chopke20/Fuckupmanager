@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Copy, Redo2, RotateCw, Trash2, Undo2 } from 'lucide-react'
 import {
   claddingMaterialLabel,
@@ -18,7 +18,10 @@ import {
   type StagePlan,
 } from '@lama-stage/shared-types'
 import StagePlanCanvas, { type StagePlanTool } from './StagePlanCanvas'
+import StageBomCatalogTable from './StageBomCatalogTable'
 import { useStagePlanEditor } from '../hooks/useStagePlanEditor'
+import { useEquipment } from '../../equipment/hooks/useEquipment'
+import { getStageBomMappingIssues } from '../utils/applyStagePlanToOrder'
 
 export interface StagePlatformVisualizerProps {
   initialPlan?: StagePlan | null
@@ -62,6 +65,8 @@ export default function StagePlatformVisualizer({
   const [rectAlongFront, setRectAlongFront] = useState(true)
   const { plan } = editor
   const skipInitialPlanChangeRef = useRef(true)
+  const { data: catalogPage } = useEquipment({ limit: 500 })
+  const catalog = catalogPage?.data ?? []
 
   useEffect(() => {
     if (skipInitialPlanChangeRef.current) {
@@ -74,9 +79,81 @@ export default function StagePlatformVisualizer({
   const activeTool = TOOLS.find((item) => item.id === tool)
   const hasSelection = editor.selectedDeckIds.length > 0
 
+  const handleApplyClick = useCallback(() => {
+    if (!onApply) return
+    const unmappedOffer = getStageBomMappingIssues(plan, catalog).filter(
+      (issue) => issue.kind === 'unmapped' && issue.line.offer
+    )
+    if (unmappedOffer.length > 0) {
+      const ok = window.confirm(
+        `${unmappedOffer.length} pozycji nie ma rekordu w bazie — wejdą do oferty z ceną 0 zł. Kontynuować?`
+      )
+      if (!ok) return
+    }
+    onApply(plan)
+  }, [catalog, onApply, plan])
+
+  const rectGenerator = (
+    <div className="flex flex-wrap items-end gap-2 rounded border border-border bg-surface p-3">
+      <div>
+        <label className="mb-1 block text-xs font-medium" htmlFor="stage-rect-width">
+          Front m
+        </label>
+        <input
+          id="stage-rect-width"
+          type="text"
+          inputMode="decimal"
+          className="w-16 rounded border border-border bg-background px-2 py-1 text-sm tabular-nums"
+          value={rectWidth}
+          onChange={(event) => setRectWidth(event.target.value)}
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium" htmlFor="stage-rect-depth">
+          Głębokość m
+        </label>
+        <input
+          id="stage-rect-depth"
+          type="text"
+          inputMode="decimal"
+          className="w-16 rounded border border-border bg-background px-2 py-1 text-sm tabular-nums"
+          value={rectDepth}
+          onChange={(event) => setRectDepth(event.target.value)}
+        />
+      </div>
+      <button
+        type="button"
+        onClick={() => setRectAlongFront((value) => !value)}
+        className={pillClass(false)}
+        title="Kierunek dłuższego boku blatów 2×1"
+      >
+        {rectAlongFront ? '2 m wzdłuż frontu' : '2 m w głąb'}
+      </button>
+      <button
+        type="button"
+        onClick={() => editor.fillRect(parseDim(rectWidth), parseDim(rectDepth), rectAlongFront)}
+        className="rounded border border-primary px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
+      >
+        Ułóż prostokąt
+      </button>
+      <button
+        type="button"
+        onClick={editor.clearAll}
+        className="rounded border border-border px-2 py-1 text-xs text-muted-foreground hover:text-destructive"
+      >
+        Wyczyść rzut
+      </button>
+      <p className="w-full text-xs text-muted-foreground">
+        Zacznij od prostokąta, potem dostawiaj i przesuwaj blaty, żeby zrobić kształt nieregularny.
+      </p>
+    </div>
+  )
+
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
       <div className="space-y-3 xl:col-span-3">
+        {rectGenerator}
+
         <div className="flex flex-wrap items-center gap-1.5">
           {TOOLS.map((item) => (
             <button
@@ -160,7 +237,7 @@ export default function StagePlatformVisualizer({
           ))}
         </div>
 
-        <StagePlanCanvas editor={editor} tool={tool} />
+        <StagePlanCanvas editor={editor} tool={tool} onToolDone={() => setTool('select')} />
 
         <p className="text-xs text-muted-foreground">
           {activeTool?.hint}. Skróty: <span className="text-foreground">R</span> obrót,{' '}
@@ -177,63 +254,6 @@ export default function StagePlatformVisualizer({
             ))}
           </ul>
         ) : null}
-
-        <div className="flex flex-wrap items-end gap-2 rounded border border-border bg-surface p-3">
-          <div>
-            <label className="mb-1 block text-xs font-medium" htmlFor="stage-rect-width">
-              Front m
-            </label>
-            <input
-              id="stage-rect-width"
-              type="text"
-              inputMode="decimal"
-              className="w-16 rounded border border-border bg-background px-2 py-1 text-sm tabular-nums"
-              value={rectWidth}
-              onChange={(event) => setRectWidth(event.target.value)}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium" htmlFor="stage-rect-depth">
-              Głębokość m
-            </label>
-            <input
-              id="stage-rect-depth"
-              type="text"
-              inputMode="decimal"
-              className="w-16 rounded border border-border bg-background px-2 py-1 text-sm tabular-nums"
-              value={rectDepth}
-              onChange={(event) => setRectDepth(event.target.value)}
-            />
-          </div>
-          <button
-            type="button"
-            onClick={() => setRectAlongFront((value) => !value)}
-            className={pillClass(false)}
-            title="Kierunek dłuższego boku blatów 2×1"
-          >
-            {rectAlongFront ? '2 m wzdłuż frontu' : '2 m w głąb'}
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              editor.fillRect(parseDim(rectWidth), parseDim(rectDepth), rectAlongFront)
-            }
-            className="rounded border border-primary px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
-          >
-            Ułóż prostokąt
-          </button>
-          <button
-            type="button"
-            onClick={editor.clearAll}
-            className="rounded border border-border px-2 py-1 text-xs text-muted-foreground hover:text-destructive"
-          >
-            Wyczyść rzut
-          </button>
-          <p className="w-full text-xs text-muted-foreground">
-            Prostokąt to punkt startowy — dalej dostawiaj i przesuwaj blaty ręcznie, żeby
-            zrobić kształt nieregularny.
-          </p>
-        </div>
       </div>
 
       <div className="space-y-4 rounded-lg border border-border bg-surface p-4 xl:col-span-2">
@@ -407,33 +427,7 @@ export default function StagePlatformVisualizer({
           ) : null}
         </div>
 
-        <div className="overflow-x-auto rounded border border-border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-surface-2 text-left text-xs text-muted-foreground">
-                <th className="px-2 py-1.5 font-medium">Pozycja</th>
-                <th className="px-2 py-1.5 text-right font-medium">Ilość</th>
-              </tr>
-            </thead>
-            <tbody>
-              {plan.bom.map((line) => (
-                <tr key={line.key} className="border-t border-border/60">
-                  <td className="px-2 py-1.5">{line.name}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">
-                    {formatMeters(line.quantity)} {line.unit}
-                  </td>
-                </tr>
-              ))}
-              {plan.bom.length === 0 ? (
-                <tr>
-                  <td className="px-2 py-3 text-xs text-muted-foreground" colSpan={2}>
-                    Ułóż podesty na rzucie, żeby zobaczyć wykaz.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
+        <StageBomCatalogTable plan={plan} />
 
         <ul className="list-disc space-y-1 pl-4 text-xs text-muted-foreground">
           {plan.notes.map((note) => (
@@ -445,7 +439,7 @@ export default function StagePlatformVisualizer({
           <button
             type="button"
             disabled={plan.counts.decksTotal === 0}
-            onClick={() => onApply(plan)}
+            onClick={handleApplyClick}
             className="w-full rounded border-2 border-primary px-3 py-2 text-sm font-medium text-primary hover:bg-primary/10 disabled:opacity-50"
           >
             {applyLabel || 'Zastosuj'}

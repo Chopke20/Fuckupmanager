@@ -68,6 +68,7 @@ export const OrderOfferBlockSchema = z.object({
     .min(1, 'Tytuł bloku jest wymagany')
     .max(ORDER_OFFER_BLOCK_TITLE_MAX_LENGTH, `Tytuł bloku może mieć maksymalnie ${ORDER_OFFER_BLOCK_TITLE_MAX_LENGTH} znaków`),
   sortOrder: z.number().int().default(0),
+  stagePlanJson: z.string().nullable().optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });

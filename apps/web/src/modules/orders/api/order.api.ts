@@ -85,10 +85,14 @@ export function getOrderWarehousePdfPreviewUrl(orderId: string): string {
   return `/api/pdf/warehouse/${orderId}/generate?preview=1`;
 }
 
-export async function downloadOrderStagePlanPdf(orderId: string): Promise<void> {
+export async function downloadOrderStagePlanPdf(
+  orderId: string,
+  blockId?: string | null
+): Promise<void> {
   const res = await axios.get(`/api/pdf/stage-plan/${orderId}/generate`, {
     responseType: 'blob',
     withCredentials: true,
+    params: blockId ? { blockId } : undefined,
   })
   const blob = res.data as Blob
   if (blob.type === 'application/json') {
@@ -114,8 +118,12 @@ export async function downloadOrderStagePlanPdf(orderId: string): Promise<void> 
   URL.revokeObjectURL(url)
 }
 
-export function getOrderStagePlanPdfPreviewUrl(orderId: string): string {
-  return `/api/pdf/stage-plan/${orderId}/generate?preview=1`
+export function getOrderStagePlanPdfPreviewUrl(
+  orderId: string,
+  blockId?: string | null
+): string {
+  const query = blockId ? `?preview=1&blockId=${encodeURIComponent(blockId)}` : '?preview=1'
+  return `/api/pdf/stage-plan/${orderId}/generate${query}`
 }
 
 export interface OrderDocumentExportMeta {

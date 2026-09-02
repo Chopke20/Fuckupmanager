@@ -155,6 +155,12 @@ export const createEquipment = async (req: Request, res: Response, next: NextFun
     if (data.subcategory !== undefined) {
       data.subcategory = typeof data.subcategory === 'string' ? data.subcategory.trim() || null : null
     }
+    if (data.stagePlanKey !== undefined) {
+      data.stagePlanKey =
+        typeof data.stagePlanKey === 'string' && data.stagePlanKey.trim()
+          ? data.stagePlanKey.trim()
+          : null
+    }
     const codeTrimmed = typeof data.internalCode === 'string' ? data.internalCode.trim() : ''
     if (!codeTrimmed) {
       data.internalCode = await getNextInternalCode(data.category)
@@ -187,6 +193,12 @@ export const updateEquipment = async (req: Request, res: Response, next: NextFun
     }
     if (data.internalCode !== undefined) {
       data.internalCode = typeof data.internalCode === 'string' ? data.internalCode.trim() || null : null
+    }
+    if (data.stagePlanKey !== undefined) {
+      data.stagePlanKey =
+        typeof data.stagePlanKey === 'string' && data.stagePlanKey.trim()
+          ? data.stagePlanKey.trim()
+          : null
     }
     if (data.pricingRule && typeof data.pricingRule === 'object') {
       data.pricingRule = JSON.stringify(data.pricingRule)

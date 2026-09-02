@@ -33,6 +33,7 @@ export const EquipmentSchema = z.object({
   technicalNotes: z.string().optional(),
   imageUrl: z.string().url().optional().or(z.literal('')),
   visibleInOffer: z.boolean().default(true),
+  stagePlanKey: z.string().trim().min(1).nullable().optional(),
   pricingRule: PricingRuleSchema,
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),

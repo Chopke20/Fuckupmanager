@@ -1,56 +1,40 @@
-import type { Equipment, OrderEquipmentItem, StagePlan } from '@lama-stage/shared-types'
+import type { Equipment, OrderEquipmentItem, StageBomLine, StagePlan } from '@lama-stage/shared-types'
 import { STAGE_PLAN_LINE_MARKER, formatMeters } from '@lama-stage/shared-types'
 
-function norm(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/×/g, 'x')
-    .replace(/\s+/g, ' ')
-    .trim()
+export interface StageBomMappingIssue {
+  line: StageBomLine
+  kind: 'unmapped' | 'unit_mismatch'
+  equipment?: Equipment
 }
 
-function findCatalog(list: Equipment[], predicate: (name: string) => boolean): Equipment | undefined {
-  return list.find((eq) => eq.category !== 'ZASOBY' && predicate(norm(eq.name)))
-}
-
-export function matchStageBomToCatalog(list: Equipment[], plan: StagePlan): Map<string, Equipment> {
+export function buildStageCatalogMap(catalog: Equipment[]): Map<string, Equipment> {
   const map = new Map<string, Equipment>()
-  const deck2 = findCatalog(list, (n) => n.includes('podest') && (n.includes('2x1') || n.includes('2 x 1')))
-  const deck1 = findCatalog(list, (n) => n.includes('podest') && (n.includes('1x1') || n.includes('1 x 1')))
-  const legs = findCatalog(
-    list,
-    (n) => n.includes('nog') && n.includes(String(plan.legHeightCm))
-  ) || findCatalog(list, (n) => n.includes('nog'))
-  const skirt = findCatalog(list, (n) => n.includes('kotar') || n.includes('falban') || n.includes('obic'))
-  const hipsCladding =
-    findCatalog(list, (n) => n.includes('hips') && (n.includes('obic') || n.includes('bok'))) ||
-    findCatalog(list, (n) => n.includes('hips')) ||
-    findCatalog(list, (n) => n.includes('blend') || (n.includes('sklejk') && n.includes('obic')))
-  const carpet = findCatalog(list, (n) => n.includes('wykładzin') || n.includes('wykladzin'))
-  const hipsFloor =
-    findCatalog(
-      list,
-      (n) => n.includes('hips') && (n.includes('podłog') || n.includes('podlog'))
-    ) || findCatalog(list, (n) => n.includes('hips'))
-  const stairs = findCatalog(list, (n) => n.includes('schod'))
-  const rail = findCatalog(list, (n) => n.includes('barierk'))
-  const deckClamp = findCatalog(list, (n) => n.includes('klamr') && (n.includes('blat') || n.includes('szybkoz')))
-  const dual = findCatalog(list, (n) => n.includes('klamr') && n.includes('nóg') && n.includes('podw'))
-  const quad = findCatalog(list, (n) => n.includes('klamr') && (n.includes('poczw') || n.includes('4')))
-
-  if (deck2) map.set('deck-2x1', deck2)
-  if (deck1) map.set('deck-1x1', deck1)
-  if (legs) map.set('legs', legs)
-  if (plan.claddingMaterial === 'skirt' && skirt) map.set('cladding', skirt)
-  if (plan.claddingMaterial === 'hips' && hipsCladding) map.set('cladding', hipsCladding)
-  if (plan.floorMaterial === 'carpet' && carpet) map.set('floor', carpet)
-  if (plan.floorMaterial === 'hips' && hipsFloor) map.set('floor', hipsFloor)
-  if (stairs) map.set('stairs', stairs)
-  if (rail) map.set('railings', rail)
-  if (deckClamp) map.set('deck-clamps', deckClamp)
-  if (dual) map.set('dual-leg-clamps', dual)
-  if (quad) map.set('quad-leg-clamps', quad)
+  for (const item of catalog) {
+    if (item.category === 'ZASOBY') continue
+    const key = item.stagePlanKey?.trim()
+    if (key) map.set(key, item)
+  }
   return map
+}
+
+export function getStageBomMappingIssues(
+  plan: StagePlan,
+  catalog: Equipment[]
+): StageBomMappingIssue[] {
+  const byKey = buildStageCatalogMap(catalog)
+  const issues: StageBomMappingIssue[] = []
+  for (const line of plan.bom) {
+    const equipment = byKey.get(line.catalogKey)
+    if (!equipment) {
+      issues.push({ line, kind: 'unmapped' })
+      continue
+    }
+    const unit = (equipment.unit || 'szt.').trim()
+    if (unit !== line.unit) {
+      issues.push({ line, kind: 'unit_mismatch', equipment })
+    }
+  }
+  return issues
 }
 
 export function isStagePlanEquipmentLine(item: Partial<OrderEquipmentItem>): boolean {
@@ -65,14 +49,17 @@ export function applyStagePlanToEquipmentItems(params: {
   days: number
   offerBlockId?: string | null
 }): Partial<OrderEquipmentItem>[] {
-  const kept = params.existing.filter((item) => !isStagePlanEquipmentLine(item))
-  const matched = matchStageBomToCatalog(params.catalog, params.plan)
+  const targetBlockId = params.offerBlockId ?? null
+  const kept = params.existing.filter((item) => {
+    if (!isStagePlanEquipmentLine(item)) return true
+    const itemBlockId = item.offerBlockId ?? null
+    return itemBlockId !== targetBlockId
+  })
+  const byKey = buildStageCatalogMap(params.catalog)
   const now = Date.now()
   const dim = `${params.plan.widthM}×${params.plan.depthM} m, nogi ${params.plan.legHeightCm} cm`
   const newItems: Partial<OrderEquipmentItem>[] = params.plan.bom.map((line, idx) => {
-    const eq = matched.get(line.key)
-    // Ilość w zleceniu jest liczbą całkowitą, więc metry i metry kwadratowe
-    // idą w górę do pełnej jednostki. Dokładna wartość zostaje w opisie.
+    const eq = byKey.get(line.catalogKey)
     const quantity = Math.max(1, Math.ceil(line.quantity))
     const exact =
       line.unit === 'szt.' ? '' : ` · ${formatMeters(line.quantity)} ${line.unit}`
@@ -89,7 +76,7 @@ export function applyStagePlanToEquipmentItems(params: {
       days: Math.max(1, params.days),
       discount: 0,
       pricingRule: eq?.pricingRule || { day1: 1.0, nextDays: 0.5 },
-      visibleInOffer: line.offer,
+      visibleInOffer: eq ? eq.visibleInOffer !== false : line.offer,
       isRental: false,
       sortOrder: kept.length + idx,
       offerBlockId: params.offerBlockId ?? null,

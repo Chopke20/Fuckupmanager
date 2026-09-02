@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 
-import { Plus, Trash2, ChevronUp, ChevronDown } from 'lucide-react'
+import { Plus, Trash2, ChevronUp, ChevronDown, LayoutGrid } from 'lucide-react'
 
 import {
 
@@ -62,6 +62,8 @@ type Props = {
 
   orderSpanDays?: number
 
+  onOpenStagePlan?: (offerBlockId: string, blockTitle: string) => void
+
 }
 
 
@@ -89,6 +91,8 @@ export default function OrderOfferBlocksEditor({
   orderDateTo,
 
   orderSpanDays = 1,
+
+  onOpenStagePlan,
 
 }: Props) {
 
@@ -326,7 +330,19 @@ export default function OrderOfferBlocksEditor({
 
 
 
-                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Wykaz sprzętu</h4>
+                <h4 className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <span>Wykaz sprzętu</span>
+                  {onOpenStagePlan ? (
+                    <button
+                      type="button"
+                      onClick={() => onOpenStagePlan(blockId, block.title?.trim() || `Blok ${index + 1}`)}
+                      className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] font-normal normal-case tracking-normal hover:bg-surface"
+                    >
+                      <LayoutGrid className="h-3.5 w-3.5" />
+                      Złóż scenę z podestów
+                    </button>
+                  ) : null}
+                </h4>
 
                 <OrderEquipmentSection
 

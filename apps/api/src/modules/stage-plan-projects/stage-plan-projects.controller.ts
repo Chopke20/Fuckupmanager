@@ -12,6 +12,7 @@ const createProjectSchema = z.object({
   name: z.string().trim().min(1).max(200),
   planJson: planJsonSchema,
   orderId: z.string().uuid().optional().nullable(),
+  offerBlockId: z.string().uuid().optional().nullable(),
 })
 
 const updateProjectSchema = z.object({
@@ -23,6 +24,7 @@ const updateProjectSchema = z.object({
 const upsertForOrderSchema = z.object({
   name: z.string().trim().min(1).max(200),
   planJson: planJsonSchema,
+  offerBlockId: z.string().uuid().optional().nullable(),
 })
 
 function projectSelect() {
@@ -31,6 +33,7 @@ function projectSelect() {
     name: true,
     planJson: true,
     orderId: true,
+    offerBlockId: true,
     createdAt: true,
     updatedAt: true,
     order: {
@@ -98,13 +101,23 @@ export async function createStagePlanProject(req: Request, res: Response, next: 
         res.status(404).json({ error: 'Zlecenie nie istnieje.', requestId: res.locals.requestId })
         return
       }
-      const existing = await prisma.stagePlanProject.findUnique({
-        where: { orderId: parsed.orderId },
+      if (parsed.offerBlockId) {
+        const block = await prisma.orderOfferBlock.findFirst({
+          where: { id: parsed.offerBlockId, orderId: parsed.orderId },
+          select: { id: true },
+        })
+        if (!block) {
+          res.status(404).json({ error: 'Blok oferty nie istnieje w tym zleceniu.', requestId: res.locals.requestId })
+          return
+        }
+      }
+      const existing = await prisma.stagePlanProject.findFirst({
+        where: { orderId: parsed.orderId, offerBlockId: parsed.offerBlockId ?? null },
         select: { id: true },
       })
       if (existing) {
         res.status(409).json({
-          error: 'To zlecenie ma już przypisany projekt sceny.',
+          error: 'Ten blok zlecenia ma już przypisany projekt sceny.',
           requestId: res.locals.requestId,
         })
         return
@@ -116,6 +129,7 @@ export async function createStagePlanProject(req: Request, res: Response, next: 
         name: parsed.name,
         planJson: parsed.planJson,
         orderId: parsed.orderId ?? null,
+        offerBlockId: parsed.offerBlockId ?? null,
       },
       select: projectSelect(),
     })
@@ -190,6 +204,7 @@ export async function upsertStagePlanProjectForOrder(req: Request, res: Response
   try {
     const { orderId } = req.params
     const parsed = upsertForOrderSchema.parse(req.body)
+    const offerBlockId = parsed.offerBlockId ?? null
 
     const order = await prisma.order.findFirst({
       where: { id: orderId, isDeleted: false },
@@ -200,15 +215,26 @@ export async function upsertStagePlanProjectForOrder(req: Request, res: Response
       return
     }
 
-    const existing = await prisma.stagePlanProject.findUnique({
-      where: { orderId },
+    if (offerBlockId) {
+      const block = await prisma.orderOfferBlock.findFirst({
+        where: { id: offerBlockId, orderId },
+        select: { id: true },
+      })
+      if (!block) {
+        res.status(404).json({ error: 'Blok oferty nie istnieje w tym zleceniu.', requestId: res.locals.requestId })
+        return
+      }
+    }
+
+    const existing = await prisma.stagePlanProject.findFirst({
+      where: { orderId, offerBlockId },
       select: { id: true },
     })
 
     const project = existing
       ? await prisma.stagePlanProject.update({
           where: { id: existing.id },
-          data: { name: parsed.name, planJson: parsed.planJson },
+          data: { name: parsed.name, planJson: parsed.planJson, offerBlockId },
           select: projectSelect(),
         })
       : await prisma.stagePlanProject.create({
@@ -216,6 +242,7 @@ export async function upsertStagePlanProjectForOrder(req: Request, res: Response
             name: parsed.name,
             planJson: parsed.planJson,
             orderId,
+            offerBlockId,
           },
           select: projectSelect(),
         })
