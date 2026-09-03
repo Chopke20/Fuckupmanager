@@ -288,7 +288,9 @@ export function snapToStep(value: number, step: number): number {
 
 /**
  * Wypełnia prostokąt blatami — akcja startowa edytora, nie stan planu.
- * Dłuższy bok 2×1 kładziony wzdłuż frontu albo w głąb, resztki dobierane 1×1.
+ * Zawsze maksymalizuje liczbę 2×1: najpierw w preferowanym kierunku, potem
+ * obrócone w pasku resztkowym, a 1×1 tylko na komórki, których nie da się
+ * pokryć blatem 2×1.
  */
 export function fillRectWithDecks(
   widthM: number,
@@ -302,19 +304,31 @@ export function fillRectWithDecks(
 
   if (longAlongFront) {
     const pairs = Math.floor(w / 2)
-    const odd = w % 2 === 1
     for (let y = 0; y < d; y += 1) {
       for (let i = 0; i < pairs; i += 1) decks.push(createStageDeck('2x1', i * 2, y))
-      if (odd) decks.push(createStageDeck('1x1', pairs * 2, y))
+    }
+    if (w % 2 === 1) {
+      const x = pairs * 2
+      const verticalPairs = Math.floor(d / 2)
+      for (let i = 0; i < verticalPairs; i += 1) {
+        decks.push(createStageDeck('2x1', x, i * 2, true))
+      }
+      if (d % 2 === 1) decks.push(createStageDeck('1x1', x, verticalPairs * 2))
     }
     return decks
   }
 
   const pairs = Math.floor(d / 2)
-  const odd = d % 2 === 1
   for (let x = 0; x < w; x += 1) {
     for (let i = 0; i < pairs; i += 1) decks.push(createStageDeck('2x1', x, i * 2, true))
-    if (odd) decks.push(createStageDeck('1x1', x, pairs * 2))
+  }
+  if (d % 2 === 1) {
+    const y = pairs * 2
+    const horizontalPairs = Math.floor(w / 2)
+    for (let i = 0; i < horizontalPairs; i += 1) {
+      decks.push(createStageDeck('2x1', i * 2, y))
+    }
+    if (w % 2 === 1) decks.push(createStageDeck('1x1', horizontalPairs * 2, y))
   }
   return decks
 }

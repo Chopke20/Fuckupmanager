@@ -47,17 +47,28 @@ describe('fillRectWithDecks', () => {
     expect(decks.every((deck) => deck.kind === '2x1')).toBe(true)
   })
 
-  it('dla 5×3 dokłada 1×1 na nieparzystym froncie', () => {
+  it('dla 5×3 minimalizuje 1×1 — resztkowy pas wzdłuż boku pokrywa obróconymi 2×1', () => {
     const decks = fillRectWithDecks(5, 3, true)
-    expect(decks.filter((deck) => deck.kind === '2x1')).toHaveLength(6)
-    expect(decks.filter((deck) => deck.kind === '1x1')).toHaveLength(3)
+    expect(decks.filter((deck) => deck.kind === '2x1')).toHaveLength(7)
+    expect(decks.filter((deck) => deck.kind === '1x1')).toHaveLength(1)
   })
 
-  it('w głąb obraca blaty 2×1', () => {
+  it('dla 3×4 wzdłuż frontu nie używa 1×1 — pas boczny z obróconych 2×1', () => {
+    const decks = fillRectWithDecks(3, 4, true)
+    expect(decks.filter((deck) => deck.kind === '2x1')).toHaveLength(6)
+    expect(decks.filter((deck) => deck.kind === '1x1')).toHaveLength(0)
+  })
+
+  it('w głąb obraca blaty 2×1, a resztkę pokrywa wzdłuż frontu', () => {
     const decks = fillRectWithDecks(3, 4, false)
-    expect(decks.filter((deck) => deck.kind === '2x1').every((deck) => deck.h === 2)).toBe(
-      true
-    )
+    expect(decks.every((deck) => deck.kind === '2x1')).toBe(true)
+    expect(decks.filter((deck) => deck.h === 2)).toHaveLength(6)
+  })
+
+  it('dla 3×5 w głąb zostawia jedną 1×1', () => {
+    const decks = fillRectWithDecks(3, 5, false)
+    expect(decks.filter((deck) => deck.kind === '2x1')).toHaveLength(7)
+    expect(decks.filter((deck) => deck.kind === '1x1')).toHaveLength(1)
   })
 
   it('obrót zamienia boki tylko blatom 2×1', () => {
