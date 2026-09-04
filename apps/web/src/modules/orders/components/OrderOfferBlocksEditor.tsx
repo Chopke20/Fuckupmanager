@@ -24,6 +24,8 @@ import OrderEquipmentSection from './OrderEquipmentSection'
 
 import OrderProductionSection from './OrderProductionSection'
 
+import LockedFieldHint from './LockedFieldHint'
+
 import {
 
   filterEquipmentByBlock,
@@ -285,6 +287,8 @@ export default function OrderOfferBlocksEditor({
                     className="min-w-[10rem] flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground placeholder:text-muted-foreground"
 
                   />
+
+                  {readOnly ? <LockedFieldHint /> : null}
 
                   {!readOnly && (
                     <div className="flex items-center gap-1 shrink-0">

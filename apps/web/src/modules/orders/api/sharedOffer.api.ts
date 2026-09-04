@@ -1,5 +1,9 @@
 import axios from 'axios'
-import type { SharedOfferPartnerLine, SharedOfferPublicView } from '@lama-stage/shared-types'
+import type {
+  SharedOfferPartnerLine,
+  SharedOfferPublicView,
+  SharedOfferSaveStage,
+} from '@lama-stage/shared-types'
 import { api } from '../../../shared/api/client'
 
 function filenameFromContentDisposition(cd: string | undefined, fallback: string): string {
@@ -55,22 +59,25 @@ async function parseLockedChanged(error: unknown): Promise<SharedOfferPublicView
   return null
 }
 
+export type SharedOfferSavePayload = {
+  lines: SharedOfferPartnerLine[]
+  lockedFingerprint?: string
+  description?: string | null
+  stages?: SharedOfferSaveStage[]
+}
+
 export const sharedOfferPublicApi = {
   get: async (token: string): Promise<SharedOfferPublicView> => {
     const res = await axios.get<{ data: SharedOfferPublicView }>(`/api/public/shared-offer/${token}`)
     return res.data.data
   },
 
-  save: async (
-    token: string,
-    lines: SharedOfferPartnerLine[],
-    lockedFingerprint?: string
-  ): Promise<SharedOfferPublicView> => {
+  save: async (token: string, payload: SharedOfferSavePayload): Promise<SharedOfferPublicView> => {
     try {
-      const res = await axios.put<{ data: SharedOfferPublicView }>(`/api/public/shared-offer/${token}`, {
-        lines,
-        lockedFingerprint,
-      })
+      const res = await axios.put<{ data: SharedOfferPublicView }>(
+        `/api/public/shared-offer/${token}`,
+        payload
+      )
       return res.data.data
     } catch (error) {
       const view = await parseLockedChanged(error)
@@ -81,15 +88,25 @@ export const sharedOfferPublicApi = {
 
   generatePdf: async (token: string, lockedFingerprint?: string): Promise<void> => {
     try {
-      const res = await axios.post(`/api/public/shared-offer/${token}/pdf`, { lockedFingerprint }, {
-        responseType: 'blob',
-      })
+      const res = await axios.post(
+        `/api/public/shared-offer/${token}/pdf`,
+        { lockedFingerprint },
+        { responseType: 'blob' }
+      )
       const blob = res.data as Blob
       if (blob.type === 'application/json') {
         const text = await blob.text()
         let msg = 'Nie udało się wygenerować PDF.'
         try {
-          const j = JSON.parse(text) as { error?: string | { message?: string; code?: string; details?: { view?: SharedOfferPublicView } } }
+          const j = JSON.parse(text) as {
+            error?:
+              | string
+              | {
+                  message?: string
+                  code?: string
+                  details?: { view?: SharedOfferPublicView }
+                }
+          }
           if (typeof j.error === 'string') msg = j.error
           else if (j.error && typeof j.error === 'object') {
             if (j.error.code === 'LOCKED_CHANGED' && j.error.details?.view) {
@@ -126,7 +143,9 @@ export const sharedOfferAdminApi = {
     return res.data
   },
 
-  createLink: async (orderId: string): Promise<{ token: string; url: null; revokedAt: string | null }> => {
+  createLink: async (
+    orderId: string
+  ): Promise<{ token: string; url: null; revokedAt: string | null }> => {
     const res = await api.post<{ data: { token: string; url: null; revokedAt: string | null } }>(
       `/orders/${orderId}/shared-offer/link`
     )

@@ -33,6 +33,7 @@ import OrderEquipmentSection from '../components/OrderEquipmentSection'
 import OrderProductionSection from '../components/OrderProductionSection'
 import OrderTransportSection from '../components/OrderTransportSection'
 import OrderFinancialSection from '../components/OrderFinancialSection'
+import LockedFieldHint from '../components/LockedFieldHint'
 
 type FormValues = Partial<Order> & {
   equipmentItems: Partial<OrderEquipmentItem>[]
@@ -280,6 +281,18 @@ export default function SharedOfferEditorPage() {
 
   const markDirty = () => setDirty(true)
 
+  const handleOrderChange = (updates: Partial<Order>) => {
+    for (const [key, value] of Object.entries(updates)) {
+      setValue(key as any, value as any, { shouldDirty: true })
+    }
+    markDirty()
+  }
+
+  const handleStagesChange = (nextStages: Partial<OrderStage>[]) => {
+    setValue('stages', nextStages, { shouldDirty: true })
+    markDirty()
+  }
+
   const handleEquipmentChange = (items: Partial<OrderEquipmentItem>[]) => {
     const next = items.map((item) =>
       item.id ? item : { ...item, id: randomClientUuid(), visibleInOffer: true }
@@ -332,17 +345,43 @@ export default function SharedOfferEditorPage() {
     setInfo(null)
     try {
       const lines = currentPartnerLines()
-      const next = await sharedOfferPublicApi.save(token, lines, view.lockedFingerprint)
+      const description = (getValues('description') as string | undefined) ?? ''
+      const formStages = (getValues('stages') ?? []) as Partial<OrderStage>[]
+      const stages = formStages.map((s, idx) => {
+        const dateRaw = s.date
+        const date =
+          typeof dateRaw === 'string'
+            ? dateRaw
+            : dateRaw
+              ? new Date(dateRaw as unknown as string | number | Date).toISOString()
+              : new Date().toISOString()
+        return {
+          id: s.id,
+          type: String(s.type || 'CUSTOM'),
+          label: s.label ?? null,
+          date,
+          timeStart: s.timeStart ?? null,
+          timeEnd: s.timeEnd ?? null,
+          notes: s.notes ?? null,
+          sortOrder: s.sortOrder ?? idx,
+        }
+      })
+      const next = await sharedOfferPublicApi.save(token, {
+        lines,
+        lockedFingerprint: view.lockedFingerprint,
+        description,
+        stages,
+      })
       setView(next)
       reset(viewToForm(next))
       setDirty(false)
       setLockedStale(false)
-      setInfo('Zapisano pozycje.')
+      setInfo('Zapisano.')
     } catch (e) {
       if (e instanceof SharedOfferLockedChangedError) {
         applyLockedChanged(e.view, currentPartnerLines())
       } else {
-        setError('Nie udało się zapisać pozycji.')
+        setError('Nie udało się zapisać.')
       }
     } finally {
       setBusy(null)
@@ -537,7 +576,12 @@ export default function SharedOfferEditorPage() {
 
             <div className="p-4">
               <section id="header" className="scroll-mt-24 mb-6">
-                <OrderHeaderSection readOnly clientLabel={view.clientCompanyName} />
+                <OrderHeaderSection
+                  readOnly
+                  descriptionEditable
+                  clientLabel={view.clientCompanyName}
+                  onChange={handleOrderChange}
+                />
               </section>
 
               <section id="schedule" className="scroll-mt-24 mb-6">
@@ -546,8 +590,8 @@ export default function SharedOfferEditorPage() {
                   Harmonogram
                 </h2>
                 <OrderScheduleSection
-                  readOnly
                   orderDateFrom={typeof formData.dateFrom === 'string' ? formData.dateFrom : undefined}
+                  onChange={handleStagesChange}
                 />
               </section>
 
@@ -606,6 +650,7 @@ export default function SharedOfferEditorPage() {
                 <h2 className="text-lg font-bold flex items-center gap-2 mb-3">
                   <Truck size={24} />
                   Transport
+                  <LockedFieldHint />
                 </h2>
                 <OrderTransportSection
                   readOnly
@@ -622,6 +667,7 @@ export default function SharedOfferEditorPage() {
                 <h2 className="text-lg font-bold flex items-center gap-2 mb-3">
                   <DollarSign size={24} />
                   Finanse
+                  <LockedFieldHint />
                 </h2>
                 <OrderFinancialSection
                   readOnly

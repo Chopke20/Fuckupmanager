@@ -1,12 +1,13 @@
+import { randomUUID } from 'node:crypto'
 import { NextFunction, Request, Response } from 'express'
-import { z } from 'zod'
-import { SharedOfferPartnerLineSchema, MAX_SHARED_OFFER_LINES } from '@lama-stage/shared-types'
+import { SharedOfferSaveBodySchema } from '@lama-stage/shared-types'
 import { AppError } from '../../shared/errors/AppError'
 import { runWithCompanyContext } from '../../shared/context/company-context'
 import { assertRateLimit, clientIp } from '../../shared/middleware/public-rate-limit'
 import { PdfController } from '../pdf/pdf.controller'
 import { isValidPublicToken } from './public-token-lookup'
 import {
+  applySharedOfferOrderEdits,
   buildPublicView,
   findSessionByToken,
   loadOrderForSharedOffer,
@@ -25,14 +26,7 @@ function tokenFromReq(req: Request): string {
   return token
 }
 
-const SaveBodySchema = z.object({
-  lines: z.array(SharedOfferPartnerLineSchema).max(MAX_SHARED_OFFER_LINES),
-  lockedFingerprint: z.string().min(1).max(128).optional(),
-})
-
-const PdfBodySchema = z.object({
-  lockedFingerprint: z.string().min(1).max(128).optional(),
-})
+const PdfBodySchema = SharedOfferSaveBodySchema.pick({ lockedFingerprint: true })
 
 export const getSharedOffer = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -75,7 +69,7 @@ export const putSharedOfferLines = async (req: Request, res: Response, next: Nex
         throw new AppError('Nie znaleziono oferty.', 404, 'NOT_FOUND')
       }
 
-      const body = SaveBodySchema.parse(req.body ?? {})
+      const body = SharedOfferSaveBodySchema.parse(req.body ?? {})
       const currentView = await buildPublicView(order, found.session)
 
       if (body.lockedFingerprint && body.lockedFingerprint !== currentView.lockedFingerprint) {
@@ -83,12 +77,42 @@ export const putSharedOfferLines = async (req: Request, res: Response, next: Nex
           'Pozycje Lama Stage zmieniły się od otwarcia edytora.',
           409,
           'LOCKED_CHANGED',
-          { view: { ...currentView, partnerLines: body.lines } }
+          {
+            view: {
+              ...currentView,
+              partnerLines: body.lines,
+              description:
+                body.description !== undefined ? body.description : currentView.description,
+              stages:
+                body.stages !== undefined
+                  ? body.stages.map((s, idx) => ({
+                      id: s.id ?? randomUUID(),
+                      type: s.type,
+                      label: s.label ?? null,
+                      date:
+                        typeof s.date === 'string'
+                          ? s.date
+                          : new Date(s.date).toISOString(),
+                      timeStart: s.timeStart ?? null,
+                      timeEnd: s.timeEnd ?? null,
+                      notes: s.notes ?? null,
+                      sortOrder: s.sortOrder ?? idx,
+                    }))
+                  : currentView.stages,
+            },
+          }
         )
       }
 
+      await applySharedOfferOrderEdits(
+        order.id,
+        { description: body.description, stages: body.stages },
+        { dateFrom: order.dateFrom, dateTo: order.dateTo }
+      )
       const updatedSession = await savePartnerLines(found.session.id, { lines: body.lines })
-      const view = await buildPublicView(order, updatedSession)
+      const freshOrder = await loadOrderForSharedOffer(order.id)
+      if (!freshOrder) throw new AppError('Nie znaleziono oferty.', 404, 'NOT_FOUND')
+      const view = await buildPublicView(freshOrder, updatedSession)
       res.setHeader('X-Company-Code', found.companyCode)
       res.json({ data: view })
     })

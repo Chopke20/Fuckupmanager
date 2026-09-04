@@ -3,6 +3,7 @@ import type { OrderSharedOfferSession } from '@prisma/client'
 import {
   SharedOfferPartnerPayloadSchema,
   SharedOfferPublicViewSchema,
+  STAGE_TYPES,
   applyGlobalDiscountAndVat,
   computeProposalEquipmentNet,
   computeProposalProductionNet,
@@ -10,6 +11,7 @@ import {
   type SharedOfferPartnerLine,
   type SharedOfferPartnerPayload,
   type SharedOfferPublicView,
+  type SharedOfferSaveStage,
   type SharedOfferTotals,
 } from '@lama-stage/shared-types'
 import { prisma } from '../../prisma/client'
@@ -352,6 +354,80 @@ export async function savePartnerLines(sessionId: string, payload: SharedOfferPa
   })
   await logEvent(sessionId, 'SAVE')
   return updated
+}
+
+function normalizeStageType(raw: string | undefined): (typeof STAGE_TYPES)[number] {
+  const t = String(raw || 'CUSTOM').trim()
+  if ((STAGE_TYPES as readonly string[]).includes(t)) {
+    return t as (typeof STAGE_TYPES)[number]
+  }
+  return 'CUSTOM'
+}
+
+function stageDate(value: string | Date, fallback: Date): Date {
+  const d = value instanceof Date ? value : new Date(value)
+  return Number.isNaN(d.getTime()) ? fallback : d
+}
+
+/**
+ * Partner zapisuje opis + harmonogram bezpośrednio na zleceniu Lama.
+ * Pozycje sprzętu/produkcji Lama pozostają nietknięte (side-payload partnera).
+ */
+export async function applySharedOfferOrderEdits(
+  orderId: string,
+  edits: { description?: string | null; stages?: SharedOfferSaveStage[] },
+  orderDates: { dateFrom: Date; dateTo: Date }
+) {
+  const defaultStageDate = orderDates.dateFrom ?? new Date()
+
+  await prisma.$transaction(async (tx) => {
+    if (edits.description !== undefined) {
+      await tx.order.update({
+        where: { id: orderId },
+        data: { description: edits.description },
+      })
+    }
+
+    if (edits.stages !== undefined) {
+      const stages = edits.stages
+      const currentStages = await tx.orderStage.findMany({
+        where: { orderId },
+        orderBy: { sortOrder: 'asc' },
+      })
+      const currentStageIds = new Set(currentStages.map((s) => s.id))
+      const payloadStageIds = new Set(stages.map((s) => s.id).filter(Boolean) as string[])
+
+      for (const [idx, stage] of stages.entries()) {
+        const type = normalizeStageType(stage.type)
+        const label =
+          type === 'CUSTOM'
+            ? (stage.label?.trim() || null)
+            : (stage.label?.trim() || null)
+        const data = {
+          type,
+          label,
+          date: stageDate(stage.date, defaultStageDate),
+          timeStart: stage.timeStart?.trim() || null,
+          timeEnd: stage.timeEnd?.trim() || null,
+          notes: stage.notes?.trim() || null,
+          sortOrder: stage.sortOrder ?? idx,
+        }
+        if (stage.id && currentStageIds.has(stage.id)) {
+          await tx.orderStage.update({ where: { id: stage.id }, data })
+        } else {
+          await tx.orderStage.create({
+            data: { orderId, ...data },
+          })
+        }
+      }
+
+      for (const old of currentStages) {
+        if (!payloadStageIds.has(old.id)) {
+          await tx.orderStage.delete({ where: { id: old.id } })
+        }
+      }
+    }
+  })
 }
 
 export type { OrderForSharedOffer }

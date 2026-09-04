@@ -15,6 +15,7 @@ import {
   orderLineNameInputClass,
   orderLineNamePlaceholder,
 } from '../utils/orderLineItemFieldStyles'
+import LockedFieldHint from './LockedFieldHint'
 function stageDisplayName(stage: Partial<OrderStage>) {
   return stageToDisplayLabel(stage)
 }
@@ -200,7 +201,12 @@ export default function OrderProductionSection({
                     key={item.id || index}
                     className={`border-b border-border/50 hover:bg-surface-2/50 ${isLocked ? 'opacity-70' : ''}`}
                   >
-                    <td className="py-1 px-2 text-muted-foreground whitespace-nowrap">{index + 1}</td>
+                    <td className="py-1 px-2 text-muted-foreground whitespace-nowrap">
+                      <div className="flex items-center gap-1">
+                        <span>{index + 1}</span>
+                        {isLocked ? <LockedFieldHint /> : null}
+                      </div>
+                    </td>
                     <td className="py-1 px-2">
                       <input
                         type="text"

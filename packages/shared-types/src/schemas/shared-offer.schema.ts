@@ -28,6 +28,27 @@ export const SharedOfferPartnerPayloadSchema = z.object({
   lines: z.array(SharedOfferPartnerLineSchema).max(MAX_SHARED_OFFER_LINES).default([]),
 });
 
+/** Etap harmonogramu zapisywany z edytora publicznego — trafia do zlecenia Lama. */
+export const SharedOfferSaveStageSchema = z.object({
+  id: z.string().uuid().optional(),
+  type: z.string().trim().min(1).max(40).default('CUSTOM'),
+  label: z.string().trim().max(200).nullable().optional(),
+  date: z.union([z.string().datetime(), z.string().min(1).max(40)]),
+  timeStart: z.string().trim().max(16).nullable().optional(),
+  timeEnd: z.string().trim().max(16).nullable().optional(),
+  notes: z.string().trim().max(2000).nullable().optional(),
+  sortOrder: z.number().int().min(0).max(999).default(0),
+});
+
+export const SharedOfferSaveBodySchema = z.object({
+  lines: z.array(SharedOfferPartnerLineSchema).max(MAX_SHARED_OFFER_LINES),
+  lockedFingerprint: z.string().min(1).max(128).optional(),
+  /** Opis zlecenia — partner może edytować; zapis do Order.description. */
+  description: z.string().max(10_000).nullable().optional(),
+  /** Harmonogram — partner może budować; zapis do OrderStage. */
+  stages: z.array(SharedOfferSaveStageSchema).max(80).optional(),
+});
+
 /** Moja pozycja pokazywana partnerowi — WYŁĄCZNIE te pola. */
 export const SharedOfferLockedLineSchema = z.object({
   /** Stabilne id z OrderEquipmentItem / OrderProductionItem — do locków w UI. */
@@ -108,3 +129,5 @@ export type SharedOfferLockedLine = z.infer<typeof SharedOfferLockedLineSchema>;
 export type SharedOfferPublicView = z.infer<typeof SharedOfferPublicViewSchema>;
 export type SharedOfferTotals = z.infer<typeof SharedOfferTotalsSchema>;
 export type SharedOfferStage = z.infer<typeof SharedOfferStageSchema>;
+export type SharedOfferSaveStage = z.infer<typeof SharedOfferSaveStageSchema>;
+export type SharedOfferSaveBody = z.infer<typeof SharedOfferSaveBodySchema>;

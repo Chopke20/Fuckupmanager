@@ -9,6 +9,7 @@ import {
   orderLineNameInputClass,
   orderLineNamePlaceholder,
 } from '../utils/orderLineItemFieldStyles'
+import LockedFieldHint from './LockedFieldHint'
 const EQUIPMENT_COL_COUNT = 12
 
 interface OrderEquipmentSectionProps {
@@ -388,7 +389,10 @@ export default function OrderEquipmentSection({
                     className={`border-b border-border hover:bg-surface-2/50 transition-colors ${isLocked ? 'opacity-70' : ''}`}
                   >
                     <td className="py-1.5 px-2 whitespace-nowrap">
-                      <div className="text-sm text-muted-foreground">{index + 1}</div>
+                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                        <span>{index + 1}</span>
+                        {isLocked ? <LockedFieldHint /> : null}
+                      </div>
                     </td>
                     <td className="py-1.5 px-2">
                       <div>

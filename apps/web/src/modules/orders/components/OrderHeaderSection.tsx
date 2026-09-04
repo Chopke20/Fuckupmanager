@@ -7,6 +7,7 @@ import { dateInputToISO, isoToDateInput, isValidDateInput } from '../../../share
 import { api } from '../../../shared/api/client'
 import { orderApi } from '../api/order.api'
 import ClientFormModal from '../../clients/components/ClientFormModal'
+import LockedFieldHint from './LockedFieldHint'
 import { formatOrderNumber } from '../utils/orderNumberFormat'
 
 function formatClientLabel(c: Pick<Client, 'companyName' | 'contactName'>): string {
@@ -21,10 +22,19 @@ function normalizeSearch(s: string): string {
 interface OrderHeaderSectionProps {
   onChange?: (data: Partial<Order>) => void
   readOnly?: boolean
+  /** W edytorze współdzielonym: opis edytowalny mimo readOnly pozostałych pól. */
+  descriptionEditable?: boolean
   clientLabel?: string | null
 }
 
-export default function OrderHeaderSection({ onChange, readOnly = false, clientLabel = null }: OrderHeaderSectionProps) {
+export default function OrderHeaderSection({
+  onChange,
+  readOnly = false,
+  descriptionEditable = false,
+  clientLabel = null,
+}: OrderHeaderSectionProps) {
+  const descriptionLocked = readOnly && !descriptionEditable
+  const fieldLocked = readOnly
   const { watch } = useFormContext<Partial<Order>>()
   const queryClient = useQueryClient()
   // useClients has no `enabled` flag — keep call; readOnly UI skips picker (avoids relying on list)
@@ -186,7 +196,10 @@ export default function OrderHeaderSection({ onChange, readOnly = false, clientL
         <h3 className="text-base font-semibold mb-3">Nagłówek zlecenia</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium mb-1">Numer zlecenia</label>
+            <label className="flex items-center gap-1.5 text-sm font-medium mb-1">
+              Numer zlecenia
+              {fieldLocked ? <LockedFieldHint /> : null}
+            </label>
             <div className="px-3 py-2 text-sm bg-surface-2 border border-border rounded font-mono text-primary min-h-[2.5rem] flex items-center">
               {orderNumberDisplay}
             </div>
@@ -197,8 +210,9 @@ export default function OrderHeaderSection({ onChange, readOnly = false, clientL
             </p>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">
+            <label className="flex items-center gap-1.5 text-sm font-medium mb-1">
               Nazwa zlecenia *
+              {fieldLocked ? <LockedFieldHint /> : null}
             </label>
             <input
               type="text"
@@ -206,18 +220,19 @@ export default function OrderHeaderSection({ onChange, readOnly = false, clientL
               value={order?.name || ''}
               onChange={(e) => handleChange('name', e.target.value)}
               placeholder="Np. Event konferencyjny XYZ"
-              disabled={readOnly}
+              disabled={fieldLocked}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">
+            <label className="flex items-center gap-1.5 text-sm font-medium mb-1">
               Status
+              {fieldLocked ? <LockedFieldHint /> : null}
             </label>
             <select
               className="w-full px-3 py-2 text-sm bg-background border border-border rounded"
               value={order?.status || 'DRAFT'}
               onChange={(e) => handleChange('status', e.target.value)}
-              disabled={readOnly}
+              disabled={fieldLocked}
             >
               {statusOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -227,12 +242,14 @@ export default function OrderHeaderSection({ onChange, readOnly = false, clientL
             </select>
           </div>
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium mb-1">
-              Opis wewnętrzny (techniczny)
+            <label className="flex items-center gap-1.5 text-sm font-medium mb-1">
+              Opis zlecenia
+              {descriptionLocked ? <LockedFieldHint /> : null}
             </label>
             <p className="text-xs text-muted-foreground mb-2">
-              Na potrzeby zespołu i koordynacji — nie pokazujemy go klientowi w ofercie. Tekst do PDF dla klienta
-              ustawiasz na stronie Oferta.
+              {descriptionEditable
+                ? 'Możesz uzupełnić opis — zapisze się w zleceniu Lama Stage.'
+                : 'Na potrzeby zespołu i koordynacji — nie pokazujemy go klientowi w ofercie. Tekst do PDF dla klienta ustawiasz na stronie Oferta.'}
             </p>
             {!readOnly && (
               <div className="flex items-center gap-2 mb-1">
@@ -259,12 +276,15 @@ export default function OrderHeaderSection({ onChange, readOnly = false, clientL
               value={order?.description || ''}
               onChange={(e) => handleChange('description', e.target.value)}
               placeholder="Opis techniczny / wewnętrzny dla firmy (brief, logistyka)…"
-              disabled={readOnly}
+              disabled={descriptionLocked}
             />
             {aiError && <p className="text-xs text-red-500 mt-1">{aiError}</p>}
           </div>
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium mb-1">Klient *</label>
+            <label className="flex items-center gap-1.5 text-sm font-medium mb-1">
+              Klient *
+              {fieldLocked ? <LockedFieldHint /> : null}
+            </label>
             {readOnly ? (
               <input
                 type="text"
@@ -344,7 +364,10 @@ export default function OrderHeaderSection({ onChange, readOnly = false, clientL
             )}
           </div>
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium mb-1">Miejsce realizacji</label>
+            <label className="flex items-center gap-1.5 text-sm font-medium mb-1">
+              Miejsce realizacji
+              {fieldLocked ? <LockedFieldHint /> : null}
+            </label>
             <div className="relative">
               <input
                 type="text"
@@ -357,7 +380,7 @@ export default function OrderHeaderSection({ onChange, readOnly = false, clientL
                   setShowVenueSuggestions(true)
                 }}
                 placeholder="Np. Centrum Konferencyjne XYZ, Warszawa"
-                disabled={readOnly}
+                disabled={fieldLocked}
               />
               {!readOnly && showVenueSuggestions && ((order?.venue || '').trim().length >= 2 || isVenueLoading) && (
                 <div className="absolute z-20 mt-1 w-full rounded border border-border bg-surface shadow-lg max-h-56 overflow-auto">
@@ -388,14 +411,15 @@ export default function OrderHeaderSection({ onChange, readOnly = false, clientL
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">
+            <label className="flex items-center gap-1.5 text-sm font-medium mb-1">
               Data rozpoczęcia *
+              {fieldLocked ? <LockedFieldHint /> : null}
             </label>
             <input
               type="date"
               className="w-full px-3 py-2 text-sm bg-background border border-border rounded"
               value={localDateFrom}
-              disabled={readOnly}
+              disabled={fieldLocked}
               onFocus={() => { dateFromFocused.current = true }}
               onBlur={() => {
                 dateFromFocused.current = false
@@ -417,15 +441,16 @@ export default function OrderHeaderSection({ onChange, readOnly = false, clientL
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">
+            <label className="flex items-center gap-1.5 text-sm font-medium mb-1">
               Data zakończenia *
+              {fieldLocked ? <LockedFieldHint /> : null}
             </label>
             <input
               type="date"
               className="w-full px-3 py-2 text-sm bg-background border border-border rounded"
               min={localDateFrom || undefined}
               value={localDateTo}
-              disabled={readOnly}
+              disabled={fieldLocked}
               onFocus={() => { dateToFocused.current = true }}
               onBlur={() => {
                 dateToFocused.current = false

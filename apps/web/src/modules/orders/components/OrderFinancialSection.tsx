@@ -8,6 +8,7 @@ import {
   computeRentalMarginDeduction,
   computeSubcontractorMarginDeduction,
 } from '../utils/orderFinancialSummary'
+import LockedFieldHint from './LockedFieldHint'
 
 interface OrderFinancialSectionProps {
   order: Partial<Order>
@@ -145,7 +146,10 @@ export default function OrderFinancialSection({
           </div>
           <div className="mt-3 pt-3 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium mb-1">Rabat ogólny %</label>
+              <label className="flex items-center gap-1.5 text-xs font-medium mb-1">
+                Rabat ogólny %
+                {readOnly ? <LockedFieldHint /> : null}
+              </label>
               <div className="flex items-center gap-2 flex-wrap">
                 <input
                   type="range"
@@ -174,7 +178,10 @@ export default function OrderFinancialSection({
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1">Stawka VAT</label>
+              <label className="flex items-center gap-1.5 text-xs font-medium mb-1">
+                Stawka VAT
+                {readOnly ? <LockedFieldHint /> : null}
+              </label>
               <select
                 className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded"
                 value={order.vatRate ?? 23}
