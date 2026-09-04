@@ -315,7 +315,7 @@ export default function OrderProductionSection({
                         </button>
                       )}
                     </td>
-                    <td className="py-1 px-2 whitespace-nowrap sticky right-0 bg-background z-[1] text-center">
+                    <td className="py-1 px-2 whitespace-nowrap sticky right-0 bg-surface z-[1] text-center">
                       {!isLocked && (
                         <div className="flex items-center justify-center gap-1">
                           {!partnerMode && (item.name || '').trim() && !findResourceByName(item.name || '') ? (

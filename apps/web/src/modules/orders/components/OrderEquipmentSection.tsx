@@ -547,7 +547,7 @@ export default function OrderEquipmentSection({
                         </button>
                       )}
                     </td>
-                    <td className="py-1 px-2 whitespace-nowrap sticky right-0 bg-background z-[1]">
+                    <td className="py-1 px-2 whitespace-nowrap sticky right-0 bg-surface z-[1]">
                       {!isLocked && (
                         <div className="flex items-center justify-center gap-1">
                           {!partnerMode && !item.equipmentId && (item.name || '').trim() ? (
