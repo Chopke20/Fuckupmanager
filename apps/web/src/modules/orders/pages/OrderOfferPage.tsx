@@ -8,6 +8,7 @@ import { orderApi, OrderDocumentExportMeta } from '../api/order.api';
 import { pdfApi, financeApi } from '../api/pdf.api';
 import { formatOrderNumber } from '../utils/orderNumberFormat';
 import { groupOrderEquipmentByCategory } from '../utils/groupOrderEquipmentByCategory';
+import { OFFER_EXCEL_EXPORT_VISIBLE } from '../utils/offerExcelExport';
 import { apiListIssuerProfiles } from '../../admin/api/issuer-profiles.api';
 import { useAuth } from '../../auth/AuthProvider';
 import { apiGetAppSettings } from '../../auth/auth.api';
@@ -630,16 +631,18 @@ export default function OrderOfferPage() {
             <Eye size={16} />
             {loadingPreview ? '…' : 'Podgląd PDF'}
           </button>
-          <button
-            type="button"
-            onClick={exportOfferExcel}
-            disabled={loadingPreview || loadingGenerate || loadingExcel}
-            className="px-3 py-1.5 text-sm border border-border rounded hover:bg-surface-2 flex items-center gap-1.5 disabled:opacity-50"
-            title="Pobierz ofertę jako Excel z formułami i sumami (bez nadawania numeru)"
-          >
-            <FileSpreadsheet size={16} />
-            {loadingExcel ? 'Excel…' : 'Eksport Excel'}
-          </button>
+          {OFFER_EXCEL_EXPORT_VISIBLE ? (
+            <button
+              type="button"
+              onClick={exportOfferExcel}
+              disabled={loadingPreview || loadingGenerate || loadingExcel}
+              className="px-3 py-1.5 text-sm border border-border rounded hover:bg-surface-2 flex items-center gap-1.5 disabled:opacity-50"
+              title="Pobierz ofertę jako Excel z formułami i sumami (bez nadawania numeru)"
+            >
+              <FileSpreadsheet size={16} />
+              {loadingExcel ? 'Excel…' : 'Eksport Excel'}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={generateOfferPdf}
@@ -1139,17 +1142,19 @@ export default function OrderOfferPage() {
                         className="inline-flex items-center gap-1 px-2 py-1 rounded border border-border hover:bg-surface-2 text-xs disabled:opacity-50"
                       >
                         <Download size={14} />
-                        PDF
+                        Pobierz
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => downloadExportExcel(exp.id)}
-                        disabled={exportBusyId !== null}
-                        className="inline-flex items-center gap-1 px-2 py-1 ml-1 rounded border border-border hover:bg-surface-2 text-xs disabled:opacity-50"
-                      >
-                        <FileSpreadsheet size={14} />
-                        Excel
-                      </button>
+                      {OFFER_EXCEL_EXPORT_VISIBLE ? (
+                        <button
+                          type="button"
+                          onClick={() => downloadExportExcel(exp.id)}
+                          disabled={exportBusyId !== null}
+                          className="inline-flex items-center gap-1 px-2 py-1 ml-1 rounded border border-border hover:bg-surface-2 text-xs disabled:opacity-50"
+                        >
+                          <FileSpreadsheet size={14} />
+                          Excel
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => deleteExport(exp.id, exp.documentNumber)}

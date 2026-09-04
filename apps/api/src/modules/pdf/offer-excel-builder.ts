@@ -1,5 +1,6 @@
 /**
- * Eksport oferty do funkcjonalnego Excel (.xlsx):
+ * Parked: eksport oferty do funkcjonalnego Excel (.xlsx).
+ * UI is hidden (`OFFER_EXCEL_EXPORT_VISIBLE` in web). Do not delete.
  * - pozycje jak w PDF (sprzęt / produkcja / transport, bloki, kategorie, etapy)
  * - ilości, dni, ceny i rabaty jako komórki edytowalne
  * - netto / VAT / brutto i podsumowanie jako formuły (przeliczają się po edycji)
