@@ -1,11 +1,12 @@
 /** Branding Toinen Music — wspólne dla PDF i publicznego edytora. */
 export const TOINEN_ACCENT_HEX = '#81B29F'
 
+/** Logo na ciemne tło: napis biały, akcent (#5FB29E) bez zmian. */
 export const TOINEN_LOGO_SVG = `<?xml version="1.0" encoding="utf-8"?>
 <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
 \t viewBox="0 0 519.4 200.6" enable-background="new 0 0 519.4 200.6" xml:space="preserve">
 <g id="Layer_1">
-\t<g>
+\t<g fill="#FFFFFF">
 \t\t<polygon points="14.1,23.4 65.6,23.4 65.6,42.1 48.6,42.1 48.6,97.9 30.1,97.9 30.1,42.1 14.1,42.1 \t\t"/>
 \t\t<path d="M106.1,22.9c-21.5,0-38.9,17.4-38.9,38.9c0,21.5,17.4,38.9,38.9,38.9S145,83.2,145,61.7C145,40.3,127.5,22.9,106.1,22.9z
 \t\t\t M106.1,84.5C95,84.5,86,74.6,86,62.4s9-22.1,20.1-22.1s20.1,9.9,20.1,22.1S117.2,84.5,106.1,84.5z"/>
