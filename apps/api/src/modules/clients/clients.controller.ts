@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client'
 import { prisma } from '../../prisma/client'
 import { NotFoundError } from '../../shared/errors/AppError'
 import { PaginationSchema } from '@lama-stage/shared-types'
+import { clientListSearchWhere, findClientIdsForSearch } from '../../shared/utils/prisma-search'
 
 export const getClients = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -22,14 +23,12 @@ export const getClients = async (req: Request, res: Response, next: NextFunction
     const term = typeof searchQuery === 'string' ? searchQuery.trim() : '';
     const where: Prisma.ClientWhereInput = deletedOnly ? { isDeleted: true } : { isDeleted: false }
     if (term) {
-      where.OR = [
-        { companyName: { contains: term } },
-        { contactName: { contains: term } },
-        { email: { contains: term } },
-        { phone: { contains: term } },
-        { nip: { contains: term } },
-        { address: { contains: term } },
-      ];
+      try {
+        const ids = await findClientIdsForSearch(prisma, term)
+        where.id = { in: ids }
+      } catch {
+        Object.assign(where, clientListSearchWhere(term))
+      }
     }
 
     const [clients, total] = await prisma.$transaction([

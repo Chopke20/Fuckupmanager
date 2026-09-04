@@ -14,6 +14,7 @@ import { z } from 'zod'
 import { EquipmentUnavailableError } from '../../shared/errors/AppError'
 
 import { prisma } from '../../prisma/client'
+import { findOrderIdsForSearch, orderListSearchWhere } from '../../shared/utils/prisma-search'
 
 const orderDetailInclude = {
   client: true,
@@ -231,12 +232,13 @@ export class OrdersService {
       where.status = params.status;
     }
     if (params?.search?.trim()) {
-      const term = params.search.trim();
-      where.OR = [
-        { name: { contains: term } },
-        { venue: { contains: term } },
-        { client: { companyName: { contains: term } } },
-      ];
+      try {
+        const ids = await findOrderIdsForSearch(prisma, params.search)
+        where.id = { in: ids }
+      } catch {
+        // Fallback if DB lacks normalize() / older Postgres
+        Object.assign(where, orderListSearchWhere(params.search))
+      }
     }
 
     const [orders, total] = await Promise.all([
