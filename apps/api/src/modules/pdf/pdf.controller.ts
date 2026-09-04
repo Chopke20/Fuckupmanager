@@ -1,9 +1,10 @@
 import { Request, Response } from 'express'
+import { randomUUID } from 'node:crypto'
 import { prisma } from '../../prisma/client'
 import puppeteer from 'puppeteer'
 import { ZodError } from 'zod'
 import { AppError } from '../../shared/errors/AppError'
-import { OrderOfferSnapshotSchema, parseStagePlanJson, type OfferDocumentDraft, type OrderOfferSnapshot } from '@lama-stage/shared-types'
+import { OrderOfferSnapshotSchema, parseStagePlanJson, type OfferDocumentDraft, type OrderOfferSnapshot, type SharedOfferPartnerLine } from '@lama-stage/shared-types'
 import { buildOfferHtmlV5, type OrderLike } from './offer-v5-builder'
 import { buildOfferExcel, offerExcelFilename } from './offer-excel-builder'
 import { buildWarehousePdfHtml } from './warehouse-pdf-builder'
@@ -112,6 +113,48 @@ const TOINEN_LOGO_SVG = `<?xml version="1.0" encoding="utf-8"?>
 </svg>`
 
 const TOINEN_LOGO_DATA_URI = svgToDataUri(TOINEN_LOGO_SVG)
+
+function partnerLineToSnapshotEquipment(l: SharedOfferPartnerLine, orderId: string, nowIso: string) {
+  return {
+    id: randomUUID(),
+    orderId,
+    name: l.name,
+    description: l.description || undefined,
+    category: l.category || 'Inne',
+    quantity: Math.max(1, Math.round(l.quantity) || 1),
+    unitPrice: l.unitPrice,
+    days: l.days,
+    discount: l.discount,
+    visibleInOffer: true,
+    isRental: false,
+    sortOrder: l.sortOrder,
+    offerBlockId: l.offerBlockId,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  }
+}
+
+function partnerLineToSnapshotProduction(l: SharedOfferPartnerLine, orderId: string, nowIso: string) {
+  return {
+    id: randomUUID(),
+    orderId,
+    name: l.name,
+    description: l.description || undefined,
+    rateType: 'FLAT' as const,
+    rateValue: l.unitPrice,
+    units: l.quantity,
+    discount: l.discount,
+    stageIds: undefined,
+    isTransport: false,
+    isAutoCalculated: false,
+    isSubcontractor: false,
+    visibleInOffer: true,
+    sortOrder: l.sortOrder,
+    offerBlockId: l.offerBlockId,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  }
+}
 
 export class PdfController {
   private isToinenMusicModeAllowed(appSettings: unknown): boolean {
@@ -551,6 +594,108 @@ export class PdfController {
     }
   }
 
+  /**
+   * Oferta współdzielona (Toinen): scalone pozycje + wymuszony tryb Toinen.
+   * Nie rusza Order.offerVersion / offerNumber — osobna seria SHARED_OFFER (TOI-…).
+   */
+  async generateSharedOfferPdf(orderId: string, partnerLines: SharedOfferPartnerLine[], res: Response) {
+    const order = await loadOrderForPdf(orderId)
+    if (!order) throw new AppError('Zlecenie nie znalezione', 404, 'NOT_FOUND')
+    if (!order.client) {
+      throw new AppError('Zlecenie nie ma przypisanego klienta — brak danych do oferty', 400)
+    }
+
+    const orderYear = order.orderYear ?? new Date(order.createdAt).getFullYear()
+    const orderNumber = order.orderNumber
+    if (orderNumber == null || orderYear == null) {
+      throw new AppError(
+        'Zlecenie nie ma nadanego numeru. Uruchom skrypt backfillu numeracji lub utwórz zlecenie ponownie.',
+        400
+      )
+    }
+
+    let draftPayload = await loadOfferDraftPayload(prisma, orderId, order)
+    draftPayload = { ...draftPayload, toinenMusicMode: true }
+    const generatedAt = new Date().toISOString()
+    const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
+    if (!this.isToinenMusicModeAllowed(appSettings)) {
+      throw new AppError('Tryb Toinen Music jest wyłączony w ustawieniach aplikacji.', 400)
+    }
+
+    let branding = await this.resolvePdfBranding(appSettings)
+    let projectContact = this.pickProjectContact(appSettings, null)
+    let offerIssuerDetailsVariant: 'DEFAULT' | 'ADDRESS_NIP' = 'DEFAULT'
+    ;({ draftPayload, branding, projectContact, offerIssuerDetailsVariant } = this.applyToinenMusicModeIfEnabled(
+      appSettings,
+      draftPayload,
+      branding,
+      projectContact,
+    ))
+    if (!draftPayload.toinenMusicMode) {
+      throw new AppError('Tryb Toinen Music jest wyłączony w ustawieniach aplikacji.', 400)
+    }
+
+    branding = {
+      ...branding,
+      logoUrl: (await this.tryLoadLogoAsDataUri(branding.logoUrl)) ?? branding.logoUrl,
+    }
+
+    const existing = await prisma.orderDocumentExport.count({
+      where: { orderId, documentType: 'SHARED_OFFER' },
+    })
+    const documentNumber = buildDocumentNumber({
+      documentType: 'SHARED_OFFER',
+      orderNumber,
+      orderYear,
+      version: existing + 1,
+    })
+
+    const baseSnapshot = buildOrderOfferSnapshotFromOrder(order, draftPayload, {
+      generatedAt,
+      documentNumber,
+    })
+
+    const partnerEq = partnerLines
+      .filter((l) => l.kind === 'EQUIPMENT')
+      .map((l) => partnerLineToSnapshotEquipment(l, orderId, generatedAt))
+    const partnerProd = partnerLines
+      .filter((l) => l.kind === 'PRODUCTION')
+      .map((l) => partnerLineToSnapshotProduction(l, orderId, generatedAt))
+
+    const mergedSnapshot = OrderOfferSnapshotSchema.parse({
+      ...baseSnapshot,
+      equipmentItems: [...baseSnapshot.equipmentItems, ...partnerEq],
+      productionItems: [...baseSnapshot.productionItems, ...partnerProd],
+      documentDraft: {
+        ...(baseSnapshot.documentDraft as Record<string, unknown>),
+        toinenMusicMode: true,
+      },
+    })
+
+    await prisma.orderDocumentExport.create({
+      data: {
+        orderId,
+        documentType: 'SHARED_OFFER',
+        documentNumber,
+        snapshot: JSON.stringify(mergedSnapshot),
+      },
+    })
+
+    const html = buildOfferHtmlV5(orderOfferSnapshotToPdfOrderLike(mergedSnapshot), documentNumber, {
+      issuedAt: generatedAt,
+      projectContact,
+      accentColorHex: branding.accentColorHex,
+      logoUrl: branding.logoUrl,
+      issuerDetailsVariant: offerIssuerDetailsVariant,
+    })
+    const pdfBuffer = await this.renderPdf(html)
+
+    const filename = `Oferta-${documentNumber}.pdf`
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    res.send(pdfBuffer)
+  }
+
   async buildOfferPdfFromExportId(exportId: string): Promise<{ buffer: Buffer; filename: string }> {
     const exportRecord = await prisma.orderDocumentExport.findUnique({
       where: { id: exportId },
@@ -558,8 +703,8 @@ export class PdfController {
     if (!exportRecord) {
       throw new AppError('Eksport dokumentu nie znaleziony', 404, 'NOT_FOUND')
     }
-    if (exportRecord.documentType !== 'OFFER') {
-      throw new AppError('Obsługiwany jest tylko eksport oferty (OFFER)', 400)
+    if (exportRecord.documentType !== 'OFFER' && exportRecord.documentType !== 'SHARED_OFFER') {
+      throw new AppError('Obsługiwany jest tylko eksport oferty', 400)
     }
     let snapshotRaw: unknown
     try {
@@ -582,20 +727,63 @@ export class PdfController {
     const issuedAt: string | undefined =
       parsed.success && parsed.data.generatedAt ? parsed.data.generatedAt : issuedAtFallback
     const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
-    const branding = await this.resolvePdfBranding(appSettings)
-    const projectContact = this.pickProjectContact(appSettings, null)
+    let branding = await this.resolvePdfBranding(appSettings)
+    let projectContact = this.pickProjectContact(appSettings, null)
+    let issuerDetailsVariant: 'DEFAULT' | 'ADDRESS_NIP' = 'DEFAULT'
+
+    const draftFromSnapshot =
+      parsed.success && parsed.data.documentDraft && typeof parsed.data.documentDraft === 'object'
+        ? (parsed.data.documentDraft as OfferDocumentDraft)
+        : null
+    const wantsToinen =
+      exportRecord.documentType === 'SHARED_OFFER' ||
+      draftFromSnapshot?.toinenMusicMode === true
+
+    if (wantsToinen && draftFromSnapshot) {
+      const forcedDraft: OfferDocumentDraft = { ...draftFromSnapshot, toinenMusicMode: true }
+      ;({ branding, projectContact, offerIssuerDetailsVariant: issuerDetailsVariant } =
+        this.applyToinenMusicModeIfEnabled(appSettings, forcedDraft, branding, projectContact))
+      branding = {
+        ...branding,
+        logoUrl: (await this.tryLoadLogoAsDataUri(branding.logoUrl)) ?? branding.logoUrl,
+      }
+    } else if (wantsToinen) {
+      const stubDraft = {
+        toinenMusicMode: true,
+        offerValidityDays: 14,
+        currency: 'PLN' as const,
+        vatRate: 23 as const,
+        issuer: {
+          profileKey: 'TOINEN_MUSIC',
+          companyName: 'Toinen Music Mariusz Nowicki',
+          address: 'ul. Czerska 8/10\n00-732 Warszawa',
+          nip: '8121780604',
+          email: 'pawel@toinenmusic.com',
+          phone: '508067687',
+        },
+      } satisfies OfferDocumentDraft
+      ;({ branding, projectContact, offerIssuerDetailsVariant: issuerDetailsVariant } =
+        this.applyToinenMusicModeIfEnabled(appSettings, stubDraft, branding, projectContact))
+      branding = {
+        ...branding,
+        logoUrl: (await this.tryLoadLogoAsDataUri(branding.logoUrl)) ?? branding.logoUrl,
+      }
+    }
+
     const html = parsed.success
       ? buildOfferHtmlV5(orderOfferSnapshotToPdfOrderLike(parsed.data), exportRecord.documentNumber, {
           issuedAt,
           projectContact,
           accentColorHex: branding.accentColorHex,
           logoUrl: branding.logoUrl,
+          issuerDetailsVariant,
         })
       : buildOfferHtmlV5(raw as OrderLike, exportRecord.documentNumber, {
           issuedAt,
           projectContact,
           accentColorHex: branding.accentColorHex,
           logoUrl: branding.logoUrl,
+          issuerDetailsVariant,
         })
     const pdfBuffer = await this.renderPdf(html)
     return { buffer: pdfBuffer, filename: `Oferta-${exportRecord.documentNumber}.pdf` }

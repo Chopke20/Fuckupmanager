@@ -8,6 +8,7 @@ import OrderFormPage from '../modules/orders/pages/OrderFormPage'
 import OrderOfferPage from '../modules/orders/pages/OrderOfferPage'
 import OrderProposalPage from '../modules/orders/pages/OrderProposalPage'
 import PublicProposalPage from '../modules/orders/pages/PublicProposalPage'
+import SharedOfferEditorPage from '../modules/orders/pages/SharedOfferEditorPage'
 import OrderWarehousePage from '../modules/orders/pages/OrderWarehousePage'
 import OrderBriefPage from '../modules/orders/pages/OrderBriefPage'
 import OrderStagePlanPage from '../modules/orders/pages/OrderStagePlanPage'
@@ -42,6 +43,7 @@ export const appRouter = createBrowserRouter([
   { path: '/reset-password', element: <ResetPasswordPage /> },
   { path: '/accept-invite', element: <AcceptInvitePage /> },
   { path: '/p/:token', element: <PublicProposalPage /> },
+  { path: '/so/:token', element: <SharedOfferEditorPage /> },
   { path: '/', element: <ProtectedLayout><OverviewPage /></ProtectedLayout> },
   { path: '/v4', element: <ProtectedLayout><OverviewPageV4 /></ProtectedLayout> },
   { path: '/orders', element: <ProtectedLayout><OrdersPage /></ProtectedLayout> },

@@ -16,6 +16,7 @@ import authRouter from './modules/auth/auth.router'
 import issuerProfilesRouter from './modules/issuer-profiles/issuer-profiles.router'
 import dataportRouter from './modules/dataport/dataport.router'
 import publicProposalRouter from './modules/orders/public-proposal.router'
+import sharedOfferPublicRouter from './modules/orders/shared-offer-public.router'
 import stagePlanProjectsRouter from './modules/stage-plan-projects/stage-plan-projects.router'
 import { bindCompanyContext, requireAuth, requireModuleAccess, requirePermission } from './shared/middleware/auth.middleware'
 
@@ -67,6 +68,7 @@ export function createApp() {
   // API routes
   app.use('/api/auth', authRouter)
   app.use('/api/public/proposals', publicProposalRouter)
+  app.use('/api/public/shared-offer', sharedOfferPublicRouter)
   app.use('/api', requireAuth, bindCompanyContext)
   app.use('/api/clients', requireModuleAccess('clients'), clientsRouter)
   app.use('/api/equipment', requireModuleAccess('equipment'), equipmentRouter)

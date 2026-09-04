@@ -189,6 +189,7 @@ model Order {
 
   documentExports OrderDocumentExport[]
   documentDrafts  OrderDocumentDraft[]
+  sharedOfferSession OrderSharedOfferSession?
   stagePlanProjects StagePlanProject[]
 
   createdAt DateTime @default(now())
@@ -407,6 +408,44 @@ model ProposalPublicEvent {
 
   @@index([exportId, eventType, createdAt])
   @@map("proposal_public_events")
+}
+
+/// Sesja zewnętrznego edytora oferty (partner Toinen Music).
+/// Jeden aktywny link na zlecenie. Pozycje partnera żyją TYLKO tutaj —
+/// nigdy w order_equipment_items / order_production_items.
+model OrderSharedOfferSession {
+  id      String @id @default(uuid())
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  publicToken String @unique
+
+  /// JSON: SharedOfferPartnerPayload (lista pozycji partnera)
+  partnerPayloadJson String
+
+  revokedAt   DateTime?
+  lastSavedAt DateTime?
+  createdById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events SharedOfferSessionEvent[]
+
+  @@index([publicToken])
+  @@map("order_shared_offer_sessions")
+}
+
+model SharedOfferSessionEvent {
+  id        String                  @id @default(uuid())
+  sessionId String
+  session   OrderSharedOfferSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  /// OPEN | SAVE | PDF
+  eventType String
+  createdAt DateTime                @default(now())
+
+  @@index([sessionId, eventType, createdAt])
+  @@map("shared_offer_session_events")
 }
 
 model OrderDocumentDraft {

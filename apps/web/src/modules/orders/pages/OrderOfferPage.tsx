@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback, Fragment } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, FileText, Eye, Download, Shield, Trash2, FileSpreadsheet } from 'lucide-react';
+import { ArrowLeft, FileText, Eye, Download, Shield, Trash2, FileSpreadsheet, Link2, Copy, Ban } from 'lucide-react';
 import type { IssuerProfilePublic } from '@lama-stage/shared-types';
 import { useOrder, orderKeys } from '../hooks/useOrders';
 import { orderApi, OrderDocumentExportMeta } from '../api/order.api';
@@ -12,6 +12,7 @@ import { OFFER_EXCEL_EXPORT_VISIBLE } from '../utils/offerExcelExport';
 import { apiListIssuerProfiles } from '../../admin/api/issuer-profiles.api';
 import { useAuth } from '../../auth/AuthProvider';
 import { apiGetAppSettings } from '../../auth/auth.api';
+import { sharedOfferAdminApi, type SharedOfferStatusResponse } from '../api/sharedOffer.api';
 
 function parseFilenameFromContentDisposition(header: string | undefined, fallback: string) {
   if (!header) return fallback;
@@ -117,6 +118,8 @@ export default function OrderOfferPage() {
 
   const [draft, setDraft] = useState<OfferDraft | null>(null);
   const [exports, setExports] = useState<OrderDocumentExportMeta[]>([]);
+  const [sharedStatus, setSharedStatus] = useState<SharedOfferStatusResponse | null>(null);
+  const [sharedBusy, setSharedBusy] = useState(false);
   const [loadingDraft, setLoadingDraft] = useState(false);
   const [loadingExports, setLoadingExports] = useState(false);
   const [loadingPreview, setLoadingPreview] = useState(false);
@@ -172,12 +175,30 @@ export default function OrderOfferPage() {
   useEffect(() => {
     if (!id) return;
     setLoadingExports(true);
-    orderApi
-      .getDocumentExports(id, 'OFFER')
-      .then(setExports)
+    Promise.all([
+      orderApi.getDocumentExports(id, 'OFFER').catch(() => [] as OrderDocumentExportMeta[]),
+      orderApi.getDocumentExports(id, 'SHARED_OFFER').catch(() => [] as OrderDocumentExportMeta[]),
+    ])
+      .then(([offerExports, sharedExports]) => {
+        const merged = [...offerExports, ...sharedExports].sort(
+          (a, b) => new Date(b.exportedAt).getTime() - new Date(a.exportedAt).getTime()
+        );
+        setExports(merged);
+      })
       .catch(() => setExports([]))
       .finally(() => setLoadingExports(false));
   }, [id]);
+
+  useEffect(() => {
+    if (!id || !enableToinenMusicMode) {
+      setSharedStatus(null);
+      return;
+    }
+    sharedOfferAdminApi
+      .status(id)
+      .then(setSharedStatus)
+      .catch(() => setSharedStatus(null));
+  }, [id, enableToinenMusicMode]);
 
   /** Profil z draftu API, którego nie ma w liście z serwera — dołącz do wyboru (snapshot / stary klucz). */
   const issuerProfilesForSelect = useMemo(() => {
@@ -190,15 +211,78 @@ export default function OrderOfferPage() {
 
   const reloadExports = useCallback(async () => {
     if (!id) return;
-    const list = await orderApi.getDocumentExports(id, 'OFFER').catch(() => [] as OrderDocumentExportMeta[]);
-    setExports(list);
+    const [offerExports, sharedExports] = await Promise.all([
+      orderApi.getDocumentExports(id, 'OFFER').catch(() => [] as OrderDocumentExportMeta[]),
+      orderApi.getDocumentExports(id, 'SHARED_OFFER').catch(() => [] as OrderDocumentExportMeta[]),
+    ]);
+    const merged = [...offerExports, ...sharedExports].sort(
+      (a, b) => new Date(b.exportedAt).getTime() - new Date(a.exportedAt).getTime()
+    );
+    setExports(merged);
   }, [id]);
 
+  const reloadSharedStatus = useCallback(async () => {
+    if (!id || !enableToinenMusicMode) return;
+    const status = await sharedOfferAdminApi.status(id).catch(() => null);
+    setSharedStatus(status);
+  }, [id, enableToinenMusicMode]);
+
+  const createSharedLink = useCallback(async () => {
+    if (!id) return;
+    setSharedBusy(true);
+    setError(null);
+    try {
+      await sharedOfferAdminApi.createLink(id);
+      await reloadSharedStatus();
+      setInfo('Utworzono link oferty współdzielonej dla partnera.');
+    } catch (e: any) {
+      const msg =
+        e?.response?.data?.error?.message ||
+        e?.response?.data?.error ||
+        'Nie udało się utworzyć linku.';
+      setError(typeof msg === 'string' ? msg : 'Nie udało się utworzyć linku.');
+    } finally {
+      setSharedBusy(false);
+    }
+  }, [id, reloadSharedStatus]);
+
+  const revokeSharedLink = useCallback(async () => {
+    if (!id) return;
+    const ok = window.confirm('Unieważnić link dla partnera? Edytor zewnętrzny przestanie działać.');
+    if (!ok) return;
+    setSharedBusy(true);
+    setError(null);
+    try {
+      await sharedOfferAdminApi.revokeLink(id);
+      await reloadSharedStatus();
+      setInfo('Link oferty współdzielonej został unieważniony.');
+    } catch {
+      setError('Nie udało się unieważnić linku.');
+    } finally {
+      setSharedBusy(false);
+    }
+  }, [id, reloadSharedStatus]);
+
+  const copySharedLink = useCallback(async () => {
+    const token = sharedStatus?.session?.publicToken;
+    if (!token) return;
+    const url = `${window.location.origin}/so/${token}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setInfo('Skopiowano link do schowka.');
+    } catch {
+      setError('Nie udało się skopiować linku.');
+    }
+  }, [sharedStatus?.session?.publicToken]);
+
   const deleteExport = useCallback(
-    async (exportId: string, documentNumber: string) => {
+    async (exportId: string, documentNumber: string, documentType?: string) => {
       if (!id) return;
+      const isShared = documentType === 'SHARED_OFFER';
       const ok = window.confirm(
-        `Usunąć snapshot oferty ${documentNumber}?\n\nNumer wersji zlecenia (offerVersion / kolejny PDF) zostanie przeliczony z pozostałych snapshotów. Tej operacji nie cofniesz.`
+        isShared
+          ? `Usunąć dokument oferty współdzielonej ${documentNumber}?\n\nTej operacji nie cofniesz.`
+          : `Usunąć snapshot oferty ${documentNumber}?\n\nNumer wersji zlecenia (offerVersion / kolejny PDF) zostanie przeliczony z pozostałych snapshotów. Tej operacji nie cofniesz.`
       );
       if (!ok) return;
       setExportBusyId(exportId);
@@ -207,7 +291,7 @@ export default function OrderOfferPage() {
         await orderApi.deleteDocumentExport(id, exportId);
         await reloadExports();
         await queryClient.invalidateQueries({ queryKey: orderKeys.detail(id) });
-        setInfo('Usunięto snapshot oferty; numer wersji zaktualizowano.');
+        setInfo(isShared ? 'Usunięto dokument oferty współdzielonej.' : 'Usunięto snapshot oferty; numer wersji zaktualizowano.');
       } catch {
         setError('Nie udało się usunąć snapshotu.');
       } finally {
@@ -1103,7 +1187,8 @@ export default function OrderOfferPage() {
           Snapshoty oferty (historia)
         </div>
         <p className="text-xs text-muted-foreground mb-3">
-          Numer oferty: <span className="font-mono">OFR-YY-NNNN-v#</span> — nadawany przy pierwszym eksporcie z nową treścią. Usunięcie snapshotu przelicza{' '}
+          Numer oferty: <span className="font-mono">OFR-YY-NNNN-v#</span> — nadawany przy pierwszym eksporcie z nową treścią.
+          Dokumenty partnera: <span className="font-mono">TOI-YY-NNNN-v#</span>. Usunięcie snapshotu OFR przelicza{' '}
           <span className="font-mono">wersję</span> z pozostałych zapisów (lub reset, gdy nie ma żadnego).
         </p>
         {loadingExports ? (
@@ -1116,6 +1201,7 @@ export default function OrderOfferPage() {
               <thead>
                 <tr className="border-b border-border">
                   <th className="text-left py-2 pr-3">Numer oferty</th>
+                  <th className="text-left py-2 pr-3">Źródło</th>
                   <th className="text-left py-2 pr-3">Data eksportu</th>
                   <th className="text-right py-2 pl-3">Akcje</th>
                 </tr>
@@ -1124,6 +1210,15 @@ export default function OrderOfferPage() {
                 {exports.map((exp) => (
                   <tr key={exp.id} className="border-b border-border/60 last:border-0">
                     <td className="py-2 pr-3 font-mono">{exp.documentNumber}</td>
+                    <td className="py-2 pr-3">
+                      {exp.documentType === 'SHARED_OFFER' ? (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide border border-border bg-surface-2">
+                          Toinen
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">Lama</span>
+                      )}
+                    </td>
                     <td className="py-2 pr-3">{new Date(exp.exportedAt).toLocaleString('pl-PL')}</td>
                     <td className="py-2 pl-3 text-right whitespace-nowrap">
                       <button
@@ -1144,7 +1239,7 @@ export default function OrderOfferPage() {
                         <Download size={14} />
                         Pobierz
                       </button>
-                      {OFFER_EXCEL_EXPORT_VISIBLE ? (
+                      {OFFER_EXCEL_EXPORT_VISIBLE && exp.documentType !== 'SHARED_OFFER' ? (
                         <button
                           type="button"
                           onClick={() => downloadExportExcel(exp.id)}
@@ -1157,7 +1252,7 @@ export default function OrderOfferPage() {
                       ) : null}
                       <button
                         type="button"
-                        onClick={() => deleteExport(exp.id, exp.documentNumber)}
+                        onClick={() => deleteExport(exp.id, exp.documentNumber, exp.documentType)}
                         disabled={exportBusyId !== null}
                         title="Usuń snapshot"
                         className="inline-flex items-center gap-1 px-2 py-1 ml-1 rounded border border-destructive/40 text-destructive hover:bg-destructive/10 text-xs disabled:opacity-50"
@@ -1173,6 +1268,89 @@ export default function OrderOfferPage() {
           </div>
         )}
       </div>
+
+      {enableToinenMusicMode ? (
+        <div className="max-w-6xl mx-auto bg-surface rounded-xl border border-border p-4">
+          <div className="text-lg font-bold mb-1 flex items-center gap-2">
+            <Link2 size={20} />
+            Oferta współdzielona (Toinen Music)
+          </div>
+          <p className="text-xs text-muted-foreground mb-3">
+            Pozycje partnera nie wchodzą do Twojego zlecenia. Widzisz je w wygenerowanych dokumentach typu{' '}
+            <span className="font-mono">TOI-…</span>.
+          </p>
+          {!sharedStatus?.session || sharedStatus.session.revokedAt ? (
+            <button
+              type="button"
+              onClick={() => void createSharedLink()}
+              disabled={sharedBusy}
+              className="inline-flex items-center gap-2 px-3 py-2 text-sm rounded border border-border hover:bg-surface-2 disabled:opacity-50"
+            >
+              <Link2 size={16} />
+              {sharedBusy ? 'Tworzenie…' : 'Utwórz link dla partnera'}
+            </button>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  readOnly
+                  className="flex-1 min-w-[240px] px-2 py-1.5 text-sm font-mono bg-background border border-border rounded"
+                  value={`${typeof window !== 'undefined' ? window.location.origin : ''}/so/${sharedStatus.session.publicToken}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => void copySharedLink()}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded border border-border hover:bg-surface-2"
+                >
+                  <Copy size={14} />
+                  Kopiuj
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void revokeSharedLink()}
+                  disabled={sharedBusy}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded border border-destructive/40 text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                >
+                  <Ban size={14} />
+                  Unieważnij link
+                </button>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Pozycje partnera: <strong>{sharedStatus.partnerLineCount}</strong>
+                {sharedStatus.partnerLineCount > 0 ? (
+                  <>
+                    {' '}
+                    · suma netto ok. <strong>{sharedStatus.partnerNet.toLocaleString('pl-PL')} PLN</strong>
+                  </>
+                ) : null}
+                {sharedStatus.session.lastSavedAt ? (
+                  <>
+                    {' '}
+                    · ostatni zapis:{' '}
+                    {new Date(sharedStatus.session.lastSavedAt).toLocaleString('pl-PL')}
+                  </>
+                ) : null}
+              </p>
+              {sharedStatus.events.length > 0 ? (
+                <div>
+                  <div className="text-sm font-medium mb-1">Historia aktywności</div>
+                  <ul className="text-xs text-muted-foreground space-y-1 max-h-40 overflow-y-auto">
+                    {sharedStatus.events.map((ev) => (
+                      <li key={ev.id}>
+                        <span className="font-mono">{ev.eventType}</span>
+                        {' · '}
+                        {new Date(ev.createdAt).toLocaleString('pl-PL')}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">Brak aktywności partnera.</p>
+              )}
+            </div>
+          )}
+        </div>
+      ) : null}
 
     </div>
   );

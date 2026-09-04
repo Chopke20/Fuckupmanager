@@ -4,6 +4,7 @@ export * from './schemas/client.schema';
 export * from './schemas/equipment.schema';
 export * from './schemas/order.schema';
 export * from './schemas/order-document.schema';
+export * from './schemas/shared-offer.schema';
 export * from './schemas/auth.schema';
 export * from './schemas/user.schema';
 export * from './schemas/permission.schema';

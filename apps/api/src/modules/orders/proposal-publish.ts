@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto'
 import {
   OfferDocumentDraftSchema,
   ProposalClientSignalsSchema,
@@ -8,9 +7,13 @@ import {
 } from '@lama-stage/shared-types'
 import { prisma } from '../../prisma/client'
 import { AppError } from '../../shared/errors/AppError'
-import { getCompanyRegistry } from '../companies/company-registry'
-import { getCurrentCompanyCode, runWithCompanyContext } from '../../shared/context/company-context'
+import { getCurrentCompanyCode } from '../../shared/context/company-context'
 import { buildDocumentNumber, parseJsonSafely } from './order-document-draft-utils'
+import {
+  findAcrossCompanies,
+  isValidPublicToken,
+  newPublicToken,
+} from './public-token-lookup'
 import {
   buildProposalPublicSnapshot,
   parseProposalDraft,
@@ -20,14 +23,8 @@ import {
   type ProposalPublicSnapshot,
 } from './proposal-snapshot'
 
-const TOKEN_RE = /^[A-Za-z0-9_-]{20,64}$/
-
 export function isValidProposalPublicToken(token: string): boolean {
-  return TOKEN_RE.test(token)
-}
-
-function newPublicToken(): string {
-  return randomBytes(24).toString('base64url')
+  return isValidPublicToken(token)
 }
 
 function pickLogoUrl(settings: {
@@ -89,16 +86,13 @@ export function parseClientSignals(raw: string | null | undefined): ProposalClie
 
 export async function findProposalExportByPublicToken(token: string) {
   if (!isValidProposalPublicToken(token)) return null
-  const companies = getCompanyRegistry()
-  for (const company of companies) {
-    const found = await runWithCompanyContext(company.code, async () =>
-      prisma.orderDocumentExport.findFirst({
-        where: { documentType: 'PROPOSAL', publicToken: token },
-      })
-    )
-    if (found) return { companyCode: company.code, export: found }
-  }
-  return null
+  const found = await findAcrossCompanies(() =>
+    prisma.orderDocumentExport.findFirst({
+      where: { documentType: 'PROPOSAL', publicToken: token },
+    })
+  )
+  if (!found) return null
+  return { companyCode: found.companyCode, export: found.value }
 }
 
 export async function publishProposalExport(orderId: string) {

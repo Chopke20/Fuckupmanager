@@ -13,6 +13,7 @@ const DOCUMENT_TYPE_PREFIX: Record<DocumentType, string> = {
   WAREHOUSE: 'WHS',
   BRIEF: 'BRF',
   STAGE_PLAN: 'SCN',
+  SHARED_OFFER: 'TOI',
 };
 
 // Format: {OFR|PRP|WHS|BRF}-{YY}-{NNNN}-v{V}  e.g. OFR-26-0016-v3

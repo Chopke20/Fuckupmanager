@@ -335,6 +335,10 @@ export const createOrderDocumentExport = async (req: Request, res: Response, nex
 
     const documentType = parsedType.data
 
+    if (documentType === 'SHARED_OFFER') {
+      throw new AppError('Dokument oferty współdzielonej tworzy wyłącznie edytor partnera.', 400)
+    }
+
     if (documentType === 'PROPOSAL') {
       const published = await publishProposalExport(orderId)
       return res.status(201).json({

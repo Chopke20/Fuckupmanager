@@ -23,6 +23,11 @@ import {
   getOrderDocumentDraft,
   updateOrderDocumentDraft,
 } from './order-documents.controller';
+import {
+  getSharedOfferStatus,
+  createSharedOfferLink,
+  revokeSharedOfferLink,
+} from './shared-offer.controller';
 import { generateOfferClientDescription } from '../ai/ai.controller';
 
 const router = Router();
@@ -40,6 +45,9 @@ router.delete('/:id/documents/exports/:exportId', deleteOrderDocumentExport);
 router.post('/:id/documents/exports', createOrderDocumentExport);
 router.get('/:id/documents/draft', getOrderDocumentDraft);
 router.put('/:id/documents/draft', updateOrderDocumentDraft);
+router.get('/:id/shared-offer', getSharedOfferStatus);
+router.post('/:id/shared-offer/link', createSharedOfferLink);
+router.delete('/:id/shared-offer/link', revokeSharedOfferLink);
 /** OpenRouter: opis oferty dla klienta — ten sam prefiks co draft (`/:id/documents/...`), żeby proxy i routing nie zwracały 404. */
 router.post('/:id/documents/offer-client-description', generateOfferClientDescription);
 router.post('/', validate(CreateOrderSchema), createOrder);

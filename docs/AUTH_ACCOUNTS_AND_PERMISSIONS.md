@@ -31,6 +31,9 @@ Guardy UI:
 - `POST /api/auth/forgot-password`
 - `POST /api/auth/reset-password`
 - `POST /api/auth/accept-invite`
+- `GET /api/auth/public-companies`
+- `GET /api/public/proposals/:token` (+ events / signals / pdf)
+- `GET|PUT /api/public/shared-offer/:token` (+ `POST .../pdf`) — oferta współdzielona (Toinen Music)
 - `GET /health`
 
 ### Chronione endpointy

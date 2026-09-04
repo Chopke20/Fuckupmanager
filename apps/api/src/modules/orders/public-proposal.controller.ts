@@ -7,6 +7,7 @@ import {
 import { prisma } from '../../prisma/client'
 import { AppError } from '../../shared/errors/AppError'
 import { runWithCompanyContext } from '../../shared/context/company-context'
+import { assertRateLimit, clientIp } from '../../shared/middleware/public-rate-limit'
 import { PdfController } from '../pdf/pdf.controller'
 import {
   findProposalExportByPublicToken,
@@ -15,26 +16,8 @@ import {
   snapshotFromExport,
 } from './proposal-publish'
 
-const rateHits = new Map<string, { n: number; resetAt: number }>()
-
-function clientIp(req: Request): string {
-  const fwd = req.headers['x-forwarded-for']
-  if (typeof fwd === 'string' && fwd.trim()) return fwd.split(',')[0]!.trim()
-  return req.ip || 'unknown'
-}
-
-function assertRateLimit(req: Request) {
-  const now = Date.now()
-  const key = clientIp(req)
-  const cur = rateHits.get(key)
-  if (!cur || cur.resetAt < now) {
-    rateHits.set(key, { n: 1, resetAt: now + 60_000 })
-    return
-  }
-  if (cur.n >= 60) {
-    throw new AppError('Zbyt wiele żądań. Spróbuj za chwilę.', 429, 'RATE_LIMIT')
-  }
-  cur.n += 1
+function assertProposalRateLimit(req: Request) {
+  assertRateLimit(`prop:${clientIp(req)}`, 60, 60_000)
 }
 
 function tokenFromReq(req: Request): string {
@@ -47,7 +30,7 @@ function tokenFromReq(req: Request): string {
 
 export const getPublicProposal = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    assertRateLimit(req)
+    assertProposalRateLimit(req)
     const token = tokenFromReq(req)
     const found = await findProposalExportByPublicToken(token)
     if (!found) throw new AppError('Nie znaleziono oferty.', 404, 'NOT_FOUND')
@@ -96,7 +79,7 @@ export const getPublicProposal = async (req: Request, res: Response, next: NextF
 
 export const postPublicProposalEvent = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    assertRateLimit(req)
+    assertProposalRateLimit(req)
     const token = tokenFromReq(req)
     const parsed = ProposalPublicEventTypeSchema.safeParse(req.body?.eventType)
     if (!parsed.success) throw new AppError('Nieprawidłowy typ zdarzenia.', 400)
@@ -121,7 +104,7 @@ export const postPublicProposalEvent = async (req: Request, res: Response, next:
 
 export const postPublicProposalSignals = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    assertRateLimit(req)
+    assertProposalRateLimit(req)
     const token = tokenFromReq(req)
     const found = await findProposalExportByPublicToken(token)
     if (!found) throw new AppError('Nie znaleziono oferty.', 404, 'NOT_FOUND')
@@ -168,7 +151,7 @@ const pdfController = new PdfController()
 
 export const getPublicProposalPdf = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    assertRateLimit(req)
+    assertProposalRateLimit(req)
     const token = tokenFromReq(req)
     const found = await findProposalExportByPublicToken(token)
     if (!found) throw new AppError('Nie znaleziono oferty.', 404, 'NOT_FOUND')
