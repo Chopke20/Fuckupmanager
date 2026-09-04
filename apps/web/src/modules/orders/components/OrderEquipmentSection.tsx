@@ -323,11 +323,11 @@ export default function OrderEquipmentSection({
       {/* Tabela jak harmonogram – spójny wygląd, nazwa ma miejsce */}
       <div className="border border-border rounded overflow-hidden">
         <div className="overflow-x-auto">
-          <table className={`w-full text-sm ${compactLayout ? 'min-w-[960px]' : 'table-fixed min-w-[1100px]'}`}>
+          <table className={`w-full text-sm ${compactLayout ? 'min-w-[960px]' : 'w-full min-w-0'}`}>
             <thead>
               <tr className="bg-surface-2 border-b border-border">
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-10">#</th>
-                <th className={`text-left py-1.5 px-2 font-medium text-muted-foreground ${compactLayout ? 'w-48 min-w-[12rem]' : 'w-[28rem] min-w-[22rem]'}`}>Nazwa</th>
+                <th className={`text-left py-1.5 px-2 font-medium text-muted-foreground ${compactLayout ? 'w-48 min-w-[12rem]' : 'min-w-[16rem]'}`}>Nazwa</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-32">Kategoria</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-16">Ilość</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-24">Cena</th>

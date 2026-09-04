@@ -172,11 +172,11 @@ export default function OrderProductionSection({
       )}
       <div className="border border-border rounded overflow-hidden">
         <div className="overflow-x-auto">
-          <table className={`w-full text-sm ${compactLayout ? 'min-w-[880px]' : 'table-fixed min-w-[1000px]'}`}>
+          <table className={`w-full text-sm ${compactLayout ? 'min-w-[880px]' : 'w-full min-w-0'}`}>
             <thead>
               <tr className="bg-surface-2 border-b border-border">
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-10">#</th>
-                <th className={`text-left py-1.5 px-2 font-medium text-muted-foreground ${compactLayout ? 'w-48 min-w-[12rem]' : 'w-[28rem] min-w-[22rem]'}`}>Nazwa</th>
+                <th className={`text-left py-1.5 px-2 font-medium text-muted-foreground ${compactLayout ? 'w-48 min-w-[12rem]' : 'min-w-[16rem]'}`}>Nazwa</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-24">Stawka</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-16">Jedn.</th>
                 <th className="text-left py-1.5 px-2 font-medium text-muted-foreground w-16">Rabat</th>
