@@ -43,6 +43,7 @@ interface OrderTransportSectionProps {
   orderDateTo?: string | Date;
   distanceKm: number | null;
   onChange: (items: Partial<OrderProductionItem>[]) => void;
+  readOnly?: boolean;
 }
 
 type TransportTarget = {
@@ -204,6 +205,7 @@ export default function OrderTransportSection({
   orderDateTo,
   distanceKm,
   onChange,
+  readOnly = false,
 }: OrderTransportSectionProps) {
   const [settings, setSettings] = useState<TransportPricingSettings | null>(null);
   const [loadingSettings, setLoadingSettings] = useState(false);
@@ -223,6 +225,7 @@ export default function OrderTransportSection({
   const legacyAssignmentNormalizedRef = useRef(false);
 
   useEffect(() => {
+    if (readOnly) return;
     setLoadingSettings(true);
     financeApi
       .getTransportPricingSettings()
@@ -232,7 +235,7 @@ export default function OrderTransportSection({
       })
       .catch(() => setError('Nie udało się pobrać ustawień transportu.'))
       .finally(() => setLoadingSettings(false));
-  }, []);
+  }, [readOnly]);
 
   const [debouncedOrderDateFrom, setDebouncedOrderDateFrom] = useState(orderDateFrom);
   const [debouncedOrderDateTo, setDebouncedOrderDateTo] = useState(orderDateTo);
@@ -264,6 +267,7 @@ export default function OrderTransportSection({
   );
 
   useEffect(() => {
+    if (readOnly) return;
     if (legacyAssignmentNormalizedRef.current || items.length === 0) return;
     legacyAssignmentNormalizedRef.current = true;
     const next = items.map((item) => {
@@ -276,7 +280,7 @@ export default function OrderTransportSection({
     if (next.some((row, i) => row.description !== items[i]?.description)) {
       onChange(next);
     }
-  }, [items, onChange]);
+  }, [items, onChange, readOnly]);
 
   const stageOptions = useMemo(
     () =>
@@ -337,6 +341,7 @@ export default function OrderTransportSection({
   };
 
   useEffect(() => {
+    if (readOnly) return;
     if (distanceKm == null) {
       setQuote(null);
       return;
@@ -354,10 +359,11 @@ export default function OrderTransportSection({
       })
       .catch(() => setError('Nie udało się pobrać breakdownu transportu.'))
       .finally(() => setLoadingQuote(false));
-  }, [distanceKm, targets.length]);
+  }, [distanceKm, targets.length, readOnly]);
 
   // Build/sync transport rows from targets (schedule or order dates). Pierwsze wejście: szanuj zapisane wiersze; drugi wiersz tylko gdy liczba celów transportu rośnie (np. z 1 do 2 po zmianie harmonogramu).
   useEffect(() => {
+    if (readOnly) return;
     if (targets.length === 0) return;
     if (!settings) return;
 
@@ -423,7 +429,7 @@ export default function OrderTransportSection({
     if (shouldRecalculate) {
       onChange(buildAutoRows(items, targets.slice(0, Math.max(1, items.length))));
     }
-  }, [distanceKm, settings, quote, targets, hasManualOverride, items.length]);
+  }, [distanceKm, settings, quote, targets, hasManualOverride, items.length, readOnly]);
 
   const totalNet = items.reduce((sum, row) => sum + (row.rateValue ?? 0) * (row.units ?? 1), 0);
 
@@ -469,31 +475,35 @@ export default function OrderTransportSection({
     <div className="space-y-3">
       <div className="flex justify-between items-center">
         <h3 className="text-base font-semibold">Transport</h3>
-        <button
-          type="button"
-          onClick={() => setSettingsOpen(true)}
-          className="px-2 py-1 text-xs border border-border rounded hover:bg-surface-2 inline-flex items-center gap-1.5"
-        >
-          <Settings size={14} />
-          Ustawienia stawek
-        </button>
-      </div>
-
-      <div className="text-xs rounded border border-border p-2 bg-surface-2">
-        <div className="font-medium mb-1">Legenda wyceny (netto, trasa w dwie strony):</div>
-        {settings ? (
-          <ul className="space-y-0.5 text-muted-foreground">
-            {settings.ranges.map((row, idx) => (
-              <li key={`${row.fromKm}-${row.toKm}-${idx}`}>{`${row.fromKm} km - ${row.toKm} km: ${row.flatNet.toFixed(2)} PLN`}</li>
-            ))}
-            <li>{`>= ${settings.ranges[settings.ranges.length - 1]?.toKm ?? 0} km: kilometrówka ${settings.longDistancePerKm.toFixed(
-              2
-            )} PLN/km x km x 2`}</li>
-          </ul>
-        ) : (
-          <div className="text-muted-foreground">{loadingSettings ? 'Ładowanie...' : 'Brak danych ustawień'}</div>
+        {!readOnly && (
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            className="px-2 py-1 text-xs border border-border rounded hover:bg-surface-2 inline-flex items-center gap-1.5"
+          >
+            <Settings size={14} />
+            Ustawienia stawek
+          </button>
         )}
       </div>
+
+      {!readOnly && (
+        <div className="text-xs rounded border border-border p-2 bg-surface-2">
+          <div className="font-medium mb-1">Legenda wyceny (netto, trasa w dwie strony):</div>
+          {settings ? (
+            <ul className="space-y-0.5 text-muted-foreground">
+              {settings.ranges.map((row, idx) => (
+                <li key={`${row.fromKm}-${row.toKm}-${idx}`}>{`${row.fromKm} km - ${row.toKm} km: ${row.flatNet.toFixed(2)} PLN`}</li>
+              ))}
+              <li>{`>= ${settings.ranges[settings.ranges.length - 1]?.toKm ?? 0} km: kilometrówka ${settings.longDistancePerKm.toFixed(
+                2
+              )} PLN/km x km x 2`}</li>
+            </ul>
+          ) : (
+            <div className="text-muted-foreground">{loadingSettings ? 'Ładowanie...' : 'Brak danych ustawień'}</div>
+          )}
+        </div>
+      )}
 
       <div className="border border-border rounded overflow-hidden">
         <div className="overflow-x-auto">
@@ -530,6 +540,7 @@ export default function OrderTransportSection({
                         type="text"
                         className={orderLineNameInputClass}
                         value={item.name || ''}
+                        disabled={readOnly}
                         onChange={(e) =>
                           updateRow(idx, {
                             name: e.target.value,
@@ -544,6 +555,7 @@ export default function OrderTransportSection({
                           maxLength={ORDER_LINE_DESCRIPTION_MAX_LENGTH}
                           className={orderLineDescriptionInputClass}
                           value={item.description || ''}
+                          disabled={readOnly}
                           onChange={(e) =>
                             updateRow(idx, {
                               description: clampOrderLineDescription(e.target.value),
@@ -554,14 +566,16 @@ export default function OrderTransportSection({
                         />
                       ) : null}
                       <div className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                        <button
-                          type="button"
-                          className="p-0.5 rounded hover:bg-surface-2 text-muted-foreground hover:text-foreground inline-flex"
-                          title="Szczegóły wyceny transportu"
-                          onClick={() => setInfoRowIndex(idx)}
-                        >
-                          <Info size={14} />
-                        </button>
+                        {!readOnly && (
+                          <button
+                            type="button"
+                            className="p-0.5 rounded hover:bg-surface-2 text-muted-foreground hover:text-foreground inline-flex"
+                            title="Szczegóły wyceny transportu"
+                            onClick={() => setInfoRowIndex(idx)}
+                          >
+                            <Info size={14} />
+                          </button>
+                        )}
                         <span>
                           {item.isAutoCalculated === false ? 'Kwota zmieniona ręcznie.' : 'Kwota wyliczona automatycznie.'}
                         </span>
@@ -571,6 +585,7 @@ export default function OrderTransportSection({
                       <select
                         className="w-full min-w-[170px] px-2 py-1 text-xs bg-background border border-border rounded"
                         value={stageId || '__CUSTOM__'}
+                        disabled={readOnly}
                         onChange={(e) => {
                           const selectedStageId = e.target.value;
                           if (selectedStageId === '__CUSTOM__') {
@@ -611,6 +626,7 @@ export default function OrderTransportSection({
                             target?.assignment ??
                             ''
                           }
+                          disabled={readOnly}
                           onChange={(e) =>
                             updateRow(idx, {
                               description: clampOrderLineDescription(e.target.value),
@@ -628,6 +644,7 @@ export default function OrderTransportSection({
                         step={0.01}
                         className="w-24 px-2 py-1 text-xs bg-background border border-border rounded text-right"
                         value={item.rateValue ?? 0}
+                        disabled={readOnly}
                         onChange={(e) =>
                           updateRow(idx, {
                             rateValue: Number(e.target.value) || 0,
@@ -642,6 +659,7 @@ export default function OrderTransportSection({
                         min={1}
                         className="w-16 px-2 py-1 text-xs bg-background border border-border rounded text-right"
                         value={item.units ?? 1}
+                        disabled={readOnly}
                         onChange={(e) =>
                           updateRow(idx, {
                             units: Number(e.target.value) || 1,
@@ -652,7 +670,7 @@ export default function OrderTransportSection({
                     </td>
                     <td className="py-1 px-2 font-medium text-right text-xs">{valueNet.toFixed(2)} PLN</td>
                     <td className="py-1 px-2">
-                      {idx > 0 && (
+                      {!readOnly && idx > 0 && (
                         <button
                           type="button"
                           className="px-2 py-1 text-[11px] border border-border rounded hover:bg-surface-2"
@@ -670,17 +688,19 @@ export default function OrderTransportSection({
               })}
             </tbody>
             <tfoot>
-              <tr className="bg-surface-2 border-t border-border">
-                <td colSpan={7} className="py-1.5 px-2">
-                  <button
-                    type="button"
-                    onClick={addCustomTransportRow}
-                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                  >
-                    + Dodaj własny transport
-                  </button>
-                </td>
-              </tr>
+              {!readOnly && (
+                <tr className="bg-surface-2 border-t border-border">
+                  <td colSpan={7} className="py-1.5 px-2">
+                    <button
+                      type="button"
+                      onClick={addCustomTransportRow}
+                      className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      + Dodaj własny transport
+                    </button>
+                  </td>
+                </tr>
+              )}
               <tr className="bg-surface-2 border-t border-border">
                 <td colSpan={6} className="py-1.5 px-2 text-right font-medium text-sm">
                   Suma transport netto:
@@ -761,7 +781,7 @@ export default function OrderTransportSection({
         </div>
       )}
 
-      {settingsOpen && settingsDraft && (
+      {!readOnly && settingsOpen && settingsDraft && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-surface border border-border rounded-xl shadow-xl max-w-md w-full">
             <div className="p-3 border-b border-border">

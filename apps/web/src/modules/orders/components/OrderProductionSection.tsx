@@ -26,6 +26,8 @@ interface OrderProductionSectionProps {
   lockedOfferBlockId?: string
   hideSectionTitle?: boolean
   compactLayout?: boolean
+  lockedItemIds?: ReadonlySet<string> | string[]
+  partnerMode?: boolean
 }
 
 const PRODUCTION_COL_COUNT = 10
@@ -40,9 +42,20 @@ export default function OrderProductionSection({
   lockedOfferBlockId,
   hideSectionTitle = false,
   compactLayout = false,
+  lockedItemIds,
+  partnerMode = false,
 }: OrderProductionSectionProps) {
+  const locked = (id?: string) =>
+    Boolean(
+      id &&
+        (lockedItemIds instanceof Set
+          ? lockedItemIds.has(id)
+          : Array.isArray(lockedItemIds)
+            ? lockedItemIds.includes(id)
+            : false)
+    )
   const { data: paginatedResources } = useEquipment({ category: 'ZASOBY', limit: 200, page: 1 })
-  const resources = paginatedResources?.data || []
+  const resources = partnerMode ? [] : (paginatedResources?.data || [])
   const { data: resourceSubcategories = [] } = useResourceSubcategories()
   const [saveToCatalog, setSaveToCatalog] = useState<{
     index: number
@@ -60,6 +73,7 @@ export default function OrderProductionSection({
   }
 
   useEffect(() => {
+    if (partnerMode) return
     if (!resources.length || !items.length) return
     let hasChanges = false
     const nextItems = items.map((item) => {
@@ -78,7 +92,7 @@ export default function OrderProductionSection({
     })
     if (hasChanges) onChange(nextItems)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resources])
+  }, [resources, partnerMode])
   const addEmptyRows = (count: number) => {
     const safeCount = Math.max(1, Math.floor(count))
     const baseSort = items.length
@@ -148,11 +162,13 @@ export default function OrderProductionSection({
         </div>
       )}
 
-      <datalist id="production-datalist">
-        {resources.map((r) => (
-          <option key={r.id} value={r.name} />
-        ))}
-      </datalist>
+      {!partnerMode && (
+        <datalist id="production-datalist">
+          {resources.map((r) => (
+            <option key={r.id} value={r.name} />
+          ))}
+        </datalist>
+      )}
       <div className="border border-border rounded overflow-hidden">
         <div className="overflow-x-auto">
           <table className={`w-full text-sm ${compactLayout ? 'min-w-[880px]' : 'table-fixed min-w-[1000px]'}`}>
@@ -178,17 +194,23 @@ export default function OrderProductionSection({
             <tbody>
               {items.map((item, index) => {
                 const stageIds = parseStageIds(item)
+                const isLocked = locked(item.id)
                 return (
-                  <tr key={item.id || index} className="border-b border-border/50 hover:bg-surface-2/50">
+                  <tr
+                    key={item.id || index}
+                    className={`border-b border-border/50 hover:bg-surface-2/50 ${isLocked ? 'opacity-70' : ''}`}
+                  >
                     <td className="py-1 px-2 text-muted-foreground whitespace-nowrap">{index + 1}</td>
                     <td className="py-1 px-2">
                       <input
                         type="text"
-                        list="production-datalist"
+                        list={partnerMode ? undefined : 'production-datalist'}
                         className={orderLineNameInputClass}
                         value={item.name || ''}
+                        disabled={isLocked}
                         onChange={(e) => updateItem(index, { name: e.target.value })}
                         onBlur={(e) => {
+                          if (partnerMode || isLocked) return
                           const matched = findResourceByName(e.target.value)
                           if (!matched) return
                           updateItem(index, {
@@ -206,6 +228,7 @@ export default function OrderProductionSection({
                         maxLength={ORDER_LINE_DESCRIPTION_MAX_LENGTH}
                         className={orderLineDescriptionInputClass}
                         value={item.description || ''}
+                        disabled={isLocked}
                         onChange={(e) =>
                           updateItem(index, { description: clampOrderLineDescription(e.target.value) })
                         }
@@ -219,6 +242,7 @@ export default function OrderProductionSection({
                         step={0.01}
                         className="w-20 px-2 py-1 text-xs bg-background border border-border rounded text-right"
                         value={typeof item.rateValue === 'number' && Number.isFinite(item.rateValue) ? item.rateValue : (Number(item.rateValue) || 0)}
+                        disabled={isLocked}
                         onChange={(e) => updateItem(index, { rateValue: parseFloat(e.target.value) || 0 })}
                       />
                     </td>
@@ -228,6 +252,7 @@ export default function OrderProductionSection({
                         min={1}
                         className="w-14 px-2 py-1 text-xs bg-background border border-border rounded text-right"
                         value={item.units ?? 1}
+                        disabled={isLocked}
                         onChange={(e) => updateItem(index, { units: parseFloat(e.target.value) || 1 })}
                       />
                     </td>
@@ -238,6 +263,7 @@ export default function OrderProductionSection({
                         max={100}
                         className="w-14 px-2 py-1 text-xs bg-background border border-border rounded text-right"
                         value={item.discount ?? 0}
+                        disabled={isLocked}
                         onChange={(e) => updateItem(index, { discount: parseFloat(e.target.value) || 0 })}
                       />
                     </td>
@@ -245,6 +271,7 @@ export default function OrderProductionSection({
                       <select
                         className="w-full min-w-[100px] px-2 py-1 text-xs bg-background border border-border rounded"
                         value={stageIds[0] ?? ''}
+                        disabled={isLocked}
                         onChange={(e) => {
                           const id = e.target.value
                           setItemStageIds(index, id ? [id] : [])
@@ -265,51 +292,56 @@ export default function OrderProductionSection({
                       <input
                         type="checkbox"
                         checked={!!item.isSubcontractor}
+                        disabled={isLocked}
                         onChange={(e) => updateItem(index, { isSubcontractor: e.target.checked })}
                         title="Podwykonawca"
                       />
                     </td>
                     <td className="py-1 px-2 whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={() => updateItem(index, { visibleInOffer: !item.visibleInOffer })}
-                        className={`p-1 rounded ${item.visibleInOffer !== false ? 'text-green-500' : 'text-muted-foreground'}`}
-                        title={VISIBILITY_TOOLTIP}
-                      >
-                        {item.visibleInOffer !== false ? <Eye size={16} /> : <EyeOff size={16} />}
-                      </button>
-                    </td>
-                    <td className="py-1 px-2 whitespace-nowrap sticky right-0 bg-background z-[1] text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        {(item.name || '').trim() && !findResourceByName(item.name || '') ? (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setSaveToCatalog({
-                                index,
-                                draft: {
-                                  name: (item.name || '').trim(),
-                                  description: item.description || '',
-                                  dailyPrice: Number(item.rateValue) || 0,
-                                  visibleInOffer: item.visibleInOffer !== false,
-                                },
-                              })
-                            }
-                            className="p-1 text-primary hover:text-primary-hover"
-                            title="Dodaj do bazy zasobów"
-                          >
-                            <Database size={16} />
-                          </button>
-                        ) : null}
+                      {!isLocked && (
                         <button
                           type="button"
-                          onClick={() => removeItem(index)}
-                          className="p-1 text-red-500 hover:text-red-700"
-                          title="Usuń"
+                          onClick={() => updateItem(index, { visibleInOffer: !item.visibleInOffer })}
+                          className={`p-1 rounded ${item.visibleInOffer !== false ? 'text-green-500' : 'text-muted-foreground'}`}
+                          title={VISIBILITY_TOOLTIP}
                         >
-                          <Trash2 size={16} />
+                          {item.visibleInOffer !== false ? <Eye size={16} /> : <EyeOff size={16} />}
                         </button>
-                      </div>
+                      )}
+                    </td>
+                    <td className="py-1 px-2 whitespace-nowrap sticky right-0 bg-background z-[1] text-center">
+                      {!isLocked && (
+                        <div className="flex items-center justify-center gap-1">
+                          {!partnerMode && (item.name || '').trim() && !findResourceByName(item.name || '') ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSaveToCatalog({
+                                  index,
+                                  draft: {
+                                    name: (item.name || '').trim(),
+                                    description: item.description || '',
+                                    dailyPrice: Number(item.rateValue) || 0,
+                                    visibleInOffer: item.visibleInOffer !== false,
+                                  },
+                                })
+                              }
+                              className="p-1 text-primary hover:text-primary-hover"
+                              title="Dodaj do bazy zasobów"
+                            >
+                              <Database size={16} />
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => removeItem(index)}
+                            className="p-1 text-red-500 hover:text-red-700"
+                            title="Usuń"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 )
@@ -354,7 +386,7 @@ export default function OrderProductionSection({
         </div>
       </div>
 
-      {saveToCatalog && (
+      {saveToCatalog && !partnerMode && (
         <EquipmentFormModal
           isOpen
           onClose={() => setSaveToCatalog(null)}

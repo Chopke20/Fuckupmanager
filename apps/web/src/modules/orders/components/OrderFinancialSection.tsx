@@ -17,6 +17,8 @@ interface OrderFinancialSectionProps {
   onChange: (updates: Partial<Order>) => void
   onEquipmentMarginPatch: (index: number, patch: Partial<OrderEquipmentItem>) => void
   onProductionMarginPatch: (index: number, patch: Partial<OrderProductionItem>) => void
+  readOnly?: boolean
+  partnerBreakdown?: { ownNet: number; partnerNet: number; currency: string } | null
 }
 
 export default function OrderFinancialSection({
@@ -27,6 +29,8 @@ export default function OrderFinancialSection({
   onChange,
   onEquipmentMarginPatch,
   onProductionMarginPatch,
+  readOnly = false,
+  partnerBreakdown = null,
 }: OrderFinancialSectionProps) {
   const summary = calculateOrderFinancialSummary(order, equipmentItems, productionItems)
   const [marginModalOpen, setMarginModalOpen] = useState(false)
@@ -95,6 +99,29 @@ export default function OrderFinancialSection({
         <div className="border border-border rounded-lg p-3 bg-surface-2">
           <h4 className="font-semibold mb-2">Kalkulacja</h4>
           <div className="space-y-1.5 text-sm">
+            {partnerBreakdown && (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Lama Stage netto</span>
+                  <span className="font-medium">
+                    {partnerBreakdown.ownNet.toFixed(2)} {partnerBreakdown.currency}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Toinen Music netto</span>
+                  <span className="font-medium">
+                    {partnerBreakdown.partnerNet.toFixed(2)} {partnerBreakdown.currency}
+                  </span>
+                </div>
+                <div className="flex justify-between pt-1 border-b border-border pb-1.5 mb-0.5">
+                  <span className="text-muted-foreground">Razem partnerzy</span>
+                  <span className="font-medium">
+                    {(partnerBreakdown.ownNet + partnerBreakdown.partnerNet).toFixed(2)}{' '}
+                    {partnerBreakdown.currency}
+                  </span>
+                </div>
+              </>
+            )}
             <div className="flex justify-between">
               <span className="text-muted-foreground">Przychód netto</span>
               <span className="font-medium">{summary.revenueNet.toFixed(2)} PLN</span>
@@ -127,6 +154,7 @@ export default function OrderFinancialSection({
                   step="1"
                   className="flex-1 min-w-0 h-2"
                   value={order.discountGlobal ?? 0}
+                  disabled={readOnly}
                   onChange={(e) => handleChange('discountGlobal', parseFloat(e.target.value) || 0)}
                 />
                 <input
@@ -136,6 +164,7 @@ export default function OrderFinancialSection({
                   step={0.5}
                   className="w-16 px-2 py-1 text-sm bg-background border border-border rounded text-right tabular-nums"
                   value={order.discountGlobal ?? 0}
+                  disabled={readOnly}
                   onChange={(e) => {
                     const v = parseFloat(e.target.value)
                     if (!Number.isNaN(v)) handleChange('discountGlobal', Math.min(100, Math.max(0, v)))
@@ -149,6 +178,7 @@ export default function OrderFinancialSection({
               <select
                 className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded"
                 value={order.vatRate ?? 23}
+                disabled={readOnly}
                 onChange={(e) => handleChange('vatRate', parseInt(e.target.value) || 0)}
               >
                 <option value="23">23%</option>
@@ -161,20 +191,22 @@ export default function OrderFinancialSection({
         <div className="border border-border rounded-lg p-3 bg-surface-2">
           <div className="flex items-start justify-between gap-2 mb-2">
             <h4 className="font-semibold">Zysk</h4>
-            <button
-              type="button"
-              disabled={marginRows.length === 0}
-              title={
-                marginRows.length === 0
-                  ? 'Brak pozycji z rental lub podwykonawcą'
-                  : 'Ustal koszt pod rental / podwykonawcę (opcjonalnie)'
-              }
-              onClick={() => setMarginModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded border border-border bg-background hover:bg-surface-2 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-            >
-              <SlidersHorizontal size={14} />
-              Koszty marży
-            </button>
+            {!readOnly && (
+              <button
+                type="button"
+                disabled={marginRows.length === 0}
+                title={
+                  marginRows.length === 0
+                    ? 'Brak pozycji z rental lub podwykonawcą'
+                    : 'Ustal koszt pod rental / podwykonawcę (opcjonalnie)'
+                }
+                onClick={() => setMarginModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded border border-border bg-background hover:bg-surface-2 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+              >
+                <SlidersHorizontal size={14} />
+                Koszty marży
+              </button>
+            )}
           </div>
           <div className="space-y-1.5 text-sm">
             <div className="flex justify-between">
@@ -206,6 +238,7 @@ export default function OrderFinancialSection({
             className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded min-h-[112px]"
             placeholder="Uwagi wewnętrzne (niezależne od opisu zlecenia)..."
             value={order.notes ?? ''}
+            disabled={readOnly}
             onChange={(e) => handleChange('notes', e.target.value)}
           />
         </div>

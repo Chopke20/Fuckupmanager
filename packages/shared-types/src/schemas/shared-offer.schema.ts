@@ -30,6 +30,8 @@ export const SharedOfferPartnerPayloadSchema = z.object({
 
 /** Moja pozycja pokazywana partnerowi — WYŁĄCZNIE te pola. */
 export const SharedOfferLockedLineSchema = z.object({
+  /** Stabilne id z OrderEquipmentItem / OrderProductionItem — do locków w UI. */
+  id: z.string().uuid(),
   kind: SharedOfferLineKindSchema,
   name: z.string(),
   description: z.string().nullable(),
@@ -40,12 +42,27 @@ export const SharedOfferLockedLineSchema = z.object({
   discount: z.number(),
   offerBlockId: z.string().nullable(),
   unit: z.string().nullable(),
+  sortOrder: z.number().int().default(0),
+  isTransport: z.boolean().optional(),
+  rateType: z.string().optional(),
+  stageIds: z.string().nullable().optional(),
 });
 
 export const SharedOfferBlockSchema = z.object({
   id: z.string(),
   title: z.string(),
   sortOrder: z.number(),
+});
+
+export const SharedOfferStageSchema = z.object({
+  id: z.string().uuid(),
+  type: z.string(),
+  label: z.string().nullable().optional(),
+  date: z.string(),
+  timeStart: z.string().nullable().optional(),
+  timeEnd: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
+  sortOrder: z.number().int().default(0),
 });
 
 export const SharedOfferTotalsSchema = z.object({
@@ -62,10 +79,19 @@ export const SharedOfferTotalsSchema = z.object({
 export const SharedOfferPublicViewSchema = z.object({
   status: z.enum(['ACTIVE', 'REVOKED']),
   orderName: z.string(),
+  orderStatus: z.string(),
+  orderNumber: z.number().int().nullable(),
+  orderYear: z.number().int().nullable(),
+  description: z.string().nullable(),
   venue: z.string().nullable(),
+  venuePlaceId: z.string().nullable(),
+  dateFrom: z.string(),
+  dateTo: z.string(),
   startDate: z.string(),
   endDate: z.string(),
   clientCompanyName: z.string().nullable(),
+  brandAccentHex: z.string().default('#81B29F'),
+  stages: z.array(SharedOfferStageSchema).default([]),
   blocks: z.array(SharedOfferBlockSchema),
   lockedLines: z.array(SharedOfferLockedLineSchema),
   partnerLines: z.array(SharedOfferPartnerLineSchema),
@@ -81,3 +107,4 @@ export type SharedOfferPartnerPayload = z.infer<typeof SharedOfferPartnerPayload
 export type SharedOfferLockedLine = z.infer<typeof SharedOfferLockedLineSchema>;
 export type SharedOfferPublicView = z.infer<typeof SharedOfferPublicViewSchema>;
 export type SharedOfferTotals = z.infer<typeof SharedOfferTotalsSchema>;
+export type SharedOfferStage = z.infer<typeof SharedOfferStageSchema>;

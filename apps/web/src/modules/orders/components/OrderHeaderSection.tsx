@@ -20,11 +20,14 @@ function normalizeSearch(s: string): string {
 
 interface OrderHeaderSectionProps {
   onChange?: (data: Partial<Order>) => void
+  readOnly?: boolean
+  clientLabel?: string | null
 }
 
-export default function OrderHeaderSection({ onChange }: OrderHeaderSectionProps) {
+export default function OrderHeaderSection({ onChange, readOnly = false, clientLabel = null }: OrderHeaderSectionProps) {
   const { watch } = useFormContext<Partial<Order>>()
   const queryClient = useQueryClient()
+  // useClients has no `enabled` flag — keep call; readOnly UI skips picker (avoids relying on list)
   const { data: paginatedClients } = useClients({ limit: 500 })
   const clients = paginatedClients?.data || []
   const [showNewClient, setShowNewClient] = useState(false)
@@ -44,7 +47,7 @@ export default function OrderHeaderSection({ onChange }: OrderHeaderSectionProps
   const order = watch()
   const clientId = order?.clientId || ''
   const clientInList = useMemo(() => clients.find((c) => c.id === clientId), [clients, clientId])
-  const { data: clientOrphan } = useClient(clientId, { enabled: !!clientId && !clientInList })
+  const { data: clientOrphan } = useClient(clientId, { enabled: !readOnly && !!clientId && !clientInList })
   const resolvedClient = clientInList ?? clientOrphan ?? null
 
   const filteredClients = useMemo(() => {
@@ -82,6 +85,11 @@ export default function OrderHeaderSection({ onChange }: OrderHeaderSectionProps
     }
   }, [order?.dateTo])
   useEffect(() => {
+    if (readOnly) {
+      setVenueSuggestions([])
+      setIsVenueLoading(false)
+      return
+    }
     const query = (order?.venue || '').trim()
     if (query.length < 2) {
       setVenueSuggestions([])
@@ -103,7 +111,7 @@ export default function OrderHeaderSection({ onChange }: OrderHeaderSectionProps
       }
     }, 250)
     return () => clearTimeout(timeout)
-  }, [order?.venue])
+  }, [order?.venue, readOnly])
 
   const statusOptions = [
     { value: 'DRAFT', label: 'Szkic' },
@@ -198,6 +206,7 @@ export default function OrderHeaderSection({ onChange }: OrderHeaderSectionProps
               value={order?.name || ''}
               onChange={(e) => handleChange('name', e.target.value)}
               placeholder="Np. Event konferencyjny XYZ"
+              disabled={readOnly}
             />
           </div>
           <div>
@@ -208,6 +217,7 @@ export default function OrderHeaderSection({ onChange }: OrderHeaderSectionProps
               className="w-full px-3 py-2 text-sm bg-background border border-border rounded"
               value={order?.status || 'DRAFT'}
               onChange={(e) => handleChange('status', e.target.value)}
+              disabled={readOnly}
             >
               {statusOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -224,101 +234,114 @@ export default function OrderHeaderSection({ onChange }: OrderHeaderSectionProps
               Na potrzeby zespołu i koordynacji — nie pokazujemy go klientowi w ofercie. Tekst do PDF dla klienta
               ustawiasz na stronie Oferta.
             </p>
-            <div className="flex items-center gap-2 mb-1">
-              <button
-                type="button"
-                onClick={() => rewriteDescriptionWithAi(false)}
-                disabled={isAiLoading || !order?.description?.trim()}
-                className="px-2.5 py-1 text-xs border border-border rounded hover:bg-surface-2 transition-colors disabled:opacity-50"
-              >
-                {isAiLoading ? 'Redagowanie...' : 'AI: Zredaguj'}
-              </button>
-              <button
-                type="button"
-                onClick={() => rewriteDescriptionWithAi(true)}
-                disabled={isAiLoading || !order?.description?.trim()}
-                className="px-2.5 py-1 text-xs border border-border rounded hover:bg-surface-2 transition-colors disabled:opacity-50"
-              >
-                Odśwież
-              </button>
-            </div>
+            {!readOnly && (
+              <div className="flex items-center gap-2 mb-1">
+                <button
+                  type="button"
+                  onClick={() => rewriteDescriptionWithAi(false)}
+                  disabled={isAiLoading || !order?.description?.trim()}
+                  className="px-2.5 py-1 text-xs border border-border rounded hover:bg-surface-2 transition-colors disabled:opacity-50"
+                >
+                  {isAiLoading ? 'Redagowanie...' : 'AI: Zredaguj'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => rewriteDescriptionWithAi(true)}
+                  disabled={isAiLoading || !order?.description?.trim()}
+                  className="px-2.5 py-1 text-xs border border-border rounded hover:bg-surface-2 transition-colors disabled:opacity-50"
+                >
+                  Odśwież
+                </button>
+              </div>
+            )}
             <textarea
               className="w-full px-3 py-2 text-sm bg-background border border-border rounded min-h-[80px]"
               value={order?.description || ''}
               onChange={(e) => handleChange('description', e.target.value)}
               placeholder="Opis techniczny / wewnętrzny dla firmy (brief, logistyka)…"
+              disabled={readOnly}
             />
             {aiError && <p className="text-xs text-red-500 mt-1">{aiError}</p>}
           </div>
           <div className="md:col-span-2">
             <label className="block text-sm font-medium mb-1">Klient *</label>
-            <div className="flex gap-2">
-              <div className="relative min-w-0 flex-1">
-                <div className="flex gap-1 items-stretch">
-                  <input
-                    type="text"
-                    className="min-w-0 flex-1 px-3 py-2 text-sm bg-background border border-border rounded"
-                    value={clientInput}
-                    onFocus={() => {
-                      clientInputFocused.current = true
-                      setShowClientSuggestions(true)
-                    }}
-                    onBlur={() => {
-                      setTimeout(() => {
-                        clientInputFocused.current = false
-                        setShowClientSuggestions(false)
-                      }, 120)
-                    }}
-                    onChange={(e) => handleClientInputChange(e.target.value)}
-                    placeholder="Szukaj po nazwie firmy lub osobie kontaktowej…"
-                    autoComplete="off"
-                  />
-                  {clientId ? (
-                    <button
-                      type="button"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={clearClientSelection}
-                      className="shrink-0 px-2.5 text-sm border border-border rounded hover:bg-surface-2 text-muted-foreground"
-                      aria-label="Wyczyść wybór klienta"
-                      title="Wyczyść"
-                    >
-                      ×
-                    </button>
-                  ) : null}
-                </div>
-                {showClientSuggestions && (
-                  <div className="absolute z-20 mt-1 w-full rounded border border-border bg-surface shadow-lg max-h-56 overflow-auto">
-                    {filteredClients.length > 0 ? (
-                      filteredClients.map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => pickClient(c)}
-                          className={`w-full text-left px-3 py-2 text-sm hover:bg-surface-2 ${
-                            c.id === clientId ? 'bg-surface-2/80' : ''
-                          }`}
-                          title={formatClientLabel(c)}
-                        >
-                          {formatClientLabel(c)}
-                        </button>
-                      ))
-                    ) : (
-                      <div className="px-3 py-2 text-xs text-muted-foreground">
-                        Brak pasujących klientów. Użyj „+ Nowy” lub zmień wyszukiwanie.
-                      </div>
-                    )}
+            {readOnly ? (
+              <input
+                type="text"
+                className="w-full px-3 py-2 text-sm bg-background border border-border rounded"
+                value={clientLabel || ''}
+                disabled
+                readOnly
+              />
+            ) : (
+              <div className="flex gap-2">
+                <div className="relative min-w-0 flex-1">
+                  <div className="flex gap-1 items-stretch">
+                    <input
+                      type="text"
+                      className="min-w-0 flex-1 px-3 py-2 text-sm bg-background border border-border rounded"
+                      value={clientInput}
+                      onFocus={() => {
+                        clientInputFocused.current = true
+                        setShowClientSuggestions(true)
+                      }}
+                      onBlur={() => {
+                        setTimeout(() => {
+                          clientInputFocused.current = false
+                          setShowClientSuggestions(false)
+                        }, 120)
+                      }}
+                      onChange={(e) => handleClientInputChange(e.target.value)}
+                      placeholder="Szukaj po nazwie firmy lub osobie kontaktowej…"
+                      autoComplete="off"
+                    />
+                    {clientId ? (
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={clearClientSelection}
+                        className="shrink-0 px-2.5 text-sm border border-border rounded hover:bg-surface-2 text-muted-foreground"
+                        aria-label="Wyczyść wybór klienta"
+                        title="Wyczyść"
+                      >
+                        ×
+                      </button>
+                    ) : null}
                   </div>
-                )}
+                  {showClientSuggestions && (
+                    <div className="absolute z-20 mt-1 w-full rounded border border-border bg-surface shadow-lg max-h-56 overflow-auto">
+                      {filteredClients.length > 0 ? (
+                        filteredClients.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => pickClient(c)}
+                            className={`w-full text-left px-3 py-2 text-sm hover:bg-surface-2 ${
+                              c.id === clientId ? 'bg-surface-2/80' : ''
+                            }`}
+                            title={formatClientLabel(c)}
+                          >
+                            {formatClientLabel(c)}
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-3 py-2 text-xs text-muted-foreground">
+                          Brak pasujących klientów. Użyj „+ Nowy” lub zmień wyszukiwanie.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowNewClient(true)}
+                  className="shrink-0 px-3 py-2 text-sm border-2 border-primary text-primary bg-transparent rounded hover:bg-primary/10 transition-colors"
+                >
+                  + Nowy
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowNewClient(true)}
-                className="shrink-0 px-3 py-2 text-sm border-2 border-primary text-primary bg-transparent rounded hover:bg-primary/10 transition-colors"
-              >
-                + Nowy
-              </button>
-            </div>
+            )}
           </div>
           <div className="md:col-span-2">
             <label className="block text-sm font-medium mb-1">Miejsce realizacji</label>
@@ -327,15 +350,16 @@ export default function OrderHeaderSection({ onChange }: OrderHeaderSectionProps
                 type="text"
                 className="w-full px-3 py-2 text-sm bg-background border border-border rounded"
                 value={order?.venue || ''}
-                onFocus={() => setShowVenueSuggestions(true)}
+                onFocus={() => !readOnly && setShowVenueSuggestions(true)}
                 onBlur={() => setTimeout(() => setShowVenueSuggestions(false), 120)}
                 onChange={(e) => {
                   handleUpdates({ venue: e.target.value, venuePlaceId: undefined })
                   setShowVenueSuggestions(true)
                 }}
                 placeholder="Np. Centrum Konferencyjne XYZ, Warszawa"
+                disabled={readOnly}
               />
-              {showVenueSuggestions && ((order?.venue || '').trim().length >= 2 || isVenueLoading) && (
+              {!readOnly && showVenueSuggestions && ((order?.venue || '').trim().length >= 2 || isVenueLoading) && (
                 <div className="absolute z-20 mt-1 w-full rounded border border-border bg-surface shadow-lg max-h-56 overflow-auto">
                   {isVenueLoading ? (
                     <div className="px-3 py-2 text-xs text-muted-foreground">Szukam miejsc...</div>
@@ -371,6 +395,7 @@ export default function OrderHeaderSection({ onChange }: OrderHeaderSectionProps
               type="date"
               className="w-full px-3 py-2 text-sm bg-background border border-border rounded"
               value={localDateFrom}
+              disabled={readOnly}
               onFocus={() => { dateFromFocused.current = true }}
               onBlur={() => {
                 dateFromFocused.current = false
@@ -400,6 +425,7 @@ export default function OrderHeaderSection({ onChange }: OrderHeaderSectionProps
               className="w-full px-3 py-2 text-sm bg-background border border-border rounded"
               min={localDateFrom || undefined}
               value={localDateTo}
+              disabled={readOnly}
               onFocus={() => { dateToFocused.current = true }}
               onBlur={() => {
                 dateToFocused.current = false
@@ -423,16 +449,18 @@ export default function OrderHeaderSection({ onChange }: OrderHeaderSectionProps
         </div>
       </div>
 
-      <ClientFormModal
-        isOpen={showNewClient}
-        onClose={() => setShowNewClient(false)}
-        client={null}
-        onSuccess={async (created) => {
-          await queryClient.refetchQueries({ queryKey: ['clients'] })
-          handleChange('clientId', created.id)
-          setShowNewClient(false)
-        }}
-      />
+      {!readOnly && (
+        <ClientFormModal
+          isOpen={showNewClient}
+          onClose={() => setShowNewClient(false)}
+          client={null}
+          onSuccess={async (created) => {
+            await queryClient.refetchQueries({ queryKey: ['clients'] })
+            handleChange('clientId', created.id)
+            setShowNewClient(false)
+          }}
+        />
+      )}
     </div>
   )
 }

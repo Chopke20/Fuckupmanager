@@ -24,6 +24,7 @@ export async function loadOrderForSharedOffer(orderId: string) {
     where: { id: orderId },
     include: {
       client: true,
+      stages: { orderBy: { sortOrder: 'asc' } },
       offerBlocks: { orderBy: { sortOrder: 'asc' } },
       equipmentItems: {
         include: { equipment: true },
@@ -67,6 +68,7 @@ export function buildLockedLines(order: OrderForSharedOffer): SharedOfferLockedL
   const equipment: SharedOfferLockedLine[] = order.equipmentItems
     .filter((item) => item.visibleInOffer !== false)
     .map((item) => ({
+      id: item.id,
       kind: 'EQUIPMENT' as const,
       name: item.name,
       description: item.description ?? null,
@@ -77,11 +79,14 @@ export function buildLockedLines(order: OrderForSharedOffer): SharedOfferLockedL
       discount: item.discount ?? 0,
       offerBlockId: item.offerBlockId ?? null,
       unit: item.equipment?.unit ?? null,
+      sortOrder: item.sortOrder ?? 0,
+      isTransport: false,
     }))
 
   const production: SharedOfferLockedLine[] = order.productionItems
-    .filter((item) => item.visibleInOffer !== false && !item.isTransport)
+    .filter((item) => item.visibleInOffer !== false)
     .map((item) => ({
+      id: item.id,
       kind: 'PRODUCTION' as const,
       name: item.name,
       description: item.description ?? null,
@@ -92,6 +97,10 @@ export function buildLockedLines(order: OrderForSharedOffer): SharedOfferLockedL
       discount: item.discount ?? 0,
       offerBlockId: item.offerBlockId ?? null,
       unit: null,
+      sortOrder: item.sortOrder ?? 0,
+      isTransport: item.isTransport ?? false,
+      rateType: item.rateType ?? 'FLAT',
+      stageIds: item.stageIds ?? null,
     }))
 
   return [...equipment, ...production]
@@ -169,10 +178,28 @@ export async function buildPublicView(
   const view: SharedOfferPublicView = {
     status: session.revokedAt ? 'REVOKED' : 'ACTIVE',
     orderName: order.name,
+    orderStatus: order.status ?? 'DRAFT',
+    orderNumber: order.orderNumber ?? null,
+    orderYear: order.orderYear ?? null,
+    description: order.description ?? null,
     venue: order.venue ?? null,
+    venuePlaceId: order.venuePlaceId ?? null,
+    dateFrom: order.dateFrom.toISOString(),
+    dateTo: order.dateTo.toISOString(),
     startDate: order.startDate.toISOString(),
     endDate: order.endDate.toISOString(),
     clientCompanyName: order.client?.companyName ?? null,
+    brandAccentHex: '#81B29F',
+    stages: order.stages.map((s) => ({
+      id: s.id,
+      type: s.type,
+      label: s.label ?? null,
+      date: s.date.toISOString(),
+      timeStart: s.timeStart ?? null,
+      timeEnd: s.timeEnd ?? null,
+      notes: s.notes ?? null,
+      sortOrder: s.sortOrder ?? 0,
+    })),
     blocks: order.offerBlocks.map((b) => ({
       id: b.id,
       title: b.title,

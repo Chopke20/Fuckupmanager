@@ -10,19 +10,22 @@ function ScheduleTimeField({
   value,
   onChange,
   defaultTime,
+  disabled = false,
 }: {
   value?: string | null
   onChange: (next: string) => void
   defaultTime: string
+  disabled?: boolean
 }) {
   if (isScheduleTimeTba(value)) {
     return (
       <div className="flex items-center gap-1.5 w-full max-w-[9.5rem]">
         <button
           type="button"
-          className="flex-1 min-w-0 px-2 py-1 text-xs font-medium border border-dashed border-primary/40 rounded bg-primary/5 hover:bg-primary/10 text-foreground"
+          className="flex-1 min-w-0 px-2 py-1 text-xs font-medium border border-dashed border-primary/40 rounded bg-primary/5 hover:bg-primary/10 text-foreground disabled:opacity-60 disabled:pointer-events-none"
           onClick={() => onChange(defaultTime)}
           title="Kliknij, aby ustawić konkretną godzinę"
+          disabled={disabled}
         >
           TBA
         </button>
@@ -37,15 +40,18 @@ function ScheduleTimeField({
         className="w-[5.25rem] shrink-0 px-1.5 py-1 bg-background border border-border rounded text-xs"
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
       />
-      <button
-        type="button"
-        className="shrink-0 px-1 py-1 text-xs font-medium text-primary hover:bg-primary/10 rounded"
-        onClick={() => onChange(SCHEDULE_TIME_TBA)}
-        title="Do ustalenia (TBA)"
-      >
-        TBA
-      </button>
+      {!disabled && (
+        <button
+          type="button"
+          className="shrink-0 px-1 py-1 text-xs font-medium text-primary hover:bg-primary/10 rounded"
+          onClick={() => onChange(SCHEDULE_TIME_TBA)}
+          title="Do ustalenia (TBA)"
+        >
+          TBA
+        </button>
+      )}
     </div>
   )
 }
@@ -54,9 +60,10 @@ interface OrderScheduleSectionProps {
   /** Data rozpoczęcia zlecenia – pierwsza proponowana data przy dodawaniu etapu */
   orderDateFrom?: string | null
   onChange?: (stages: OrderStage[]) => void
+  readOnly?: boolean
 }
 
-export default function OrderScheduleSection({ orderDateFrom, onChange }: OrderScheduleSectionProps) {
+export default function OrderScheduleSection({ orderDateFrom, onChange, readOnly = false }: OrderScheduleSectionProps) {
   const { watch } = useFormContext<Partial<Order>>()
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
   const [typeDrafts, setTypeDrafts] = useState<Record<string, string>>({})
@@ -205,19 +212,27 @@ export default function OrderScheduleSection({ orderDateFrom, onChange }: OrderS
               <tr
                 key={stage.id || index}
                 className={`border-b border-border/50 hover:bg-surface-2/50 ${draggingIndex === index ? 'opacity-50' : ''}`}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => handleDrop(e, index)}
+                onDragOver={(e) => {
+                  if (!readOnly) e.preventDefault()
+                }}
+                onDrop={(e) => {
+                  if (!readOnly) handleDrop(e, index)
+                }}
               >
                 <td
-                  className="py-1 px-1 cursor-move text-muted-foreground"
-                  title="Przeciągnij"
-                  draggable
+                  className={`py-1 px-1 text-muted-foreground ${readOnly ? '' : 'cursor-move'}`}
+                  title={readOnly ? undefined : 'Przeciągnij'}
+                  draggable={!readOnly}
                   onDragStart={(e) => {
+                    if (readOnly) {
+                      e.preventDefault()
+                      return
+                    }
                     e.dataTransfer.setData('text/plain', String(index))
                     setDraggingIndex(index)
                   }}
                 >
-                  <GripVertical size={16} />
+                  {!readOnly && <GripVertical size={16} />}
                 </td>
                 <td className="py-1 px-2">
                   <input
@@ -225,6 +240,7 @@ export default function OrderScheduleSection({ orderDateFrom, onChange }: OrderS
                     type="text"
                     className="w-full px-2 py-0.5 text-sm bg-transparent border border-transparent hover:border-border rounded focus:border-primary focus:outline-none"
                     value={typeDrafts[stageKey(stage, index)] ?? stageDisplayName(stage)}
+                    disabled={readOnly}
                     onFocus={() => {
                       const key = stageKey(stage, index)
                       setTypeDrafts((prev) => ({ ...prev, [key]: stageDisplayName(stage) }))
@@ -251,6 +267,7 @@ export default function OrderScheduleSection({ orderDateFrom, onChange }: OrderS
                     type="date"
                     className="w-full min-w-[120px] px-2 py-1 bg-background border border-border rounded text-xs"
                     value={stage.date ? isoToDateInput(stage.date) : ''}
+                    disabled={readOnly}
                     onChange={(e) => {
                     const iso = dateInputToISO(e.target.value)
                     if (iso) updateStage(index, { date: iso })
@@ -261,6 +278,7 @@ export default function OrderScheduleSection({ orderDateFrom, onChange }: OrderS
                   <ScheduleTimeField
                     value={stage.timeStart}
                     defaultTime="09:00"
+                    disabled={readOnly}
                     onChange={(timeStart) => updateStage(index, { timeStart })}
                   />
                 </td>
@@ -268,6 +286,7 @@ export default function OrderScheduleSection({ orderDateFrom, onChange }: OrderS
                   <ScheduleTimeField
                     value={stage.timeEnd}
                     defaultTime="17:00"
+                    disabled={readOnly}
                     onChange={(timeEnd) => updateStage(index, { timeEnd })}
                   />
                 </td>
@@ -278,35 +297,40 @@ export default function OrderScheduleSection({ orderDateFrom, onChange }: OrderS
                     value={stage.notes || ''}
                     onChange={(e) => updateStage(index, { notes: e.target.value })}
                     placeholder="Notatki"
+                    disabled={readOnly}
                   />
                 </td>
                 <td className="py-1 px-1">
-                  <button
-                    type="button"
-                    onClick={() => removeStage(index)}
-                    className="p-1 text-red-500 hover:text-red-700"
-                    title="Usuń"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  {!readOnly && (
+                    <button
+                      type="button"
+                      onClick={() => removeStage(index)}
+                      className="p-1 text-red-500 hover:text-red-700"
+                      title="Usuń"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
           </tbody>
-          <tfoot>
-            <tr className="bg-surface-2 border-t border-border">
-              <td colSpan={7} className="py-1.5 px-2">
-                <button
-                  type="button"
-                  onClick={addStage}
-                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                >
-                  <Plus size={14} />
-                  Dodaj wiersz
-                </button>
-              </td>
-            </tr>
-          </tfoot>
+          {!readOnly && (
+            <tfoot>
+              <tr className="bg-surface-2 border-t border-border">
+                <td colSpan={7} className="py-1.5 px-2">
+                  <button
+                    type="button"
+                    onClick={addStage}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <Plus size={14} />
+                    Dodaj wiersz
+                  </button>
+                </td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
     </div>

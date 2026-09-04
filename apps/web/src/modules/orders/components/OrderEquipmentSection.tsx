@@ -28,6 +28,10 @@ interface OrderEquipmentSectionProps {
    * Używana: podpowiedź „zlecenie:” w nagłówku; nowe wiersze biorą dni z pola w nawiasach, jeśli jest tam poprawna liczba.
    */
   orderSpanDays?: number
+  /** Partner/shared-offer: row ids that cannot be edited */
+  lockedItemIds?: ReadonlySet<string> | string[]
+  /** Partner mode: hide catalog picker, save-to-catalog, availability checks */
+  partnerMode?: boolean
 }
 
 export default function OrderEquipmentSection({
@@ -40,11 +44,22 @@ export default function OrderEquipmentSection({
   lockedOfferBlockId,
   hideSectionTitle = false,
   compactLayout = false,
+  lockedItemIds,
+  partnerMode = false,
 }: OrderEquipmentSectionProps) {
   const VISIBILITY_TOOLTIP =
     'Widoczna w ofercie — pozycja trafi do PDF. Ukryta — tylko w zleceniu, bez PDF dla klienta.'
   const AVAILABILITY_TOOLTIP =
     'Konflikty terminów z innymi zleceniami i stan magazynowy. Ikona (i) — szczegóły dostępności.'
+  const locked = (id?: string) =>
+    Boolean(
+      id &&
+        (lockedItemIds instanceof Set
+          ? lockedItemIds.has(id)
+          : Array.isArray(lockedItemIds)
+            ? lockedItemIds.includes(id)
+            : false)
+    )
   const normalizeCategoryName = (value: string): string => {
     const normalized = value.trim()
     const upper = normalized.toUpperCase()
@@ -62,7 +77,7 @@ export default function OrderEquipmentSection({
   }
 
   const { data: paginatedEquipment } = useEquipment({ page: 1, limit: 500 })
-  const equipmentList = paginatedEquipment?.data || []
+  const equipmentList = partnerMode ? [] : (paginatedEquipment?.data || [])
   const [equipmentAvailability, setEquipmentAvailability] = useState<Map<string, EquipmentAvailabilityItem>>(new Map())
   const [isCheckingAvailability, setIsCheckingAvailability] = useState(false)
   const [conflictBannerDismissed, setConflictBannerDismissed] = useState(false)
@@ -97,8 +112,8 @@ export default function OrderEquipmentSection({
     const parsed = parseInt(bulkDaysDraft, 10)
     const n = Number.isFinite(parsed) && parsed >= 1 ? Math.round(parsed) : Math.max(1, orderSpanDays)
     setBulkDaysDraft(String(n))
-    onChange(items.map((item) => ({ ...item, days: n })))
-  }, [bulkDaysDraft, items, onChange, orderSpanDays])
+    onChange(items.map((item) => (locked(item.id) ? item : { ...item, days: n })))
+  }, [bulkDaysDraft, items, onChange, orderSpanDays, lockedItemIds])
 
   const handleBulkDaysFocus = () => {
     bulkHeaderFocused.current = true
@@ -177,6 +192,10 @@ export default function OrderEquipmentSection({
   const equipmentIds = Array.from(quantityByEquipment.keys())
   const availabilityKey = equipmentIds.join(',') + '|' + JSON.stringify(Array.from(quantityByEquipment.entries())) + '|' + (orderDateFrom ?? '') + '|' + (orderDateTo ?? '')
   useEffect(() => {
+    if (partnerMode) {
+      setEquipmentAvailability(new Map())
+      return
+    }
     if (equipmentIds.length === 0) {
       setEquipmentAvailability(new Map())
       return
@@ -185,7 +204,7 @@ export default function OrderEquipmentSection({
       checkAvailability(equipmentIds, quantityByEquipment)
     }, 500)
     return () => clearTimeout(t)
-  }, [availabilityKey, orderDateFrom, orderDateTo, checkAvailability, quantityByEquipment])
+  }, [availabilityKey, orderDateFrom, orderDateTo, checkAvailability, quantityByEquipment, partnerMode])
 
   const addEmptyRows = (count: number) => {
     const safeCount = Math.max(1, Math.floor(count))
@@ -276,23 +295,27 @@ export default function OrderEquipmentSection({
 
   return (
     <div className="space-y-3">
-      <datalist id="equipment-datalist">
-        {equipmentList.filter((e) => e.category !== 'ZASOBY').map((eq) => (
-          <option key={eq.id} value={eq.name} />
-        ))}
-      </datalist>
-      <datalist id="order-equipment-category-datalist">
-        {categoryDatalistOptions.map((c) => (
-          <option key={c} value={c} />
-        ))}
-      </datalist>
+      {!partnerMode && (
+        <datalist id="equipment-datalist">
+          {equipmentList.filter((e) => e.category !== 'ZASOBY').map((eq) => (
+            <option key={eq.id} value={eq.name} />
+          ))}
+        </datalist>
+      )}
+      {!partnerMode && (
+        <datalist id="order-equipment-category-datalist">
+          {categoryDatalistOptions.map((c) => (
+            <option key={c} value={c} />
+          ))}
+        </datalist>
+      )}
       {!hideSectionTitle && (
         <div className="flex justify-between items-center">
           <h3 className="text-base font-semibold">Wykaz sprzętu</h3>
-          {isCheckingAvailability && <span className="text-sm text-blue-500">Sprawdzanie dostępności…</span>}
+          {!partnerMode && isCheckingAvailability && <span className="text-sm text-blue-500">Sprawdzanie dostępności…</span>}
         </div>
       )}
-      {hideSectionTitle && isCheckingAvailability && (
+      {hideSectionTitle && !partnerMode && isCheckingAvailability && (
         <span className="text-sm text-blue-500">Sprawdzanie dostępności…</span>
       )}
 
@@ -355,25 +378,30 @@ export default function OrderEquipmentSection({
             </thead>
             <tbody>
               {items.map((item, index) => {
-                const availability = item.equipmentId ? equipmentAvailability.get(item.equipmentId) : undefined
+                const isLocked = locked(item.id)
+                const availability = !partnerMode && item.equipmentId ? equipmentAvailability.get(item.equipmentId) : undefined
                 const isAvailable = availability?.isAvailable ?? (item.equipmentId ? true : undefined)
-                const isUnavailable = item.equipmentId && isAvailable === false
 
                 return (
-                  <tr key={item.id || index} className="border-b border-border hover:bg-surface-2/50 transition-colors">
+                  <tr
+                    key={item.id || index}
+                    className={`border-b border-border hover:bg-surface-2/50 transition-colors ${isLocked ? 'opacity-70' : ''}`}
+                  >
                     <td className="py-1.5 px-2 whitespace-nowrap">
                       <div className="text-sm text-muted-foreground">{index + 1}</div>
                     </td>
                     <td className="py-1.5 px-2">
                       <div>
                         <input
-                          list="equipment-datalist"
+                          list={partnerMode ? undefined : 'equipment-datalist'}
                           type="text"
                           className={orderLineNameInputClass}
                           placeholder={orderLineNamePlaceholder}
                           value={item.name || ''}
+                          disabled={isLocked}
                           onChange={(e) => updateItem(index, { name: e.target.value })}
                           onBlur={(e) => {
+                            if (partnerMode || isLocked) return
                             const name = (e.target.value || '').trim()
                             if (!name) return
                             const eq = equipmentList.find((e) => e.name.trim().toLowerCase() === name.toLowerCase())
@@ -385,6 +413,7 @@ export default function OrderEquipmentSection({
                           maxLength={ORDER_LINE_DESCRIPTION_MAX_LENGTH}
                           className={orderLineDescriptionInputClass}
                           value={item.description || ''}
+                          disabled={isLocked}
                           onChange={(e) =>
                             updateItem(index, { description: clampOrderLineDescription(e.target.value) })
                           }
@@ -399,10 +428,11 @@ export default function OrderEquipmentSection({
                         </span>
                       ) : (
                         <input
-                          list="order-equipment-category-datalist"
+                          list={partnerMode ? undefined : 'order-equipment-category-datalist'}
                           type="text"
                           className="w-full px-2 py-1 text-xs bg-background border border-border rounded"
                           value={item.category ?? 'Inne'}
+                          disabled={isLocked}
                           onChange={(e) => updateItem(index, { category: e.target.value })}
                           onBlur={(e) => {
                             const v = e.target.value.trim()
@@ -419,6 +449,7 @@ export default function OrderEquipmentSection({
                         min="1"
                         className="w-14 px-2 py-1 text-xs bg-background border border-border rounded text-right"
                         value={item.quantity || 1}
+                        disabled={isLocked}
                         onChange={(e) => updateItem(index, { quantity: parseInt(e.target.value) || 1 })}
                       />
                     </td>
@@ -429,6 +460,7 @@ export default function OrderEquipmentSection({
                         step="0.01"
                         className="w-20 px-2 py-1 text-xs bg-background border border-border rounded text-right"
                         value={item.unitPrice || 0}
+                        disabled={isLocked}
                         onChange={(e) => updateItem(index, { unitPrice: parseFloat(e.target.value) || 0 })}
                       />
                     </td>
@@ -438,6 +470,7 @@ export default function OrderEquipmentSection({
                         min="1"
                         className="w-12 px-2 py-1 text-xs bg-background border border-border rounded text-right"
                         value={item.days || 1}
+                        disabled={isLocked}
                         onChange={(e) => updateItem(index, { days: parseInt(e.target.value) || 1 })}
                       />
                     </td>
@@ -448,6 +481,7 @@ export default function OrderEquipmentSection({
                         max="100"
                         className="w-14 px-2 py-1 text-xs bg-background border border-border rounded text-right"
                         value={item.discount || 0}
+                        disabled={isLocked}
                         onChange={(e) => updateItem(index, { discount: parseFloat(e.target.value) || 0 })}
                       />
                     </td>
@@ -458,12 +492,15 @@ export default function OrderEquipmentSection({
                       <input
                         type="checkbox"
                         checked={!!item.isRental}
+                        disabled={isLocked}
                         onChange={(e) => updateItem(index, { isRental: e.target.checked })}
                         title="Wynajem – bez marży"
                       />
                     </td>
                     <td className="py-1 px-2">
-                      {item.equipmentId ? (
+                      {partnerMode ? (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      ) : item.equipmentId ? (
                         !availability ? (
                           <span className="text-xs text-gray-400">Nie sprawdzono</span>
                         ) : isAvailable ? (
@@ -483,66 +520,72 @@ export default function OrderEquipmentSection({
                       ) : (
                         <span className="text-xs text-muted-foreground">Własna pozycja</span>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => setAvailabilityModalItem({ item, index })}
-                        className="ml-1 p-0.5 rounded hover:bg-surface-2 text-muted-foreground hover:text-foreground inline-flex"
-                        title={AVAILABILITY_TOOLTIP}
-                      >
-                        <Info size={14} />
-                      </button>
+                      {!partnerMode && !isLocked && (
+                        <button
+                          type="button"
+                          onClick={() => setAvailabilityModalItem({ item, index })}
+                          className="ml-1 p-0.5 rounded hover:bg-surface-2 text-muted-foreground hover:text-foreground inline-flex"
+                          title={AVAILABILITY_TOOLTIP}
+                        >
+                          <Info size={14} />
+                        </button>
+                      )}
                     </td>
                     <td className="py-1 px-2 whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={() => updateItem(index, { visibleInOffer: !item.visibleInOffer })}
-                        className={`p-1 rounded ${item.visibleInOffer !== false ? 'text-green-500 hover:text-green-700' : 'text-red-500 hover:text-red-700'}`}
-                        title={VISIBILITY_TOOLTIP}
-                      >
-                        {item.visibleInOffer !== false ? <Eye size={16} /> : <EyeOff size={16} />}
-                      </button>
+                      {!isLocked && (
+                        <button
+                          type="button"
+                          onClick={() => updateItem(index, { visibleInOffer: !item.visibleInOffer })}
+                          className={`p-1 rounded ${item.visibleInOffer !== false ? 'text-green-500 hover:text-green-700' : 'text-red-500 hover:text-red-700'}`}
+                          title={VISIBILITY_TOOLTIP}
+                        >
+                          {item.visibleInOffer !== false ? <Eye size={16} /> : <EyeOff size={16} />}
+                        </button>
+                      )}
                     </td>
                     <td className="py-1 px-2 whitespace-nowrap sticky right-0 bg-background z-[1]">
-                      <div className="flex items-center justify-center gap-1">
-                        {!item.equipmentId && (item.name || '').trim() ? (
+                      {!isLocked && (
+                        <div className="flex items-center justify-center gap-1">
+                          {!partnerMode && !item.equipmentId && (item.name || '').trim() ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSaveToCatalog({
+                                  index,
+                                  draft: {
+                                    name: (item.name || '').trim(),
+                                    description: item.description || '',
+                                    category: normalizeCategoryName(item.category || 'Inne'),
+                                    dailyPrice: Number(item.unitPrice) || 0,
+                                    visibleInOffer: item.visibleInOffer !== false,
+                                    pricingRule: item.pricingRule || { day1: 1.0, nextDays: 0.5 },
+                                  },
+                                })
+                              }
+                              className="p-1 text-primary hover:text-primary-hover"
+                              title="Dodaj do bazy sprzętu"
+                            >
+                              <Database size={16} />
+                            </button>
+                          ) : null}
                           <button
                             type="button"
-                            onClick={() =>
-                              setSaveToCatalog({
-                                index,
-                                draft: {
-                                  name: (item.name || '').trim(),
-                                  description: item.description || '',
-                                  category: normalizeCategoryName(item.category || 'Inne'),
-                                  dailyPrice: Number(item.unitPrice) || 0,
-                                  visibleInOffer: item.visibleInOffer !== false,
-                                  pricingRule: item.pricingRule || { day1: 1.0, nextDays: 0.5 },
-                                },
-                              })
-                            }
-                            className="p-1 text-primary hover:text-primary-hover"
-                            title="Dodaj do bazy sprzętu"
+                            onClick={() => duplicateItem(index)}
+                            className="p-1 text-muted-foreground hover:text-foreground"
+                            title="Duplikuj"
                           >
-                            <Database size={16} />
+                            <Copy size={16} />
                           </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          onClick={() => duplicateItem(index)}
-                          className="p-1 text-muted-foreground hover:text-foreground"
-                          title="Duplikuj"
-                        >
-                          <Copy size={16} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => removeItem(index)}
-                          className="p-1 text-red-500 hover:text-red-700"
-                          title="Usuń"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
+                          <button
+                            type="button"
+                            onClick={() => removeItem(index)}
+                            className="p-1 text-red-500 hover:text-red-700"
+                            title="Usuń"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 )
@@ -588,7 +631,7 @@ export default function OrderEquipmentSection({
       </div>
 
       {/* Ostrzeżenie o niedostępnym sprzęcie (można ukryć i pracować dalej) */}
-      {!conflictBannerDismissed && items.some((item) => {
+      {!partnerMode && !conflictBannerDismissed && items.some((item) => {
         if (!item.equipmentId) return false
         const availability = equipmentAvailability.get(item.equipmentId)
         const ok = availability?.isAvailable ?? true
@@ -714,7 +757,7 @@ export default function OrderEquipmentSection({
           </div>
         </div>
       )}
-      {saveToCatalog && (
+      {saveToCatalog && !partnerMode && (
         <EquipmentFormModal
           isOpen
           onClose={() => setSaveToCatalog(null)}

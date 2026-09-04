@@ -64,6 +64,12 @@ type Props = {
 
   onOpenStagePlan?: (offerBlockId: string, blockTitle: string) => void
 
+  readOnly?: boolean
+
+  lockedItemIds?: ReadonlySet<string> | string[]
+
+  partnerMode?: boolean
+
 }
 
 
@@ -93,6 +99,12 @@ export default function OrderOfferBlocksEditor({
   orderSpanDays = 1,
 
   onOpenStagePlan,
+
+  readOnly = false,
+
+  lockedItemIds,
+
+  partnerMode = false,
 
 }: Props) {
 
@@ -204,21 +216,23 @@ export default function OrderOfferBlocksEditor({
 
         </span>
 
-        <button
+        {!readOnly && (
+          <button
 
-          type="button"
+            type="button"
 
-          onClick={addBlock}
+            onClick={addBlock}
 
-          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-medium hover:bg-surface"
+            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-medium hover:bg-surface"
 
-        >
+          >
 
-          <Plus className="h-3.5 w-3.5" />
+            <Plus className="h-3.5 w-3.5" />
 
-          Dodaj blok
+            Dodaj blok
 
-        </button>
+          </button>
+        )}
 
       </div>
 
@@ -262,6 +276,8 @@ export default function OrderOfferBlocksEditor({
 
                     value={block.title ?? ''}
 
+                    disabled={readOnly}
+
                     onChange={(e) => updateBlock(index, { title: e.target.value })}
 
                     onBlur={(e) => updateBlock(index, { title: clampOrderOfferBlockTitle(e.target.value) })}
@@ -270,61 +286,63 @@ export default function OrderOfferBlocksEditor({
 
                   />
 
-                  <div className="flex items-center gap-1 shrink-0">
+                  {!readOnly && (
+                    <div className="flex items-center gap-1 shrink-0">
 
-                    <button
+                      <button
 
-                      type="button"
+                        type="button"
 
-                      title="Wyżej"
+                        title="Wyżej"
 
-                      disabled={index === 0}
+                        disabled={index === 0}
 
-                      onClick={() => moveBlock(index, -1)}
+                        onClick={() => moveBlock(index, -1)}
 
-                      className="rounded p-1.5 text-muted-foreground hover:bg-surface disabled:opacity-30"
+                        className="rounded p-1.5 text-muted-foreground hover:bg-surface disabled:opacity-30"
 
-                    >
+                      >
 
-                      <ChevronUp className="h-4 w-4" />
+                        <ChevronUp className="h-4 w-4" />
 
-                    </button>
+                      </button>
 
-                    <button
+                      <button
 
-                      type="button"
+                        type="button"
 
-                      title="Niżej"
+                        title="Niżej"
 
-                      disabled={index === blocks.length - 1}
+                        disabled={index === blocks.length - 1}
 
-                      onClick={() => moveBlock(index, 1)}
+                        onClick={() => moveBlock(index, 1)}
 
-                      className="rounded p-1.5 text-muted-foreground hover:bg-surface disabled:opacity-30"
+                        className="rounded p-1.5 text-muted-foreground hover:bg-surface disabled:opacity-30"
 
-                    >
+                      >
 
-                      <ChevronDown className="h-4 w-4" />
+                        <ChevronDown className="h-4 w-4" />
 
-                    </button>
+                      </button>
 
-                    <button
+                      <button
 
-                      type="button"
+                        type="button"
 
-                      title="Usuń blok"
+                        title="Usuń blok"
 
-                      onClick={() => removeBlock(index)}
+                        onClick={() => removeBlock(index)}
 
-                      className="rounded p-1.5 text-red-500 hover:bg-red-500/10"
+                        className="rounded p-1.5 text-red-500 hover:bg-red-500/10"
 
-                    >
+                      >
 
-                      <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-4 w-4" />
 
-                    </button>
+                      </button>
 
-                  </div>
+                    </div>
+                  )}
 
                 </div>
 
@@ -332,7 +350,7 @@ export default function OrderOfferBlocksEditor({
 
                 <h4 className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   <span>Wykaz sprzętu</span>
-                  {onOpenStagePlan ? (
+                  {!readOnly && onOpenStagePlan ? (
                     <button
                       type="button"
                       onClick={() => onOpenStagePlan(blockId, block.title?.trim() || `Blok ${index + 1}`)}
@@ -364,6 +382,10 @@ export default function OrderOfferBlocksEditor({
 
                   orderSpanDays={orderSpanDays}
 
+                  lockedItemIds={lockedItemIds}
+
+                  partnerMode={partnerMode}
+
                 />
 
 
@@ -383,6 +405,10 @@ export default function OrderOfferBlocksEditor({
                   hideSectionTitle
 
                   compactLayout
+
+                  lockedItemIds={lockedItemIds}
+
+                  partnerMode={partnerMode}
 
                 />
 
@@ -428,6 +454,10 @@ export default function OrderOfferBlocksEditor({
 
               orderSpanDays={orderSpanDays}
 
+              lockedItemIds={lockedItemIds}
+
+              partnerMode={partnerMode}
+
             />
 
           )}
@@ -445,6 +475,10 @@ export default function OrderOfferBlocksEditor({
               hideSectionTitle
 
               compactLayout
+
+              lockedItemIds={lockedItemIds}
+
+              partnerMode={partnerMode}
 
             />
 
