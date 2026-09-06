@@ -725,6 +725,8 @@ export class OrdersService {
           } else {
             await tx.orderStage.create({
               data: {
+                // Zachowaj client UUID – productionItems.stageIds wskazują na ten id
+                id: this.isUuid(stage.id) ? stage.id : randomUUID(),
                 orderId: id,
                 type: stage.type ?? 'CUSTOM',
                 label: stage.label ?? null,

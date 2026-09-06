@@ -220,6 +220,14 @@ export const OrderSchema: z.ZodType<any> = z.lazy(() =>
   })
 );
 
+/** Etapy/pozycje mogą mieć id klienta – backend zachowuje je, żeby stageIds (zasoby/transport) nie gubły powiązań */
+export const UpdateOrderStageItemSchema = CreateOrderStageSchema.extend({
+  id: z.string().uuid().optional(),
+});
+export const UpdateOrderProductionItemItemSchema = CreateOrderProductionItemSchema.extend({
+  id: z.string().uuid().optional(),
+});
+
 export const CreateOrderSchema = z.object({
   name: z.string().min(1, 'Nazwa zlecenia jest wymagana'),
   description: z.string().optional(),
@@ -240,18 +248,11 @@ export const CreateOrderSchema = z.object({
   recurringConfig: z.string().optional(),
   stagePlanJson: z.string().nullable().optional(),
   parentOrderId: z.string().uuid().optional(),
-  stages: z.array(CreateOrderStageSchema).optional(),
+  // Ten sam schemat co przy update – id etapu musi przejść przez Zod, inaczej stageIds w produkcji wskazują w pustkę
+  stages: z.array(UpdateOrderStageItemSchema).optional(),
   offerBlocks: z.array(UpdateOrderOfferBlockItemSchema).optional(),
   equipmentItems: z.array(CreateOrderEquipmentItemSchema).optional(),
   productionItems: z.array(CreateOrderProductionItemSchema).optional(),
-});
-
-/** W aktualizacji etapy/pozycje mogą mieć id – backend aktualizuje w miejscu zamiast usuwać i tworzyć od zera */
-export const UpdateOrderStageItemSchema = CreateOrderStageSchema.extend({
-  id: z.string().uuid().optional(),
-});
-export const UpdateOrderProductionItemItemSchema = CreateOrderProductionItemSchema.extend({
-  id: z.string().uuid().optional(),
 });
 
 export const UpdateOrderSchema = CreateOrderSchema.omit({

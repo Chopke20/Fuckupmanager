@@ -728,9 +728,8 @@ export default function OrderFormPage() {
         clearOrderDraft(undefined);
         if (created?.id) {
           // Zapis nowego zlecenia zmienia URL z /orders/new -> /orders/:id.
-          // 1) Czyścimy "dirty" bez ruszania danych (API create może zwracać niepełny obiekt).
-          // 2) Jednorazowo przepuszczamy nawigację bez pytania o porzucenie zmian.
-          reset(getValues() as any);
+          // Reset z odpowiedzi API (pełny detail) – zachowuje spójne id etapów ze stageIds.
+          reset(mapApiOrderToFormValues(created));
           allowNextNavigationRef.current = true;
           navigate(`/orders/${created.id}`);
         }
