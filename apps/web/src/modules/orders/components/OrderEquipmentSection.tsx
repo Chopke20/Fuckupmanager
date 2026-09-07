@@ -94,6 +94,8 @@ export default function OrderEquipmentSection({
       pricingRule?: { day1: number; nextDays: number }
     }
   } | null>(null)
+  /** Nowe wiersze (temp-*) z domyślnym „Inne” — po focus/zmianie kategorii przestajemy delikatnie podpowiadać */
+  const [categoryConfirmedIds, setCategoryConfirmedIds] = useState<Set<string>>(() => new Set())
 
   /** Wpis w nagłówku „Dni (…)”: odświeżany przy zmianie długości zlecenia; blur = jednorazowo ustawia dni we wszystkich wierszach */
   const [bulkDaysDraft, setBulkDaysDraft] = useState(() => String(Math.max(1, orderSpanDays)))
@@ -263,6 +265,25 @@ export default function OrderEquipmentSection({
     onChange(updated)
   }
 
+  const acknowledgeCategory = (itemId?: string) => {
+    if (!itemId) return
+    setCategoryConfirmedIds((prev) => {
+      if (prev.has(itemId)) return prev
+      const next = new Set(prev)
+      next.add(itemId)
+      return next
+    })
+  }
+
+  const needsCategoryConfirm = (item: Partial<OrderEquipmentItem>, isLocked: boolean) => {
+    if (isLocked || item.equipmentId) return false
+    const id = item.id
+    if (!id || !String(id).startsWith('temp-')) return false
+    if (categoryConfirmedIds.has(id)) return false
+    if (!(item.name || '').trim()) return false
+    return normalizeCategoryName(item.category || 'Inne') === 'Inne'
+  }
+
   const removeItem = (index: number) => {
     const updated = items.filter((_, i) => i !== index)
     onChange(updated)
@@ -382,6 +403,7 @@ export default function OrderEquipmentSection({
                 const isLocked = locked(item.id)
                 const availability = !partnerMode && item.equipmentId ? equipmentAvailability.get(item.equipmentId) : undefined
                 const isAvailable = availability?.isAvailable ?? (item.equipmentId ? true : undefined)
+                const categoryHint = needsCategoryConfirm(item, isLocked)
 
                 return (
                   <tr
@@ -431,20 +453,44 @@ export default function OrderEquipmentSection({
                           {normalizeCategoryName(item.category || 'Inne')}
                         </span>
                       ) : (
-                        <input
-                          list={partnerMode ? undefined : 'order-equipment-category-datalist'}
-                          type="text"
-                          className="w-full px-2 py-1 text-xs bg-background border border-border rounded"
-                          value={item.category ?? 'Inne'}
-                          disabled={isLocked}
-                          onChange={(e) => updateItem(index, { category: e.target.value })}
-                          onBlur={(e) => {
-                            const v = e.target.value.trim()
-                            updateItem(index, { category: v ? normalizeCategoryName(v) : 'Inne' })
-                          }}
-                          title="Kategoria w ofercie / PDF — wybierz z listy lub wpisz własną"
-                          placeholder="Kategoria"
-                        />
+                        <div>
+                          <input
+                            list={partnerMode ? undefined : 'order-equipment-category-datalist'}
+                            type="text"
+                            className={
+                              categoryHint
+                                ? 'w-full px-2 py-1 text-xs bg-amber-500/5 border border-amber-500/50 rounded text-foreground'
+                                : 'w-full px-2 py-1 text-xs bg-background border border-border rounded'
+                            }
+                            value={item.category ?? 'Inne'}
+                            disabled={isLocked}
+                            onFocus={() => acknowledgeCategory(item.id)}
+                            onChange={(e) => {
+                              acknowledgeCategory(item.id)
+                              updateItem(index, { category: e.target.value })
+                            }}
+                            onBlur={(e) => {
+                              acknowledgeCategory(item.id)
+                              const v = e.target.value.trim()
+                              updateItem(index, { category: v ? normalizeCategoryName(v) : 'Inne' })
+                            }}
+                            title={
+                              categoryHint
+                                ? 'Domyślnie „Inne” — potwierdź lub wybierz inną kategorię (Inne też jest OK)'
+                                : 'Kategoria w ofercie / PDF — wybierz z listy lub wpisz własną'
+                            }
+                            placeholder="Kategoria"
+                            aria-describedby={categoryHint && item.id ? `eq-cat-hint-${item.id}` : undefined}
+                          />
+                          {categoryHint ? (
+                            <span
+                              id={item.id ? `eq-cat-hint-${item.id}` : undefined}
+                              className="mt-0.5 block text-[10px] leading-tight text-amber-600 dark:text-amber-400/90"
+                            >
+                              Potwierdź kategorię
+                            </span>
+                          ) : null}
+                        </div>
                       )}
                     </td>
                     <td className="py-1 px-2 whitespace-nowrap">
