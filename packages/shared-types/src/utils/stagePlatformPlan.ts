@@ -140,8 +140,45 @@ export const STAGE_PLAN_CATALOG_KEY_LABELS: Record<string, string> = {
   'floor-carpet': 'Wykładzina na podestach',
   'floor-hips': 'Podłoga HIPS',
   railings: 'Barierki',
+  legs: 'Nogi do podestów',
+  stairs: 'Schody na scenę',
   ...Object.fromEntries(STAGE_LEG_HEIGHTS_CM.map((h) => [`legs-${h}`, `Nogi ${h} cm`])),
   ...Object.fromEntries(STAGE_LEG_HEIGHTS_CM.map((h) => [`stairs-${h}`, `Schody ${h} cm`])),
+}
+
+/**
+ * Role / rodziny edytowane w zębatce mapowania.
+ * `legs` i `stairs` pokrywają wszystkie wysokości, chyba że jest nadpisanie legs-40 itd.
+ */
+export const STAGE_PLAN_ROLE_CONFIG_KEYS = [
+  'deck-2x1',
+  'deck-1x1',
+  'legs',
+  'deck-clamps',
+  'dual-leg-clamps',
+  'quad-leg-clamps',
+  'braces',
+  'cladding-skirt',
+  'cladding-hips',
+  'floor-carpet',
+  'floor-hips',
+  'stairs',
+  'railings',
+] as const
+
+export type StagePlanRoleConfigKey = (typeof STAGE_PLAN_ROLE_CONFIG_KEYS)[number]
+
+/** Rodzina roli dla konkretnego catalogKey (legs-40 → legs). */
+export function stagePlanRoleFamily(catalogKey: string): string {
+  if (catalogKey.startsWith('legs-')) return 'legs'
+  if (catalogKey.startsWith('stairs-')) return 'stairs'
+  return catalogKey
+}
+
+/** Klucze do wyszukania w przepisie: najpierw dokładny, potem rodzina. */
+export function stagePlanRoleLookupKeys(catalogKey: string): string[] {
+  const family = stagePlanRoleFamily(catalogKey)
+  return family === catalogKey ? [catalogKey] : [catalogKey, family]
 }
 
 /** Część planu, którą redaguje operator. To ona jest zapisywana w zleceniu. */

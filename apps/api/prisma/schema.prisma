@@ -268,7 +268,6 @@ model Equipment {
   technicalNotes String?
   imageUrl      String?
   visibleInOffer Boolean @default(true)
-  stagePlanKey   String?  @unique
   pricingRule   String?
   isDeleted     Boolean  @default(false)
   deletedAt     DateTime?
@@ -276,11 +275,31 @@ model Equipment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  orderItems    OrderEquipmentItem[]
-  reservations  EquipmentReservation[]
-  blocks        EquipmentBlock[]
+  orderItems      OrderEquipmentItem[]
+  reservations    EquipmentReservation[]
+  blocks          EquipmentBlock[]
+  stagePlanRoleMaps StagePlanRoleMap[]
 
   @@map("equipment")
+}
+
+/// Przepis firmy: jak role BOM kreatora sceny mapują się na rekordy sprzętu.
+model StagePlanRoleMap {
+  id              String     @id @default(uuid())
+  /// Klucz roli lub rodziny: deck-2x1, legs, stairs-40…
+  roleKey         String     @unique
+  /// map | attach | skip
+  action          String
+  equipmentId     String?
+  equipment       Equipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
+  /// Gdy action=attach: rola gospodarza (np. deck-2x1)
+  attachToRoleKey String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([equipmentId])
+  @@map("stage_plan_role_maps")
 }
 
 model OrderEquipmentItem {

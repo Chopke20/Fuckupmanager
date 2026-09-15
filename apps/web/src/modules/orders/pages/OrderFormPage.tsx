@@ -36,7 +36,8 @@ import OrderFinancialSection from '../components/OrderFinancialSection';
 import OrderRecurringSection from '../components/OrderRecurringSection';
 import ConfirmationModal from '../../../shared/components/ConfirmationModal';
 import StagePlatformsOrderModal from '../components/StagePlatformsOrderModal';
-import { applyStagePlanToEquipmentItems } from '../../toolbox/utils/applyStagePlanToOrder';
+import { applyStagePlanToEquipmentItems } from '../../toolbox/utils/applyStagePlanToOrder'
+import { listStagePlanRoleMaps } from '../../toolbox/api/stagePlanRoleMaps.api';
 import { upsertStagePlanProjectForOrder } from '../../toolbox/api/stagePlanProjects.api';
 import { useEquipment } from '../../equipment/hooks/useEquipment';
 
@@ -456,14 +457,40 @@ export default function OrderFormPage() {
     async (plan: StagePlan) => {
       const offerBlockId = stageModal?.offerBlockId ?? null
       const serialized = serializeStagePlan(plan)
-      const next = applyStagePlanToEquipmentItems({
+      let roleMaps: Awaited<ReturnType<typeof listStagePlanRoleMaps>> = []
+      try {
+        roleMaps = await listStagePlanRoleMaps()
+      } catch {
+        window.alert('Nie udało się wczytać mapowania ról kreatora. Otwórz zębatkę w edytorze i zapisz przepis.')
+        return
+      }
+      const result = applyStagePlanToEquipmentItems({
         existing: equipmentItems as Partial<OrderEquipmentItem>[],
         plan,
         catalog: equipmentCatalog,
+        roleMaps,
         days: Math.max(1, orderDays),
         offerBlockId,
       })
-      handleEquipmentChange(next)
+      if (result.blockingIssues.length > 0) {
+        window.alert(
+          `Nie można dodać do zlecenia — popraw mapowanie (zębatka przy rozpisce):\n` +
+            result.blockingIssues
+              .slice(0, 8)
+              .map((issue) => {
+                if (issue.kind === 'unmapped') return `• brak mapowania: ${issue.line.catalogKey}`
+                if (issue.kind === 'duplicate_equipment')
+                  return `• ten sam sprzęt dla: ${issue.catalogKeys.join(', ')}`
+                if (issue.kind === 'unit_mismatch') return `• jednostki: ${issue.line.catalogKey}`
+                if (issue.kind === 'attach_target_missing')
+                  return `• dołączenie bez gospodarza: ${issue.line.catalogKey}`
+                return `• mapowanie bez sprzętu: ${issue.line.catalogKey}`
+              })
+              .join('\n')
+        )
+        return
+      }
+      handleEquipmentChange(result.items)
 
       if (offerBlockId) {
         const nextBlocks = (offerBlocksRaw as Partial<OrderOfferBlock>[]).map((block) =>
@@ -492,9 +519,9 @@ export default function OrderFormPage() {
       equipmentCatalog,
       orderDays,
       offerBlocksRaw,
+      handleEquipmentChange,
       handleOfferBlocksChange,
       setValue,
-      handleEquipmentChange,
       isEditing,
       id,
       getValues,

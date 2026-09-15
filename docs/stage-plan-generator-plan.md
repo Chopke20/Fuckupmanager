@@ -1,78 +1,32 @@
-# Generator sceny z podestów — dokumentacja wdrożenia
+# Generator sceny — mapowanie ról (zębatka)
 
-Status: **wdrożone** (lokalnie zbudowane, testy przechodzą).
+## Model
 
----
+1. **BOM planu** — zawsze szczegółowy (`deck-2x1`, `legs-40`, klamry…).
+2. **Przepis firmy** — tabela `stage_plan_role_maps` (nie na rekordzie `Equipment`).
+3. **Wiersze zlecenia** — wyłącznie zmapowane rekordy sprzętu (`equipmentId`).
 
-## Co zostało zrobione
+Akcje na rolę / rodzinę (`legs`, `stairs`):
 
-### P1 — Status zapisu (kropka)
-- `useStagePlanProjectSession`: `saveStatus`, `busy`, `consecutiveFailures`, `pendingSince`, `lastSavedAt`
-- Czerwona kropka po 2 nieudanych zapisach lub gdy zmiany czekają >15 s
-- Przyciski blokowane przez `busy`, nie przez autozapis
+| Akcja | Skutek |
+|---|---|
+| `map` | wiersz zlecenia z ilością tej roli |
+| `attach` | bez własnego wiersza; ilość **nie** sumuje się do gospodarza |
+| `skip` | nie wchodzi do zlecenia |
 
-### P2 — Generator nad edytorem
-- Blok „Ułóż prostokąt” przeniesiony nad pasek narzędzi w `StagePlatformVisualizer`
+## UI
 
-### P3 — Eksport PDF z Toolbox
-- `POST /api/stage-plan-projects/preview-pdf` (uprawnienie `orders`)
-- Przycisk „Pobierz PDF” w `StagePlanProjectBar`
+Przy rozpisce w edytorze → **Mapowanie** (zębatka) → modal przepisu + podgląd wierszy.
 
-### P4 — Powrót do „Zaznacz” po schodach
-- `StagePlanCanvas.onToolDone` → `setTool('select')` po postawieniu biegu
+API: `/api/stage-plan-role-maps` (GET, PUT, PUT `/bulk`, DELETE `/:roleKey`).
 
-### P6.3 — Klamry po obwodzie
-- `computeStagePerimeterClamps()` w `stagePlatformGeometry.ts`
-- Prostokąt 6×4 → 10 szt.; jeden rząd → bez duplikatu z tyłu
-- Testy w `stagePlatformGeometry.test.ts`
+## Migracja
 
-### P5 — Mapowanie sprzętu (`stagePlanKey`)
-- Kolumna `Equipment.stagePlanKey` + migracja `20260902210000_equipment_stage_plan_key`
-- `StageBomLine.catalogKey` w BOM
-- `applyStagePlanToOrder.ts`: dopasowanie wyłącznie po `stagePlanKey` (usunięte fuzzy match)
-- `StageBomCatalogTable`: cena, checkbox „W ofercie”, Utwórz / Wskaż
-- Pole „Rola w generatorze sceny” w `EquipmentFormModal` (kategoria Scena)
-- Nogi: `offer: false` w BOM; rekord w bazie z `visibleInOffer: false`
+`20260915160000_stage_plan_role_maps` — tworzy tabelę, przenosi stare `Equipment.stagePlanKey` → `map`, usuwa kolumnę.
 
-### P7 — Plan sceny per blok oferty
-- `OrderStagePlanPage`: przełącznik planów (zlecenie + bloki z `stagePlanJson`)
-- `GET /api/pdf/stage-plan/:orderId/generate?blockId=…`
+## Konfiguracja typowa (Lama)
 
-### Wcześniejsze (z poprzedniej sesji, w tym commicie)
-- `StagePlanProject` + autozapis projektów
-- `orderOfferBlock.stagePlanJson` + migracja `20260902180000_offer_block_stage_plan`
-- Przycisk „Złóż scenę” per blok oferty
-
----
-
-## Migracje do zastosowania na VPS
-
-1. `20260902180000_offer_block_stage_plan` — `stagePlanJson` na blokach oferty
-2. `20260902210000_equipment_stage_plan_key` — `stagePlanKey` na sprzęcie
-
-Deploy: push na `main` → GitHub Actions → sprawdzić logi `Applying migration` dla obu firm.
-
----
-
-## Konfiguracja sprzętu (pierwsze uruchomienie)
-
-Dla każdej firmy zmapuj pozycje w module Sprzętu (pole „Rola w generatorze sceny”) lub z poziomu generatora (Utwórz / Wskaż):
-
-| Klucz | Przykładowa nazwa | W ofercie | Cena |
-|---|---|---|---|
-| `deck-2x1` | Podest 2×1 m + nogi | tak | wg cennika |
-| `legs-40` | Nogi 40 cm | **nie** | 0 |
-| `deck-clamps` | Klamry blatów | **nie** | 0 |
-| `cladding-skirt` | Obicie kotara (mb) | tak | wg cennika |
-| `stairs-40` | Schody 40 cm | tak | wg cennika |
-| `railings` | Barierki (mb) | tak | wg cennika |
-
-Stare zlecenia nie zmieniają się — pozycje trzymają snapshot ceny i widoczności.
-
----
-
-## Decyzje biznesowe (zamknięte)
-
-- **Klamry:** tylko po obwodzie, w sztukach (`computeStagePerimeterClamps`)
-- **Niewyceniane:** w wykazie sprzętu, poza ofertą PDF/Excel — flaga `visibleInOffer`
-- **Nogi:** osobny rekord magazynowy, niewidoczny w ofercie; podest wyceniony raz
+- `deck-2x1` → map „Podest 2×1 + nogi”
+- `legs` → attach → `deck-2x1`
+- `deck-clamps` → map (visibleInOffer=false) albo skip
+- schody / barierki / obicie → map na własne rekordy

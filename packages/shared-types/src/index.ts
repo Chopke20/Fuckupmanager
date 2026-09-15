@@ -13,6 +13,7 @@ export * from './schemas/transport.schema';
 export * from './schemas/issuer-profile.schema';
 export * from './schemas/nip-lookup.schema';
 export * from './schemas/app-settings.schema';
+export * from './schemas/stage-plan-role-map.schema';
 
 // Explicitly re-export commonly used schemas
 export { CreateClientSchema, UpdateClientSchema, ClientSchema } from './schemas/client.schema';
@@ -120,6 +121,9 @@ export {
   STAGE_EDGE_SIDES,
   resolveStageBomCatalogKey,
   STAGE_PLAN_CATALOG_KEY_LABELS,
+  STAGE_PLAN_ROLE_CONFIG_KEYS,
+  stagePlanRoleFamily,
+  stagePlanRoleLookupKeys,
   buildStagePlan,
   createDefaultStagePlan,
   createStageDeck,
@@ -158,6 +162,7 @@ export type {
   StageBomLine,
   StagePlanInput,
   StagePlan,
+  StagePlanRoleConfigKey,
 } from './utils/stagePlatformPlan';
 export {
   STAGE_PALETTES,
@@ -177,3 +182,13 @@ export type {
   StageViewport,
   StageStairShape,
 } from './utils/stagePlatformRender';
+export {
+  indexStagePlanRoleMaps,
+  resolveStagePlanOrderLines,
+  stagePlanApplyBlockingIssues,
+} from './utils/stagePlanRoleMaps'
+export type {
+  StagePlanRoleMapEntry,
+  ResolvedStageOrderLine,
+  StagePlanApplyIssue,
+} from './utils/stagePlanRoleMaps'

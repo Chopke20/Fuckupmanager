@@ -21,7 +21,11 @@ import StagePlanCanvas, { type StagePlanTool } from './StagePlanCanvas'
 import StageBomCatalogTable from './StageBomCatalogTable'
 import { useStagePlanEditor } from '../hooks/useStagePlanEditor'
 import { useEquipment } from '../../equipment/hooks/useEquipment'
-import { getStageBomMappingIssues } from '../utils/applyStagePlanToOrder'
+import { listStagePlanRoleMaps } from '../api/stagePlanRoleMaps.api'
+import {
+  resolveStagePlanOrderLines,
+  stagePlanApplyBlockingIssues,
+} from '../utils/applyStagePlanToOrder'
 
 export interface StagePlatformVisualizerProps {
   initialPlan?: StagePlan | null
@@ -67,6 +71,20 @@ export default function StagePlatformVisualizer({
   const skipInitialPlanChangeRef = useRef(true)
   const { data: catalogPage } = useEquipment({ limit: 500 })
   const catalog = catalogPage?.data ?? []
+  const [roleMaps, setRoleMaps] = useState<
+    Array<{
+      roleKey: string
+      action: 'map' | 'attach' | 'skip'
+      equipmentId?: string | null
+      attachToRoleKey?: string | null
+    }>
+  >([])
+
+  useEffect(() => {
+    void listStagePlanRoleMaps()
+      .then((maps) => setRoleMaps(maps))
+      .catch(() => setRoleMaps([]))
+  }, [])
 
   useEffect(() => {
     if (skipInitialPlanChangeRef.current) {
@@ -79,19 +97,42 @@ export default function StagePlatformVisualizer({
   const activeTool = TOOLS.find((item) => item.id === tool)
   const hasSelection = editor.selectedDeckIds.length > 0
 
-  const handleApplyClick = useCallback(() => {
+  const handleApplyClick = useCallback(async () => {
     if (!onApply) return
-    const unmappedOffer = getStageBomMappingIssues(plan, catalog).filter(
-      (issue) => issue.kind === 'unmapped' && issue.line.offer
-    )
-    if (unmappedOffer.length > 0) {
-      const ok = window.confirm(
-        `${unmappedOffer.length} pozycji nie ma rekordu w bazie — wejdą do oferty z ceną 0 zł. Kontynuować?`
+    let maps = roleMaps
+    try {
+      maps = await listStagePlanRoleMaps()
+      setRoleMaps(maps)
+    } catch {
+      // użyj cache
+    }
+    const { issues } = resolveStagePlanOrderLines({
+      plan,
+      maps,
+      catalog,
+    })
+    const blocking = stagePlanApplyBlockingIssues(issues)
+    if (blocking.length > 0) {
+      window.alert(
+        `Nie można dodać do zlecenia — popraw mapowanie (zębatka przy rozpisce):\n` +
+          blocking
+            .slice(0, 8)
+            .map((issue) => {
+              if (issue.kind === 'unmapped') return `• brak mapowania: ${issue.line.catalogKey}`
+              if (issue.kind === 'duplicate_equipment')
+                return `• ten sam sprzęt dla: ${issue.catalogKeys.join(', ')}`
+              if (issue.kind === 'unit_mismatch')
+                return `• jednostki: ${issue.line.catalogKey}`
+              if (issue.kind === 'attach_target_missing')
+                return `• dołączenie bez gospodarza: ${issue.line.catalogKey}`
+              return `• mapowanie bez sprzętu: ${issue.line.catalogKey}`
+            })
+            .join('\n')
       )
-      if (!ok) return
+      return
     }
     onApply(plan)
-  }, [catalog, onApply, plan])
+  }, [catalog, onApply, plan, roleMaps])
 
   const rectGenerator = (
     <div className="flex flex-wrap items-end gap-2 rounded border border-border bg-surface p-3">
@@ -439,7 +480,7 @@ export default function StagePlatformVisualizer({
           <button
             type="button"
             disabled={plan.counts.decksTotal === 0}
-            onClick={handleApplyClick}
+            onClick={() => void handleApplyClick()}
             className="w-full rounded border-2 border-primary px-3 py-2 text-sm font-medium text-primary hover:bg-primary/10 disabled:opacity-50"
           >
             {applyLabel || 'Zastosuj'}
