@@ -5,6 +5,8 @@ import {
   type StagePlan,
 } from '@lama-stage/shared-types'
 
+const PDF_TIME_ZONE = 'Europe/Warsaw'
+
 function escapeHtml(s: string): string {
   return String(s)
     .replace(/&/g, '&amp;')
@@ -13,12 +15,37 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;')
 }
 
+function fmtPlDate(value: Date | string | null | undefined): string | null {
+  if (value == null || value === '') return null
+  const d = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleDateString('pl-PL', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: PDF_TIME_ZONE,
+  })
+}
+
+function formatEventDateRange(
+  dateFrom?: Date | string | null,
+  dateTo?: Date | string | null
+): string | null {
+  const from = fmtPlDate(dateFrom)
+  const to = fmtPlDate(dateTo)
+  if (!from && !to) return null
+  if (from && to && from !== to) return `${from} – ${to}`
+  return from || to
+}
+
 export function buildStagePlanPdfHtml(params: {
   documentNumberDisplay: string
   orderName: string
   orderNumber?: number | null
   orderYear?: number | null
   venue?: string | null
+  dateFrom?: Date | string | null
+  dateTo?: Date | string | null
   issuedAt: string
   plan: StagePlan
 }): string {
@@ -45,7 +72,8 @@ export function buildStagePlanPdfHtml(params: {
     params.orderNumber != null && params.orderYear != null
       ? `${params.orderNumber}/${params.orderYear}`
       : '—'
-  const issued = new Date(params.issuedAt).toLocaleDateString('pl-PL')
+  const issued = fmtPlDate(params.issuedAt) ?? ''
+  const eventDate = formatEventDateRange(params.dateFrom, params.dateTo)
 
   return `<!DOCTYPE html>
 <html lang="pl">
@@ -56,7 +84,9 @@ export function buildStagePlanPdfHtml(params: {
   body { font-family: Arial, Helvetica, sans-serif; color:#111; font-size:10pt; margin:0; }
   .page { padding: 16mm 18mm; }
   h1 { font-size: 16pt; margin: 0 0 4px; }
-  .meta { color:#666; font-size:9pt; margin-bottom: 14px; }
+  .meta { color:#666; font-size:9pt; margin-bottom: 6px; }
+  .event-date { font-size: 12pt; font-weight: 700; color:#111; margin: 0 0 14px; }
+  .event-date span { font-weight: 400; color:#444; }
   table { width:100%; border-collapse: collapse; margin-top: 12px; }
   th, td { border-bottom: 1px solid #ddd; padding: 6px 4px; text-align:left; }
   th { font-size: 8pt; text-transform: uppercase; letter-spacing: .08em; color:#666; }
@@ -76,8 +106,13 @@ export function buildStagePlanPdfHtml(params: {
       &nbsp;·&nbsp; ${escapeHtml(params.orderName)}
       &nbsp;·&nbsp; zlecenie ${escapeHtml(orderRef)}
       ${params.venue ? `&nbsp;·&nbsp; ${escapeHtml(params.venue)}` : ''}
-      &nbsp;·&nbsp; ${escapeHtml(issued)}
+      ${issued ? `&nbsp;·&nbsp; wygenerowano ${escapeHtml(issued)}` : ''}
     </div>
+    ${
+      eventDate
+        ? `<div class="event-date">Data wydarzenia: <span>${escapeHtml(eventDate)}</span></div>`
+        : ''
+    }
     <div class="plan">${svg}</div>
     <div class="legend">${legendRows}</div>
     <table>

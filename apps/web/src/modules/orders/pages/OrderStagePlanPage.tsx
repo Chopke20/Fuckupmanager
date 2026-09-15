@@ -72,6 +72,20 @@ export default function OrderStagePlanPage() {
     return o.orderNumber != null && o.orderYear != null ? formatOrderNumber(o.orderNumber, o.orderYear) : '—'
   }, [order])
 
+  const eventDateDisplay = useMemo(() => {
+    if (!order?.dateFrom) return null
+    const fmt = (value: string) =>
+      new Date(value).toLocaleDateString('pl-PL', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      })
+    const from = fmt(order.dateFrom)
+    const to = order.dateTo ? fmt(order.dateTo) : null
+    if (to && to !== from) return `${from} – ${to}`
+    return from
+  }, [order])
+
   useEffect(() => {
     setError(null)
   }, [id, selectedPlanId])
@@ -142,6 +156,12 @@ export default function OrderStagePlanPage() {
         </div>
         <div className="space-y-4 p-4">
           <h1 className="text-lg font-bold">Plan sceny — rzut z góry</h1>
+          {eventDateDisplay ? (
+            <p className="text-base font-semibold text-foreground">
+              Data wydarzenia:{' '}
+              <span className="font-normal tabular-nums text-muted-foreground">{eventDateDisplay}</span>
+            </p>
+          ) : null}
 
           {planOptions.length > 1 ? (
             <div>

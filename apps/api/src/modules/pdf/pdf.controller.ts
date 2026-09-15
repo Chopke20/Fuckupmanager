@@ -1167,6 +1167,9 @@ export class PdfController {
                 orderId,
                 documentType: 'STAGE_PLAN',
                 generatedAt,
+                dateFrom: order.dateFrom,
+                dateTo: order.dateTo,
+                venue: order.venue,
                 plan,
               }),
             },
@@ -1182,6 +1185,8 @@ export class PdfController {
         orderNumber,
         orderYear,
         venue: order.venue,
+        dateFrom: order.dateFrom,
+        dateTo: order.dateTo,
         issuedAt: generatedAt,
         plan,
       })
