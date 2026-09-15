@@ -33,20 +33,19 @@ const catalog = [
 ]
 
 describe('resolveStagePlanOrderLines', () => {
-  it('nie sumuje ilości przy attach', () => {
+  it('pomija nogi i zostawia ilość z podestu', () => {
     const { lines, issues } = resolveStagePlanOrderLines({
       plan,
       maps: [
         { roleKey: 'deck-2x1', action: 'map', equipmentId: catalog[0]!.id },
-        { roleKey: 'legs', action: 'attach', attachToRoleKey: 'deck-2x1' },
+        { roleKey: 'legs', action: 'skip' },
         { roleKey: 'deck-clamps', action: 'skip' },
       ],
       catalog,
     })
-    expect(issues.filter((i) => i.kind !== 'unmapped' || i.line.offer)).toEqual([])
+    expect(stagePlanApplyBlockingIssues(issues)).toHaveLength(0)
     expect(lines).toHaveLength(1)
     expect(lines[0]?.quantity).toBe(1)
-    expect(lines[0]?.sourceKeys).toContain('legs-40')
   })
 
   it('zgłasza duplicate_equipment', () => {

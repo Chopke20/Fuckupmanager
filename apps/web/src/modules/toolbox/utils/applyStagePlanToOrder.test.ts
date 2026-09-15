@@ -26,17 +26,6 @@ const catalog = [
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
-  {
-    id: '22222222-2222-4222-8222-222222222222',
-    name: 'Nogi do podestów 40 cm',
-    category: 'Scena',
-    dailyPrice: 0,
-    stockQuantity: 100,
-    unit: 'szt.',
-    visibleInOffer: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
 ]
 
 describe('applyStagePlanToEquipmentItems', () => {
@@ -73,7 +62,7 @@ describe('applyStagePlanToEquipmentItems', () => {
       catalog,
       roleMaps: [
         { roleKey: 'deck-2x1', action: 'map', equipmentId: catalog[0]!.id },
-        { roleKey: 'legs', action: 'attach', attachToRoleKey: 'deck-2x1' },
+        { roleKey: 'legs', action: 'skip' },
         { roleKey: 'deck-clamps', action: 'skip' },
       ],
       days: 1,
@@ -88,21 +77,16 @@ describe('applyStagePlanToEquipmentItems', () => {
         (row) => row.description?.includes(STAGE_PLAN_LINE_MARKER) && row.offerBlockId === blockA
       )
     ).toHaveLength(1)
-    expect(
-      result.items.filter(
-        (row) => row.description?.includes(STAGE_PLAN_LINE_MARKER) && row.offerBlockId === blockB
-      )
-    ).toHaveLength(1)
   })
 
-  it('mapuje deck i dołącza nogi bez sumowania ilości', () => {
+  it('mapuje deck i pomija nogi — ilość to same podesty', () => {
     const result = applyStagePlanToEquipmentItems({
       existing: [],
       plan,
       catalog,
       roleMaps: [
         { roleKey: 'deck-2x1', action: 'map', equipmentId: catalog[0]!.id },
-        { roleKey: 'legs', action: 'attach', attachToRoleKey: 'deck-2x1' },
+        { roleKey: 'legs', action: 'skip' },
         { roleKey: 'deck-clamps', action: 'skip' },
       ],
       days: 1,

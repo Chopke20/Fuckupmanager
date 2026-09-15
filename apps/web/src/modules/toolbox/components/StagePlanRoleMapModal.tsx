@@ -4,7 +4,6 @@ import type {
   Equipment,
   StageBomLine,
   StagePlan,
-  StagePlanRoleAction,
   StagePlanRoleMap,
   UpsertStagePlanRoleMapDto,
 } from '@lama-stage/shared-types'
@@ -13,23 +12,27 @@ import {
   STAGE_PLAN_ROLE_CONFIG_KEYS,
   formatMeters,
   resolveStagePlanOrderLines,
+  stagePlanApplyBlockingIssues,
 } from '@lama-stage/shared-types'
 import { useEquipment } from '../../equipment/hooks/useEquipment'
 import { equipmentApi } from '../../equipment/api/equipment.api'
 import {
   bulkUpsertStagePlanRoleMaps,
+  deleteStagePlanRoleMap,
   listStagePlanRoleMaps,
 } from '../api/stagePlanRoleMaps.api'
 
+type UiAction = 'map' | 'skip'
+
 type DraftRow = {
   roleKey: string
-  action: StagePlanRoleAction
+  /** null = jeszcze nie ustawione */
+  action: UiAction | null
   equipmentId: string | null
-  attachToRoleKey: string | null
 }
 
 function emptyDraft(roleKey: string): DraftRow {
-  return { roleKey, action: 'skip', equipmentId: null, attachToRoleKey: null }
+  return { roleKey, action: null, equipmentId: null }
 }
 
 function draftsFromMaps(maps: StagePlanRoleMap[]): Record<string, DraftRow> {
@@ -38,11 +41,13 @@ function draftsFromMaps(maps: StagePlanRoleMap[]): Record<string, DraftRow> {
     out[key] = emptyDraft(key)
   }
   for (const map of maps) {
+    // Stare „attach” traktujemy jak „pomiń w zleceniu” — bez osobnej linii.
+    const action: UiAction =
+      map.action === 'map' ? 'map' : 'skip'
     out[map.roleKey] = {
       roleKey: map.roleKey,
-      action: map.action,
-      equipmentId: map.equipmentId ?? null,
-      attachToRoleKey: map.attachToRoleKey ?? null,
+      action,
+      equipmentId: action === 'map' ? map.equipmentId ?? null : null,
     }
   }
   return out
@@ -86,6 +91,7 @@ export default function StagePlanRoleMapModal({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [searchByRole, setSearchByRole] = useState<Record<string, string>>({})
+  const [pickerRole, setPickerRole] = useState<string | null>(null)
   const [creatingRole, setCreatingRole] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -102,17 +108,22 @@ export default function StagePlanRoleMapModal({
   }, [])
 
   useEffect(() => {
-    if (open) void load()
+    if (open) {
+      setPickerRole(null)
+      void load()
+    }
   }, [open, load])
 
   const roleMapsEntries = useMemo(
     () =>
-      Object.values(drafts).map((row) => ({
-        roleKey: row.roleKey,
-        action: row.action,
-        equipmentId: row.equipmentId,
-        attachToRoleKey: row.attachToRoleKey,
-      })),
+      Object.values(drafts)
+        .filter((row) => row.action === 'map' || row.action === 'skip')
+        .map((row) => ({
+          roleKey: row.roleKey,
+          action: row.action as UiAction,
+          equipmentId: row.equipmentId,
+          attachToRoleKey: null,
+        })),
     [drafts]
   )
 
@@ -125,8 +136,6 @@ export default function StagePlanRoleMapModal({
       }),
     [plan, roleMapsEntries, catalog]
   )
-
-  const hostOptions = STAGE_PLAN_ROLE_CONFIG_KEYS.filter((key) => key !== 'legs' && key !== 'stairs')
 
   const patchDraft = (roleKey: string, patch: Partial<DraftRow>) => {
     setDrafts((prev) => ({
@@ -148,7 +157,9 @@ export default function StagePlanRoleMapModal({
             : undefined)
       const { proposedCode } = await equipmentApi.getNextCode('Scena')
       const created = await equipmentApi.create({
-        name: STAGE_PLAN_CATALOG_KEY_LABELS[roleKey] ?? bomDisplayName(sample ?? { name: roleKey } as StageBomLine),
+        name:
+          STAGE_PLAN_CATALOG_KEY_LABELS[roleKey] ??
+          bomDisplayName(sample ?? ({ name: roleKey } as StageBomLine)),
         category: 'Scena',
         unit: sample?.unit ?? 'szt.',
         dailyPrice: 0,
@@ -158,7 +169,8 @@ export default function StagePlanRoleMapModal({
         pricingRule: { day1: 1.0, nextDays: 0.5 },
       })
       await refetchCatalog()
-      patchDraft(roleKey, { action: 'map', equipmentId: created.id, attachToRoleKey: null })
+      patchDraft(roleKey, { action: 'map', equipmentId: created.id })
+      setPickerRole(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Nie udało się utworzyć pozycji.')
     } finally {
@@ -170,13 +182,27 @@ export default function StagePlanRoleMapModal({
     setSaving(true)
     setError(null)
     try {
-      const maps: UpsertStagePlanRoleMapDto[] = Object.values(drafts).map((row) => ({
-        roleKey: row.roleKey,
-        action: row.action,
-        equipmentId: row.action === 'map' ? row.equipmentId : null,
-        attachToRoleKey: row.action === 'attach' ? row.attachToRoleKey : null,
-      }))
-      const saved = await bulkUpsertStagePlanRoleMaps(maps)
+      const toUpsert: UpsertStagePlanRoleMapDto[] = []
+      const toDelete: string[] = []
+      for (const row of Object.values(drafts)) {
+        if (row.action === null) {
+          toDelete.push(row.roleKey)
+          continue
+        }
+        if (row.action === 'map' && !row.equipmentId) {
+          setError(`Rola „${STAGE_PLAN_CATALOG_KEY_LABELS[row.roleKey] ?? row.roleKey}” ma Mapuj bez wybranej pozycji.`)
+          setSaving(false)
+          return
+        }
+        toUpsert.push({
+          roleKey: row.roleKey,
+          action: row.action,
+          equipmentId: row.action === 'map' ? row.equipmentId : null,
+          attachToRoleKey: null,
+        })
+      }
+      await Promise.all(toDelete.map((roleKey) => deleteStagePlanRoleMap(roleKey).catch(() => undefined)))
+      const saved = toUpsert.length > 0 ? await bulkUpsertStagePlanRoleMaps(toUpsert) : await listStagePlanRoleMaps()
       onSaved?.(saved)
       onClose()
     } catch (e) {
@@ -211,9 +237,11 @@ export default function StagePlanRoleMapModal({
           </button>
         </div>
 
-        <div className="overflow-y-auto px-3 py-2 space-y-2">
+        <div className="space-y-2 overflow-y-auto px-3 py-2">
           <p className="text-[11px] leading-snug text-muted-foreground">
-            Przepis firmy: mapuj na sprzęt, dołącz do innej roli (bez sumowania ilości) albo pomiń.
+            Przypisz pozycję z kreatora do pozycji z bazy sprzętu lub stwórz nową pozycję. „Pomiń”
+            zostawia pozycję w planie sceny, ale nie dodaje jej do zlecenia. Zapis jest globalny dla
+            firmy.
           </p>
 
           {error ? (
@@ -232,57 +260,70 @@ export default function StagePlanRoleMapModal({
                     <th className="px-2 py-1.5 font-medium">Rola</th>
                     <th className="px-2 py-1.5 text-right font-medium">Ilość</th>
                     <th className="px-2 py-1.5 font-medium">Akcja</th>
-                    <th className="px-2 py-1.5 font-medium">Szczegóły</th>
+                    <th className="px-2 py-1.5 font-medium">Sprzęt</th>
                   </tr>
                 </thead>
                 <tbody>
                   {STAGE_PLAN_ROLE_CONFIG_KEYS.map((roleKey) => {
                     const draft = drafts[roleKey] ?? emptyDraft(roleKey)
                     const qty = quantityForRole(plan, roleKey)
+                    const inPlan = qty != null
+                    const needsDecision = inPlan && draft.action === null
                     const query = (searchByRole[roleKey] ?? '').trim().toLowerCase()
                     const options = catalog
                       .filter((item) => item.category !== 'ZASOBY')
                       .filter((item) => !query || item.name.toLowerCase().includes(query))
                       .slice(0, 12)
                     const selected = catalog.find((item) => item.id === draft.equipmentId)
+                    const showPicker = draft.action === 'map' && (!selected || pickerRole === roleKey)
 
                     return (
-                      <tr key={roleKey} className="border-t border-border/60 align-top">
+                      <tr
+                        key={roleKey}
+                        className={`border-t border-border/60 align-top ${
+                          needsDecision ? 'bg-warning/5' : ''
+                        }`}
+                      >
                         <td className="px-2 py-1.5">
                           <div className="font-medium leading-tight">
                             {STAGE_PLAN_CATALOG_KEY_LABELS[roleKey] ?? roleKey}
                           </div>
                           <div className="text-[10px] text-muted-foreground">{roleKey}</div>
                         </td>
-                        <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground whitespace-nowrap">
+                        <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-muted-foreground">
                           {qty ? `${formatMeters(qty.quantity)} ${qty.unit}` : '—'}
                         </td>
                         <td className="px-2 py-1.5">
-                          <div className="inline-flex rounded border border-border">
+                          <div
+                            className={`inline-flex rounded border ${
+                              needsDecision ? 'border-warning' : 'border-border'
+                            }`}
+                          >
                             {(
                               [
                                 ['map', 'Mapuj'],
-                                ['attach', 'Dołącz'],
                                 ['skip', 'Pomiń'],
                               ] as const
                             ).map(([action, label], index) => (
                               <button
                                 key={action}
                                 type="button"
-                                onClick={() =>
+                                onClick={() => {
                                   patchDraft(roleKey, {
                                     action,
                                     equipmentId: action === 'map' ? draft.equipmentId : null,
-                                    attachToRoleKey:
-                                      action === 'attach' ? draft.attachToRoleKey : null,
                                   })
-                                }
+                                  if (action === 'map' && !draft.equipmentId) setPickerRole(roleKey)
+                                  if (action === 'skip') setPickerRole(null)
+                                }}
                                 className={`px-1.5 py-0.5 text-[10px] ${
                                   index > 0 ? 'border-l border-border' : ''
                                 } ${
                                   draft.action === action
                                     ? 'bg-primary/15 text-primary'
-                                    : 'text-muted-foreground hover:text-foreground'
+                                    : needsDecision && action === 'map'
+                                      ? 'text-warning hover:text-foreground'
+                                      : 'text-muted-foreground hover:text-foreground'
                                 }`}
                               >
                                 {label}
@@ -290,10 +331,10 @@ export default function StagePlanRoleMapModal({
                             ))}
                           </div>
                         </td>
-                        <td className="px-2 py-1.5 min-w-[14rem]">
+                        <td className="min-w-[14rem] px-2 py-1.5">
                           {draft.action === 'map' ? (
                             <div className="space-y-1">
-                              {selected ? (
+                              {selected && pickerRole !== roleKey ? (
                                 <div className="flex flex-wrap items-center gap-1">
                                   <span className="truncate rounded bg-surface-2 px-1.5 py-0.5">
                                     {selected.name}
@@ -305,13 +346,15 @@ export default function StagePlanRoleMapModal({
                                   </span>
                                   <button
                                     type="button"
-                                    onClick={() => patchDraft(roleKey, { equipmentId: null })}
+                                    onClick={() => setPickerRole(roleKey)}
                                     className="text-[10px] text-muted-foreground hover:text-foreground"
                                   >
                                     Zmień
                                   </button>
                                 </div>
-                              ) : (
+                              ) : null}
+
+                              {showPicker ? (
                                 <div className="space-y-1">
                                   <div className="relative">
                                     <Search
@@ -327,22 +370,36 @@ export default function StagePlanRoleMapModal({
                                           [roleKey]: e.target.value,
                                         }))
                                       }
-                                      placeholder="Szukaj…"
+                                      placeholder="Szukaj w bazie…"
                                       className="w-full rounded border border-border bg-surface py-0.5 pl-6 pr-1.5 text-[11px]"
+                                      autoFocus={pickerRole === roleKey}
                                     />
                                   </div>
-                                  <ul className="max-h-20 overflow-y-auto rounded border border-border">
+                                  <ul className="max-h-24 overflow-y-auto rounded border border-border">
+                                    <li>
+                                      <button
+                                        type="button"
+                                        disabled={creatingRole === roleKey}
+                                        onClick={() => void createEquipmentForRole(roleKey)}
+                                        className="flex w-full items-center gap-1 px-1.5 py-0.5 text-left text-[11px] text-primary hover:bg-surface-2 disabled:opacity-50"
+                                      >
+                                        <Plus size={11} />
+                                        {creatingRole === roleKey
+                                          ? 'Tworzenie…'
+                                          : 'Dodaj nową pozycję do bazy'}
+                                      </button>
+                                    </li>
                                     {options.map((item: Equipment) => (
                                       <li key={item.id}>
                                         <button
                                           type="button"
-                                          onClick={() =>
+                                          onClick={() => {
                                             patchDraft(roleKey, {
                                               action: 'map',
                                               equipmentId: item.id,
-                                              attachToRoleKey: null,
                                             })
-                                          }
+                                            setPickerRole(null)
+                                          }}
                                           className="w-full px-1.5 py-0.5 text-left text-[11px] hover:bg-surface-2"
                                         >
                                           {item.name}
@@ -351,45 +408,15 @@ export default function StagePlanRoleMapModal({
                                     ))}
                                   </ul>
                                 </div>
-                              )}
-                              <button
-                                type="button"
-                                disabled={creatingRole === roleKey}
-                                onClick={() => void createEquipmentForRole(roleKey)}
-                                className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-50"
-                              >
-                                <Plus size={10} />
-                                {creatingRole === roleKey ? 'Tworzenie…' : 'Utwórz w bazie'}
-                              </button>
+                              ) : null}
                             </div>
-                          ) : null}
-
-                          {draft.action === 'attach' ? (
-                            <select
-                              value={draft.attachToRoleKey ?? ''}
-                              onChange={(e) =>
-                                patchDraft(roleKey, {
-                                  action: 'attach',
-                                  attachToRoleKey: e.target.value || null,
-                                  equipmentId: null,
-                                })
-                              }
-                              className="w-full rounded border border-border bg-surface px-1.5 py-0.5 text-[11px]"
-                            >
-                              <option value="">— gospodarz —</option>
-                              {hostOptions
-                                .filter((key) => key !== roleKey)
-                                .map((key) => (
-                                  <option key={key} value={key}>
-                                    {STAGE_PLAN_CATALOG_KEY_LABELS[key] ?? key}
-                                  </option>
-                                ))}
-                            </select>
-                          ) : null}
-
-                          {draft.action === 'skip' ? (
-                            <span className="text-[10px] text-muted-foreground">—</span>
-                          ) : null}
+                          ) : draft.action === 'skip' ? (
+                            <span className="text-[10px] text-muted-foreground">
+                              w planie tak, w zleceniu nie
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-warning">ustaw Mapuj lub Pomiń</span>
+                          )}
                         </td>
                       </tr>
                     )
@@ -409,12 +436,7 @@ export default function StagePlanRoleMapModal({
               <ul className="space-y-0.5 text-xs">
                 {preview.lines.map((line) => (
                   <li key={line.catalogKey} className="flex justify-between gap-2">
-                    <span className="truncate">
-                      {line.equipment.name}
-                      <span className="ml-1 text-[10px] text-muted-foreground">
-                        ({line.sourceKeys.join(', ')})
-                      </span>
-                    </span>
+                    <span className="truncate">{line.equipment.name}</span>
                     <span className="shrink-0 tabular-nums text-muted-foreground">
                       {formatMeters(line.quantity)} {line.unit}
                       {line.equipment.visibleInOffer === false ? ' · mag.' : ''}
@@ -423,19 +445,19 @@ export default function StagePlanRoleMapModal({
                 ))}
               </ul>
             )}
-            {preview.issues.length > 0 ? (
+            {stagePlanApplyBlockingIssues(preview.issues).length > 0 ? (
               <ul className="mt-1 space-y-0.5 text-[10px] text-warning">
-                {preview.issues.map((issue, index) => (
+                {stagePlanApplyBlockingIssues(preview.issues).map((issue, index) => (
                   <li key={`${issue.kind}-${index}`}>
                     {issue.kind === 'unmapped'
-                      ? `Brak mapowania: ${issue.line.catalogKey}`
+                      ? `Brak decyzji: ${issue.line.catalogKey}`
                       : issue.kind === 'duplicate_equipment'
                         ? `Ten sam sprzęt: ${issue.catalogKeys.join(', ')}`
                         : issue.kind === 'unit_mismatch'
                           ? `Jednostka: ${issue.line.catalogKey}`
-                          : issue.kind === 'attach_target_missing'
-                            ? `Dołączenie ${issue.line.catalogKey} → brak ${issue.attachToRoleKey}`
-                            : `Mapowanie bez sprzętu: ${issue.line.catalogKey}`}
+                          : `Mapowanie bez sprzętu: ${
+                              'line' in issue ? issue.line.catalogKey : ''
+                            }`}
                   </li>
                 ))}
               </ul>
@@ -457,7 +479,7 @@ export default function StagePlanRoleMapModal({
             onClick={() => void save()}
             className="rounded border-2 border-primary px-2.5 py-1 text-xs font-medium text-primary disabled:opacity-50"
           >
-            {saving ? 'Zapisywanie…' : 'Zapisz przepis'}
+            {saving ? 'Zapisywanie…' : 'Zapisz'}
           </button>
         </div>
       </div>

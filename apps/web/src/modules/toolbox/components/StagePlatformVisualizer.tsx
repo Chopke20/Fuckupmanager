@@ -123,8 +123,6 @@ export default function StagePlatformVisualizer({
                 return `• ten sam sprzęt dla: ${issue.catalogKeys.join(', ')}`
               if (issue.kind === 'unit_mismatch')
                 return `• jednostki: ${issue.line.catalogKey}`
-              if (issue.kind === 'attach_target_missing')
-                return `• dołączenie bez gospodarza: ${issue.line.catalogKey}`
               return `• mapowanie bez sprzętu: ${issue.line.catalogKey}`
             })
             .join('\n')

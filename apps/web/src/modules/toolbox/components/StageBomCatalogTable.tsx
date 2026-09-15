@@ -5,6 +5,8 @@ import {
   STAGE_PLAN_CATALOG_KEY_LABELS,
   formatMeters,
   resolveStagePlanOrderLines,
+  stagePlanApplyBlockingIssues,
+  stagePlanRoleLookupKeys,
 } from '@lama-stage/shared-types'
 import { useEquipment } from '../../equipment/hooks/useEquipment'
 import { listStagePlanRoleMaps } from '../api/stagePlanRoleMaps.api'
@@ -28,20 +30,31 @@ export default function StageBomCatalogTable({ plan }: { plan: StagePlan }) {
     void refreshMaps()
   }, [])
 
+  const roleEntries = useMemo(
+    () =>
+      maps.map((item) => ({
+        roleKey: item.roleKey,
+        action: item.action === 'attach' ? ('skip' as const) : item.action,
+        equipmentId: item.action === 'map' ? item.equipmentId : null,
+        attachToRoleKey: null,
+      })),
+    [maps]
+  )
+
   const preview = useMemo(
     () =>
       resolveStagePlanOrderLines({
         plan,
-        maps: maps.map((item) => ({
-          roleKey: item.roleKey,
-          action: item.action,
-          equipmentId: item.equipmentId,
-          attachToRoleKey: item.attachToRoleKey,
-        })),
+        maps: roleEntries,
         catalog,
       }),
-    [plan, maps, catalog]
+    [plan, roleEntries, catalog]
   )
+
+  const needsMappingSetup = useMemo(() => {
+    if (plan.bom.length === 0) return false
+    return stagePlanApplyBlockingIssues(preview.issues).length > 0 || maps.length === 0
+  }, [plan.bom.length, preview.issues, maps.length])
 
   const mappedByCatalogKey = useMemo(() => {
     const out = new Map<string, string>()
@@ -52,6 +65,14 @@ export default function StageBomCatalogTable({ plan }: { plan: StagePlan }) {
     }
     return out
   }, [preview.lines])
+
+  const isSkipped = (catalogKey: string) => {
+    for (const key of stagePlanRoleLookupKeys(catalogKey)) {
+      const row = maps.find((item) => item.roleKey === key)
+      if (row?.action === 'skip' || row?.action === 'attach') return true
+    }
+    return false
+  }
 
   if (plan.bom.length === 0) {
     return (
@@ -68,11 +89,20 @@ export default function StageBomCatalogTable({ plan }: { plan: StagePlan }) {
         <button
           type="button"
           onClick={() => setGearOpen(true)}
-          className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
-          title="Mapowanie ról na sprzęt"
+          className={`inline-flex items-center gap-1 rounded border px-2 py-1 text-xs ${
+            needsMappingSetup
+              ? 'border-warning bg-warning/10 text-warning animate-pulse'
+              : 'border-border text-muted-foreground hover:text-foreground'
+          }`}
+          title={
+            needsMappingSetup
+              ? 'Ustaw mapowanie ról na sprzęt — wymagane przed dodaniem do zlecenia'
+              : 'Mapowanie ról na sprzęt'
+          }
         >
           <Settings2 size={14} />
           Mapowanie
+          {needsMappingSetup ? ' · ustaw' : ''}
         </button>
       </div>
 
@@ -88,10 +118,7 @@ export default function StageBomCatalogTable({ plan }: { plan: StagePlan }) {
           <tbody>
             {plan.bom.map((line) => {
               const mappedName = mappedByCatalogKey.get(line.catalogKey)
-              const skipped = !mappedName && maps.some((m) => {
-                if (m.action !== 'skip') return false
-                return m.roleKey === line.catalogKey || m.roleKey === line.catalogKey.split('-')[0]
-              })
+              const skipped = !mappedName && isSkipped(line.catalogKey)
               return (
                 <tr key={line.catalogKey} className="border-t border-border/60">
                   <td className="px-2 py-1.5">
@@ -107,7 +134,7 @@ export default function StageBomCatalogTable({ plan }: { plan: StagePlan }) {
                     {mappedName
                       ? mappedName
                       : skipped
-                        ? 'pominięte'
+                        ? 'pominięte (tylko plan)'
                         : '— brak mapowania'}
                   </td>
                 </tr>
