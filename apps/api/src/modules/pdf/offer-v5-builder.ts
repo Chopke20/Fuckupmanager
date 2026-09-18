@@ -297,10 +297,7 @@ export function buildOfferHtmlV5(
       <span class="fin-label">Rabat globalny (${order.discountGlobal}%)</span>
       <span class="fin-val">— ${fmt(discountAmount)}</span>
     </div>`
-      : `<div class="fin-row">
-      <span class="fin-label" style="color:#bbb">Rabat globalny (0%)</span>
-      <span class="fin-val" style="color:#bbb">— 0,00 ${symbol}</span>
-    </div>`,
+      : '',
     `<div class="fin-row fin-row--divider fin-row--netto">
       <span class="fin-label">Wartość netto</span>
       <span class="fin-val">${fmt(netAfterDiscount)}</span>
@@ -313,7 +310,9 @@ export function buildOfferHtmlV5(
       <span class="fin-label">Wartość brutto</span>
       <span class="fin-val">${fmt(grossTotal)}</span>
     </div>`,
-  ].join('\n        ')
+  ]
+    .filter(Boolean)
+    .join('\n        ')
 
   let recurringBlock = ''
   if (order.isRecurring && order.recurringConfig) {
