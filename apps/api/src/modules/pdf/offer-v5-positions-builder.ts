@@ -178,6 +178,11 @@ function buildEquipmentParts(items: VisibleEquipment[], ctx: PositionsMoneyConte
         </tr>`
       : '<tr><td colspan="9" class="dim">Brak pozycji</td></tr>'
 
+  const hasMultiDay = items.some((item) => (item.days ?? 1) > 1)
+  const multiDayNote = hasMultiDay
+    ? `<p class="eq-multiday-note">Cena za 1. dzień w pełnej wysokości; każdy kolejny dzień: 50% stawki.</p>`
+    : ''
+
   const html = `
     <table class="prod-table prod-table--line-items">
       <thead>
@@ -195,7 +200,8 @@ function buildEquipmentParts(items: VisibleEquipment[], ctx: PositionsMoneyConte
       </thead>
       <tbody>${tbody}</tbody>
       <tfoot>${tfoot}</tfoot>
-    </table>`
+    </table>
+    ${multiDayNote}`
 
   return { html, totalNet: equipmentTotalNet, totalVat: equipmentTotalVat }
 }
