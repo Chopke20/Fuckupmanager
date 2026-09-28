@@ -15,6 +15,7 @@ import {
   serializeStagePlan,
   snapToStep,
   stageStairDepthM,
+  stageStairSteps,
   stairIsAttached,
   toggleEdgeInSelection,
   toggleSideInSelection,
@@ -155,9 +156,13 @@ describe('buildStagePlan — schody i barierki', () => {
       ],
     })
     expect(plan.counts.stairs).toBe(3)
-    expect(plan.counts.stepsPerStair).toBe(3)
+    // Scena 60 cm → stopnie 20 i 40 (2); poziom 60 to już podest.
+    expect(plan.counts.stepsPerStair).toBe(2)
     expect(bomLine(plan, 'stairs')?.quantity).toBe(3)
-    expect(stageStairDepthM(60)).toBe(0.75)
+    expect(stageStairDepthM(60)).toBe(0.5)
+    expect(stageStairSteps(40)).toBe(1)
+    expect(stageStairSteps(80)).toBe(3)
+    expect(stageStairDepthM(80)).toBe(0.75)
     expect(plan.stairs.every((stair) => stairIsAttached(stair, plan.edges))).toBe(true)
   })
 

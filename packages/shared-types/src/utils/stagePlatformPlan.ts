@@ -53,7 +53,10 @@ export const STAGE_MAX_DECKS = 400
 export const STAGE_DEFAULT_STAIR_WIDTH_M = 1
 export const STAGE_MIN_STAIR_WIDTH_M = 0.5
 export const STAGE_MAX_STAIR_WIDTH_M = 4
-/** Przyjęta wysokość stopnia — z niej wychodzi liczba stopni i wysięg biegu. */
+/**
+ * Przyjęta wysokość stopnia — z niej wychodzi liczba stopni i wysięg biegu.
+ * Ostatni „stopień” to już powierzchnia sceny, więc nie liczy się do biegu.
+ */
 export const STAGE_STEP_RISE_CM = 20
 export const STAGE_STEP_TREAD_M = 0.25
 /** Od tej wysokości schody i barierki mają sens. */
@@ -370,12 +373,15 @@ export function fillRectWithDecks(
   return decks
 }
 
-/** Liczba stopni biegu dobrana do wysokości nóg. */
+/**
+ * Liczba stopni biegu (bieżni) do wysokości nóg — bez poziomu sceny.
+ * Np. scena 60 cm → stopnie 20 i 40 cm (2), potem wejście na podest.
+ */
 export function stageStairSteps(legHeightCm: number): number {
-  return Math.max(1, Math.ceil(legHeightCm / STAGE_STEP_RISE_CM))
+  return Math.max(1, Math.ceil(legHeightCm / STAGE_STEP_RISE_CM) - 1)
 }
 
-/** Wysięg biegu schodów poza kontur sceny. */
+/** Wysięg biegu schodów poza kontur sceny (tylko bieżnie pośrednie). */
 export function stageStairDepthM(legHeightCm: number): number {
   return round2(stageStairSteps(legHeightCm) * STAGE_STEP_TREAD_M)
 }
@@ -542,7 +548,7 @@ export function buildStagePlan(input: StagePlanInput): StagePlan {
   }
   if (stairs.length > 0) {
     notes.push(
-      `Schody: ${stairs.length} ${stairs.length === 1 ? 'bieg' : 'biegi'}, po ${stepsPerStair} ${stepsPerStair === 1 ? 'stopniu' : 'stopni'} na wysokość ${height} cm.`
+      `Schody: ${stairs.length} ${stairs.length === 1 ? 'bieg' : 'biegi'}, po ${stepsPerStair} ${stepsPerStair === 1 ? 'stopniu pośrednim' : 'stopniach pośrednich'} (bez poziomu sceny ${height} cm).`
     )
   }
   if (railingMb > 0) {
@@ -704,7 +710,7 @@ export function buildStagePlan(input: StagePlanInput): StagePlan {
     bom,
     {
       key: 'stairs',
-      name: `Schody na scenę (${height} cm, ${stepsPerStair} ${stepsPerStair === 1 ? 'stopień' : 'stopni'})`,
+      name: `Schody na scenę (${height} cm, ${stepsPerStair} ${stepsPerStair === 1 ? 'stopień pośredni' : 'stopnie pośrednie'})`,
       quantity: stairs.length,
       unit: 'szt.',
       group: 'accessories',

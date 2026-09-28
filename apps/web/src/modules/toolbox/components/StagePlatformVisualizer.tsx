@@ -406,7 +406,7 @@ export default function StagePlatformVisualizer({
             <span className="ml-1 font-normal text-muted-foreground">
               {plan.stairs.length === 0
                 ? 'brak — narzędziem „+ Schody” klikaj w krawędzie'
-                : `${plan.stairs.length} × ${plan.counts.stepsPerStair} stopni`}
+                : `${plan.stairs.length} × ${plan.counts.stepsPerStair} ${plan.counts.stepsPerStair === 1 ? 'stopień pośredni' : 'stopnie pośrednie'}`}
             </span>
           </div>
           {plan.stairs.length > 0 ? (

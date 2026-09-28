@@ -259,7 +259,7 @@ export interface StageStairShape {
   steps: Segment[]
 }
 
-/** Bieg schodów jako prostokąt wychodzący poza kontur plus linie stopni. */
+/** Bieg schodów jako prostokąt wychodzący poza kontur plus linie stopni pośrednich. */
 export function stageStairShape(stair: StageStair, legHeightCm: number): StageStairShape {
   const depth = stageStairDepthM(legHeightCm)
   const count = stageStairSteps(legHeightCm)
@@ -268,6 +268,7 @@ export function stageStairShape(stair: StageStair, legHeightCm: number): StageSt
   if (stair.side === 'front' || stair.side === 'back') {
     const outward = stair.side === 'front' ? -1 : 1
     const y = stair.side === 'front' ? stair.atM - depth : stair.atM
+    // Linie między bieżniami (bez krawędzi sceny — to już podest).
     for (let i = 1; i < count; i += 1) {
       const at = stair.atM + outward * i * STAGE_STEP_TREAD_M
       steps.push({ x1: stair.posM, y1: at, x2: stair.posM + stair.widthM, y2: at })
@@ -414,7 +415,7 @@ export function stagePlanLegend(plan: StagePlan): Array<{ label: string; value: 
   if (plan.stairs.length > 0) {
     legend.push({
       label: 'Schody',
-      value: `${plan.stairs.length} × ${plan.counts.stepsPerStair} stopni`,
+      value: `${plan.stairs.length} × ${plan.counts.stepsPerStair} ${plan.counts.stepsPerStair === 1 ? 'stopień pośredni' : 'stopnie pośrednie'}`,
     })
   }
   if (plan.railingMb > 0) {
