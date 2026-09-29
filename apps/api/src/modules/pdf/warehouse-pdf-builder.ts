@@ -174,17 +174,17 @@ export function buildWarehousePdfHtml(params: BuildWarehousePdfHtmlParams): stri
           .map((item, idx) => {
             const lp = String(idx + 1).padStart(2, '0')
             const unit = item.unit?.trim() || 'szt.'
-            const rentalBadge = item.isRental
-              ? ` <span class="wh-rental">Rental</span>`
+            const rentalMark = item.isRental
+              ? `<span class="wh-rental" title="Rental">R</span>`
               : ''
             const noteHtml =
               item.note?.trim()
                 ? `<div class="wh-item-note">${escapeHtml(item.note.trim())}</div>`
                 : ''
             return `<tr>
-          <td class="chk-cell"><span class="chk-box"></span></td>
+          <td class="chk-cell"><span class="chk-box"></span>${rentalMark}</td>
           <td class="lp center">${lp}</td>
-          <td class="left">${escapeHtml(item.name)}${rentalBadge}${noteHtml}</td>
+          <td class="left">${escapeHtml(item.name)}${noteHtml}</td>
           <td class="center">${item.quantity}</td>
           <td class="center dim">${escapeHtml(unit)}</td>
         </tr>`

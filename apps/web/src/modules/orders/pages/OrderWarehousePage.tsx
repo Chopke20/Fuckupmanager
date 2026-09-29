@@ -292,8 +292,8 @@ export default function OrderWarehousePage() {
         <p className="font-medium text-foreground mb-1">Do wydruku w magazynie</p>
         <p>
           PDF ma ten sam styl nagłówka co oferta i listę sprzętu z <strong>pustymi kratkami</strong> do odhaczenia
-          ołówkiem. Pozycje oznaczone „Nie pakować” nie trafiają na PDF. Rental i notatki wiersza są drukowane przy
-          nazwie. Zapisz przed pobraniem PDF.
+          ołówkiem. Pozycje oznaczone „Nie pakować” nie trafiają na PDF. Rental drukuje się jako „R” obok kratki;
+          notatka wiersza — pod nazwą. Zapisz przed pobraniem PDF.
         </p>
       </div>
 
