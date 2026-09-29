@@ -21,6 +21,7 @@ import FinanceDashboardPage from '../modules/finance/pages/FinanceDashboardPage'
 import ToolboxPage from '../modules/toolbox/pages/ToolboxPage'
 import TechnicianCashCalculatorPage from '../modules/toolbox/pages/TechnicianCashCalculatorPage'
 import StagePlatformsCalculatorPage from '../modules/toolbox/pages/StagePlatformsCalculatorPage'
+import LedScreenCalculatorPage from '../modules/toolbox/pages/LedScreenCalculatorPage'
 import LoginPage from '../modules/auth/pages/LoginPage'
 import ForgotPasswordPage from '../modules/auth/pages/ForgotPasswordPage'
 import ResetPasswordPage from '../modules/auth/pages/ResetPasswordPage'
@@ -62,6 +63,7 @@ export const appRouter = createBrowserRouter([
   { path: '/toolbox', element: <ProtectedLayout><ToolboxPage /></ProtectedLayout> },
   { path: '/toolbox/technik-gotowka', element: <ProtectedLayout><TechnicianCashCalculatorPage /></ProtectedLayout> },
   { path: '/toolbox/podesty', element: <ProtectedLayout><StagePlatformsCalculatorPage /></ProtectedLayout> },
+  { path: '/toolbox/ekran-led', element: <ProtectedLayout><LedScreenCalculatorPage /></ProtectedLayout> },
   {
     path: '/admin',
     element: (

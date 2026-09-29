@@ -22,6 +22,13 @@ export const TOOLBOX_TOOLS: ToolboxTool[] = [
     status: 'ready',
   },
   {
+    slug: 'ekran-led',
+    title: 'Kalkulator ekranu LED',
+    description:
+      'Kabinet, pitch i wymiar → siatka, piksele, proporcja oraz rozjazd od 16:9 (lub innej).',
+    status: 'ready',
+  },
+  {
     slug: 'transport-km',
     title: 'Transport km',
     description: 'Wycena transportu z przedziałów km i stawki za kilometr.',
