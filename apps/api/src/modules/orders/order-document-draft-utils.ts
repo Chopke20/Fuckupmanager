@@ -81,6 +81,9 @@ export function buildDefaultDraft(order: Pick<Order, 'name'>, documentType: Docu
       title: `Magazyn / załadunek - ${order.name}`,
       notes: '',
       checked: {},
+      skipPack: {},
+      rental: {},
+      itemNotes: {},
     })
   }
 

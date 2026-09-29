@@ -65,6 +65,9 @@ export type WarehousePdfEquipmentRow = {
   quantity: number
   unit?: string | null
   sortOrder?: number
+  skipPack?: boolean
+  isRental?: boolean
+  note?: string | null
 }
 
 export type BuildWarehousePdfHtmlParams = {
@@ -156,23 +159,32 @@ export function buildWarehousePdfHtml(params: BuildWarehousePdfHtmlParams): stri
   }
   const descBody = descBodyParts.join('<br>\n')
 
-  const items = [...params.equipmentItems].sort((a, b) => {
-    const sa = a.sortOrder ?? 0
-    const sb = b.sortOrder ?? 0
-    if (sa !== sb) return sa - sb
-    return a.name.localeCompare(b.name, 'pl', { sensitivity: 'base' })
-  })
+  const items = [...params.equipmentItems]
+    .filter((item) => !item.skipPack)
+    .sort((a, b) => {
+      const sa = a.sortOrder ?? 0
+      const sb = b.sortOrder ?? 0
+      if (sa !== sb) return sa - sb
+      return a.name.localeCompare(b.name, 'pl', { sensitivity: 'base' })
+    })
   const tbody =
     items.length === 0
-      ? `<tr><td colspan="5" class="left dim">Brak pozycji sprzętu w zleceniu</td></tr>`
+      ? `<tr><td colspan="5" class="left dim">Brak pozycji do załadunku</td></tr>`
       : items
           .map((item, idx) => {
             const lp = String(idx + 1).padStart(2, '0')
             const unit = item.unit?.trim() || 'szt.'
+            const rentalBadge = item.isRental
+              ? ` <span class="wh-rental">Rental</span>`
+              : ''
+            const noteHtml =
+              item.note?.trim()
+                ? `<div class="wh-item-note">${escapeHtml(item.note.trim())}</div>`
+                : ''
             return `<tr>
           <td class="chk-cell"><span class="chk-box"></span></td>
           <td class="lp center">${lp}</td>
-          <td class="left">${escapeHtml(item.name)}</td>
+          <td class="left">${escapeHtml(item.name)}${rentalBadge}${noteHtml}</td>
           <td class="center">${item.quantity}</td>
           <td class="center dim">${escapeHtml(unit)}</td>
         </tr>`

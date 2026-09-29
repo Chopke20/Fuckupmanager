@@ -72,5 +72,8 @@ export function buildWarehouseSnapshotFromOrder(
     endDate: order.endDate.toISOString(),
     equipmentItems: normalizeEquipmentItems(order.equipmentItems),
     itemLoadChecked: parsedDraft.checked,
+    itemSkipPack: parsedDraft.skipPack,
+    itemRental: parsedDraft.rental,
+    itemNotes: parsedDraft.itemNotes,
   })
 }

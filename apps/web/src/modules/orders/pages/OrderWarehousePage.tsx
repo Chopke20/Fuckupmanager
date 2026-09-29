@@ -13,9 +13,43 @@ import { formatOrderNumber } from '../utils/orderNumberFormat';
 type WarehouseDraft = {
   title: string;
   notes?: string;
+  skipPack?: Record<string, boolean>;
+  rental?: Record<string, boolean>;
+  itemNotes?: Record<string, string>;
 };
 
-function normalizeWarehouseDraft(payload: unknown, orderName: string): WarehouseDraft {
+type WarehouseEquipmentRow = {
+  id: string;
+  name?: string;
+  quantity?: number;
+  sortOrder?: number;
+  isRental?: boolean;
+  equipment?: { unit?: string } | null;
+};
+
+function asBoolRecord(value: unknown): Record<string, boolean> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const out: Record<string, boolean> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof v === 'boolean') out[k] = v;
+  }
+  return out;
+}
+
+function asStringRecord(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof v === 'string') out[k] = v;
+  }
+  return out;
+}
+
+function normalizeWarehouseDraft(
+  payload: unknown,
+  orderName: string,
+  equipment: WarehouseEquipmentRow[],
+): WarehouseDraft {
   const p =
     payload && typeof payload === 'object' && !Array.isArray(payload)
       ? (payload as Record<string, unknown>)
@@ -23,7 +57,22 @@ function normalizeWarehouseDraft(payload: unknown, orderName: string): Warehouse
   let title = typeof p.title === 'string' ? p.title.trim() : '';
   if (!title) title = `Magazyn / załadunek - ${orderName}`.trim() || 'Magazyn / załadunek';
   const notes = typeof p.notes === 'string' ? p.notes : '';
-  return { title, notes: notes || undefined };
+  const skipPack = asBoolRecord(p.skipPack);
+  const rentalFromDraft = asBoolRecord(p.rental);
+  const rental: Record<string, boolean> = { ...rentalFromDraft };
+  for (const item of equipment) {
+    if (!(item.id in rental)) {
+      rental[item.id] = !!item.isRental;
+    }
+  }
+  const itemNotes = asStringRecord(p.itemNotes);
+  return {
+    title,
+    notes: notes || undefined,
+    skipPack,
+    rental,
+    itemNotes,
+  };
 }
 
 export default function OrderWarehousePage() {
@@ -41,8 +90,8 @@ export default function OrderWarehousePage() {
   const [info, setInfo] = useState<string | null>(null);
 
   const equipmentSorted = useMemo(() => {
-    const items = order?.equipmentItems ?? [];
-    return [...items].sort((a: { sortOrder?: number }, b: { sortOrder?: number }) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    const items = (order?.equipmentItems ?? []) as WarehouseEquipmentRow[];
+    return [...items].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
   }, [order?.equipmentItems]);
 
   const orderNumberDisplay = useMemo(() => {
@@ -59,16 +108,19 @@ export default function OrderWarehousePage() {
       return;
     }
     const orderName = order.name || 'Zlecenie';
+    const equipment = (order.equipmentItems ?? []) as WarehouseEquipmentRow[];
     setLoadingDraft(true);
     setError(null);
     orderApi
       .getDocumentDraft<WarehouseDraft>(id, 'WAREHOUSE')
-      .then((res) => setDraft(normalizeWarehouseDraft(res.payload, orderName)))
+      .then((res) => setDraft(normalizeWarehouseDraft(res.payload, orderName, equipment)))
       .catch(() => {
         setError('Nie udało się pobrać draftu magazynu.');
         setDraft(null);
       })
       .finally(() => setLoadingDraft(false));
+    // draft ładujemy przy otwarciu zlecenia — nie resetuj przy każdej zmianie referencji equipmentItems
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, isLoading, isError, order?.id, order?.name]);
 
   useEffect(() => {
@@ -81,13 +133,43 @@ export default function OrderWarehousePage() {
       .finally(() => setLoadingExports(false));
   }, [id]);
 
+  const updateItemFlag = (itemId: string, field: 'skipPack' | 'rental', value: boolean) => {
+    setDraft((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        [field]: { ...(prev[field] ?? {}), [itemId]: value },
+      };
+    });
+  };
+
+  const updateItemNote = (itemId: string, value: string) => {
+    setDraft((prev) => {
+      if (!prev) return prev;
+      const nextNotes = { ...(prev.itemNotes ?? {}) };
+      const trimmed = value.slice(0, 500);
+      if (trimmed.trim()) nextNotes[itemId] = trimmed;
+      else delete nextNotes[itemId];
+      return { ...prev, itemNotes: nextNotes };
+    });
+  };
+
   const saveDraft = async () => {
     if (!id || !draft) return;
     setSavingDraft(true);
     setError(null);
     try {
-      const saved = await orderApi.updateDocumentDraft<WarehouseDraft>(id, 'WAREHOUSE', draft);
-      setDraft(normalizeWarehouseDraft(saved.payload, order?.name || 'Zlecenie'));
+      const payload: WarehouseDraft = {
+        title: draft.title,
+        notes: draft.notes,
+        skipPack: draft.skipPack ?? {},
+        rental: draft.rental ?? {},
+        itemNotes: draft.itemNotes ?? {},
+      };
+      const saved = await orderApi.updateDocumentDraft<WarehouseDraft>(id, 'WAREHOUSE', payload);
+      setDraft(
+        normalizeWarehouseDraft(saved.payload, order?.name || 'Zlecenie', equipmentSorted),
+      );
     } catch (e: any) {
       const raw = e?.response?.data?.error ?? e?.message;
       setError(typeof raw === 'string' ? raw : 'Nie udało się zapisać draftu magazynu.');
@@ -113,7 +195,7 @@ export default function OrderWarehousePage() {
       await reloadExports();
       if (result.numberReused) {
         setInfo(
-          'Treść bez zmian względem ostatniego eksportu — ten sam numer dokumentu. Data w nagłówku PDF jest aktualna; lista snapshotów bez nowego wiersza.'
+          'Treść bez zmian względem ostatniego eksportu — ten sam numer dokumentu. Data w nagłówku PDF jest aktualna; lista snapshotów bez nowego wiersza.',
         );
       } else if (result.exportCreated) {
         setInfo('Zapisano nowy snapshot magazynu i nadano kolejny numer wersji.');
@@ -189,7 +271,7 @@ export default function OrderWarehousePage() {
             className="px-3 py-1.5 text-sm border border-border rounded hover:bg-surface-2 flex items-center gap-1.5 disabled:opacity-50"
           >
             <Save size={16} />
-            {savingDraft ? 'Zapisywanie…' : 'Zapisz tytuł i notatki'}
+            {savingDraft ? 'Zapisywanie…' : 'Zapisz'}
           </button>
         </div>
       </div>
@@ -209,9 +291,9 @@ export default function OrderWarehousePage() {
       <div className="max-w-5xl mx-auto rounded-lg border border-border bg-surface-2/50 px-4 py-3 text-sm text-muted-foreground text-center">
         <p className="font-medium text-foreground mb-1">Do wydruku w magazynie</p>
         <p>
-          PDF ma ten sam styl nagłówka co oferta i listę sprzętu z <strong>pustymi kratkami</strong> do odhaczenia ołówkiem.
-          Tytuł i notatki poniżej trafiają na dokument — zapisz je przed pobraniem PDF.
-          Snapshot w historii tworzy się automatycznie przy <strong>Pobierz PDF (wydruk)</strong>, jak przy ofercie.
+          PDF ma ten sam styl nagłówka co oferta i listę sprzętu z <strong>pustymi kratkami</strong> do odhaczenia
+          ołówkiem. Pozycje oznaczone „Nie pakować” nie trafiają na PDF. Rental i notatki wiersza są drukowane przy
+          nazwie. Zapisz przed pobraniem PDF.
         </p>
       </div>
 
@@ -241,35 +323,81 @@ export default function OrderWarehousePage() {
           />
 
           <p className="text-xs text-muted-foreground">
-            Podgląd pozycji (kolejność jak w zleceniu). Na PDF są puste kwadraty zamiast pól do zaznaczania na ekranie.
+            Podgląd pozycji (kolejność jak w zleceniu). Zaznacz „Nie pakować”, „Rental” lub dopisz notatkę przy wierszu.
           </p>
 
           <div className="overflow-x-auto border border-border rounded">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-surface-2 border-b border-border">
-                  <th className="text-left py-2 px-3">#</th>
+                  <th className="text-left py-2 px-3 w-10">#</th>
                   <th className="text-left py-2 px-3">Nazwa</th>
-                  <th className="text-left py-2 px-3">Ilość</th>
-                  <th className="text-left py-2 px-3">Jednostka</th>
+                  <th className="text-left py-2 px-3 w-16">Ilość</th>
+                  <th className="text-left py-2 px-3 w-16">Jednostka</th>
+                  <th className="text-center py-2 px-2 w-24" title="Nie trafia na PDF załadunku">
+                    Nie pakować
+                  </th>
+                  <th className="text-center py-2 px-2 w-16">Rental</th>
+                  <th className="text-left py-2 px-3 min-w-[160px]">Notatka</th>
                 </tr>
               </thead>
               <tbody>
                 {equipmentSorted.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="py-2 px-3 text-muted-foreground">
+                    <td colSpan={7} className="py-2 px-3 text-muted-foreground">
                       Brak pozycji sprzętu w zleceniu
                     </td>
                   </tr>
                 ) : (
-                  equipmentSorted.map((item: { id: string; name?: string; quantity?: number; equipment?: { unit?: string } | null }, idx: number) => (
-                    <tr key={item.id} className="border-b border-border/60 last:border-0">
-                      <td className="py-2 px-3 text-muted-foreground">{idx + 1}</td>
-                      <td className="py-2 px-3">{item.name}</td>
-                      <td className="py-2 px-3">{item.quantity ?? 1}</td>
-                      <td className="py-2 px-3">{item.equipment?.unit || 'szt.'}</td>
-                    </tr>
-                  ))
+                  equipmentSorted.map((item, idx) => {
+                    const skip = !!draft.skipPack?.[item.id];
+                    const rental = !!draft.rental?.[item.id];
+                    const note = draft.itemNotes?.[item.id] ?? '';
+                    return (
+                      <tr
+                        key={item.id}
+                        className={`border-b border-border/60 last:border-0 ${skip ? 'opacity-55' : ''}`}
+                      >
+                        <td className="py-2 px-3 text-muted-foreground align-top">{idx + 1}</td>
+                        <td className={`py-2 px-3 align-top ${skip ? 'line-through text-muted-foreground' : ''}`}>
+                          {item.name}
+                        </td>
+                        <td className="py-2 px-3 align-top">{item.quantity ?? 1}</td>
+                        <td className="py-2 px-3 align-top">{item.equipment?.unit || 'szt.'}</td>
+                        <td className="py-2 px-2 text-center align-top">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 accent-primary"
+                            checked={skip}
+                            onChange={(e) => updateItemFlag(item.id, 'skipPack', e.target.checked)}
+                            title="Nie pakować — pomiń na PDF"
+                            aria-label={`Nie pakować: ${item.name ?? item.id}`}
+                          />
+                        </td>
+                        <td className="py-2 px-2 text-center align-top">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 accent-primary"
+                            checked={rental}
+                            onChange={(e) => updateItemFlag(item.id, 'rental', e.target.checked)}
+                            title="Rental"
+                            aria-label={`Rental: ${item.name ?? item.id}`}
+                          />
+                        </td>
+                        <td className="py-2 px-3 align-top">
+                          <input
+                            type="text"
+                            className="w-full min-w-[140px] px-2 py-1 text-xs bg-background border border-border rounded"
+                            value={note}
+                            maxLength={500}
+                            placeholder="np. już na sali"
+                            onChange={(e) => updateItemNote(item.id, e.target.value)}
+                            aria-label={`Notatka: ${item.name ?? item.id}`}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

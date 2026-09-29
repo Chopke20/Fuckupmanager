@@ -931,14 +931,25 @@ export class PdfController {
         parsedDraft != null ? parsedDraft : buildDefaultDraft(order, 'WAREHOUSE')
       let draftTitle = ''
       let draftNotes = ''
-      if (parsedDraft && typeof parsedDraft === 'object') {
-        const o = parsedDraft as Record<string, unknown>
-        if (typeof o.title === 'string') draftTitle = o.title
-        if (typeof o.notes === 'string') draftNotes = o.notes
-      } else if (draftPayload && typeof draftPayload === 'object') {
-        const o = draftPayload as Record<string, unknown>
-        if (typeof o.title === 'string') draftTitle = o.title
-        if (typeof o.notes === 'string') draftNotes = o.notes
+      let skipPack: Record<string, boolean> = {}
+      let rentalMarks: Record<string, boolean> = {}
+      let itemNotes: Record<string, string> = {}
+      const draftObj =
+        draftPayload && typeof draftPayload === 'object' && !Array.isArray(draftPayload)
+          ? (draftPayload as Record<string, unknown>)
+          : null
+      if (draftObj) {
+        if (typeof draftObj.title === 'string') draftTitle = draftObj.title
+        if (typeof draftObj.notes === 'string') draftNotes = draftObj.notes
+        if (draftObj.skipPack && typeof draftObj.skipPack === 'object' && !Array.isArray(draftObj.skipPack)) {
+          skipPack = draftObj.skipPack as Record<string, boolean>
+        }
+        if (draftObj.rental && typeof draftObj.rental === 'object' && !Array.isArray(draftObj.rental)) {
+          rentalMarks = draftObj.rental as Record<string, boolean>
+        }
+        if (draftObj.itemNotes && typeof draftObj.itemNotes === 'object' && !Array.isArray(draftObj.itemNotes)) {
+          itemNotes = draftObj.itemNotes as Record<string, string>
+        }
       }
 
       const generatedAt = new Date().toISOString()
@@ -1032,12 +1043,21 @@ export class PdfController {
               phone: order.client.phone,
             }
           : null,
-        equipmentItems: order.equipmentItems.map((e) => ({
-          name: e.name,
-          quantity: e.quantity,
-          unit: e.equipment?.unit ?? 'szt.',
-          sortOrder: e.sortOrder,
-        })),
+        equipmentItems: order.equipmentItems.map((e) => {
+          const rentalFromDraft = Object.prototype.hasOwnProperty.call(rentalMarks, e.id)
+            ? !!rentalMarks[e.id]
+            : !!e.isRental
+          const noteRaw = itemNotes[e.id]
+          return {
+            name: e.name,
+            quantity: e.quantity,
+            unit: e.equipment?.unit ?? 'szt.',
+            sortOrder: e.sortOrder,
+            skipPack: !!skipPack[e.id],
+            isRental: rentalFromDraft,
+            note: typeof noteRaw === 'string' && noteRaw.trim() ? noteRaw.trim() : null,
+          }
+        }),
         projectContactKey: order.projectContactKey,
         projectContact,
         accentColorHex: branding.accentColorHex,
