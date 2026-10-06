@@ -45,6 +45,16 @@ export const appRouter = createBrowserRouter([
   { path: '/accept-invite', element: <AcceptInvitePage /> },
   { path: '/p/:token', element: <PublicProposalPage /> },
   { path: '/so/:token', element: <SharedOfferEditorPage /> },
+  {
+    path: '/tools/ekran-led',
+    element: (
+      <div className="min-h-screen bg-background text-foreground">
+        <div className="mx-auto max-w-6xl p-4 sm:p-6">
+          <LedScreenCalculatorPage publicMode />
+        </div>
+      </div>
+    ),
+  },
   { path: '/', element: <ProtectedLayout><OverviewPage /></ProtectedLayout> },
   { path: '/v4', element: <ProtectedLayout><OverviewPageV4 /></ProtectedLayout> },
   { path: '/orders', element: <ProtectedLayout><OrdersPage /></ProtectedLayout> },

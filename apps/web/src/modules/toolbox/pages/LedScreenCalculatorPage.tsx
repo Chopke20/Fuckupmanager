@@ -97,7 +97,7 @@ function AspectPreview({
 
 type SizeMode = 'cabinets' | 'meters' | 'widthAspect' | 'heightAspect'
 
-export default function LedScreenCalculatorPage() {
+export default function LedScreenCalculatorPage({ publicMode = false }: { publicMode?: boolean }) {
   const [cabWRaw, setCabWRaw] = useState('500')
   const [cabHRaw, setCabHRaw] = useState('500')
   const [pitchRaw, setPitchRaw] = useState('2.6')
@@ -197,13 +197,17 @@ export default function LedScreenCalculatorPage() {
   return (
     <div className="space-y-6">
       <div>
-        <Link
-          to="/toolbox"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft size={14} />
-          Toolbox
-        </Link>
+        {publicMode ? (
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Lama Stage · narzędzie</p>
+        ) : (
+          <Link
+            to="/toolbox"
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft size={14} />
+            Toolbox
+          </Link>
+        )}
         <h1 className="mt-2 text-2xl font-bold">Kalkulator ekranu LED</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
           Kabinet + pitch → siatka, metry, piksele i rozjazd od 16:9 (albo innej proporcji). Wynik zawsze na
