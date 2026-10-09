@@ -36,6 +36,7 @@ import OrderFinancialSection from '../components/OrderFinancialSection';
 import OrderRecurringSection from '../components/OrderRecurringSection';
 import ConfirmationModal from '../../../shared/components/ConfirmationModal';
 import StagePlatformsOrderModal from '../components/StagePlatformsOrderModal';
+import LedScreensOrderModal from '../components/LedScreensOrderModal';
 import { applyStagePlanToEquipmentItems } from '../../toolbox/utils/applyStagePlanToOrder'
 import { listStagePlanRoleMaps } from '../../toolbox/api/stagePlanRoleMaps.api';
 import { upsertStagePlanProjectForOrder } from '../../toolbox/api/stagePlanProjects.api';
@@ -194,6 +195,7 @@ export default function OrderFormPage() {
   const [dismissedHints, setDismissedHints] = useState<Set<string>>(new Set());
   const [unsavedModalOpen, setUnsavedModalOpen] = useState(false);
   const [stageModal, setStageModal] = useState<{ offerBlockId: string | null; blockTitle?: string } | null>(null);
+  const [ledModal, setLedModal] = useState<{ offerBlockId: string | null; blockTitle?: string } | null>(null);
   const [pendingNav, setPendingNav] = useState<null | { kind: 'path'; to: string } | { kind: 'blocker' }>(null);
   const submitInFlightRef = useRef(false);
   const allowNextNavigationRef = useRef(false);
@@ -529,6 +531,10 @@ export default function OrderFormPage() {
 
   const openStagePlanModal = useCallback((offerBlockId: string | null, blockTitle?: string) => {
     setStageModal({ offerBlockId, blockTitle })
+  }, [])
+
+  const openLedScreensModal = useCallback((offerBlockId: string | null, blockTitle?: string) => {
+    setLedModal({ offerBlockId, blockTitle })
   }, [])
 
   const buildPayload = (data: Partial<Order>): CreateOrderDto | UpdateOrderDto => {
@@ -1091,6 +1097,7 @@ export default function OrderFormPage() {
                     orderDateTo={typeof formData.dateTo === 'string' ? formData.dateTo : undefined}
                     orderSpanDays={orderDays}
                     onOpenStagePlan={(blockId, blockTitle) => openStagePlanModal(blockId, blockTitle)}
+                    onOpenLedScreens={(blockId, blockTitle) => openLedScreensModal(blockId, blockTitle)}
                   />
                 </section>
 
@@ -1102,14 +1109,23 @@ export default function OrderFormPage() {
                           <FileText size={24} />
                           Wykaz sprzętu
                         </h2>
-                        <button
-                          type="button"
-                          onClick={() => openStagePlanModal(null)}
-                          className="inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1.5 text-xs hover:bg-surface-2"
-                        >
-                          <LayoutGrid size={14} />
-                          Złóż scenę z podestów
-                        </button>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => openStagePlanModal(null)}
+                            className="inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1.5 text-xs hover:bg-surface-2"
+                          >
+                            <LayoutGrid size={14} />
+                            Złóż scenę z podestów
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openLedScreensModal(null)}
+                            className="inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1.5 text-xs hover:bg-surface-2"
+                          >
+                            Ekrany LED
+                          </button>
+                        </div>
                       </div>
                       <div className="lg:col-span-2">
                         <OrderEquipmentSection
@@ -1272,6 +1288,18 @@ export default function OrderFormPage() {
         initialPlan={stageModalInitialPlan}
         onClose={() => setStageModal(null)}
         onApply={handleApplyStagePlan}
+      />
+
+      <LedScreensOrderModal
+        open={ledModal !== null}
+        orderId={isEditing ? id : null}
+        offerBlockId={ledModal?.offerBlockId ?? null}
+        orderLabel={
+          ledModal?.offerBlockId && ledModal.blockTitle
+            ? `${stageOrderLabel ?? 'Zlecenie'} · ${ledModal.blockTitle}`
+            : stageOrderLabel
+        }
+        onClose={() => setLedModal(null)}
       />
 
       <ConfirmationModal

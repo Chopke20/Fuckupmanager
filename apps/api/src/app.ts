@@ -18,6 +18,7 @@ import dataportRouter from './modules/dataport/dataport.router'
 import publicProposalRouter from './modules/orders/public-proposal.router'
 import sharedOfferPublicRouter from './modules/orders/shared-offer-public.router'
 import stagePlanProjectsRouter from './modules/stage-plan-projects/stage-plan-projects.router'
+import ledScreenProjectsRouter from './modules/led-screen-projects/led-screen-projects.router'
 import stagePlanRoleMapsRouter from './modules/stage-plan-role-maps/stage-plan-role-maps.router'
 import { bindCompanyContext, requireAuth, requireModuleAccess, requirePermission } from './shared/middleware/auth.middleware'
 
@@ -75,6 +76,7 @@ export function createApp() {
   app.use('/api/equipment', requireModuleAccess('equipment'), equipmentRouter)
   app.use('/api/orders', requireModuleAccess('orders'), ordersRouter)
   app.use('/api/stage-plan-projects', requireModuleAccess('orders'), stagePlanProjectsRouter)
+  app.use('/api/led-screen-projects', requireModuleAccess('orders'), ledScreenProjectsRouter)
   app.use('/api/stage-plan-role-maps', requireModuleAccess('orders'), stagePlanRoleMapsRouter)
   app.use('/api/issuer-profiles', issuerProfilesRouter)
   app.use('/api/integrations/nip-lookup', dataportRouter)

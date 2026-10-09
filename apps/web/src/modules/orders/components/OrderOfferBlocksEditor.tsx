@@ -66,6 +66,8 @@ type Props = {
 
   onOpenStagePlan?: (offerBlockId: string, blockTitle: string) => void
 
+  onOpenLedScreens?: (offerBlockId: string, blockTitle: string) => void
+
   readOnly?: boolean
 
   lockedItemIds?: ReadonlySet<string> | string[]
@@ -101,6 +103,8 @@ export default function OrderOfferBlocksEditor({
   orderSpanDays = 1,
 
   onOpenStagePlan,
+
+  onOpenLedScreens,
 
   readOnly = false,
 
@@ -354,16 +358,27 @@ export default function OrderOfferBlocksEditor({
 
                 <h4 className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   <span>Wykaz sprzętu</span>
-                  {!readOnly && onOpenStagePlan ? (
-                    <button
-                      type="button"
-                      onClick={() => onOpenStagePlan(blockId, block.title?.trim() || `Blok ${index + 1}`)}
-                      className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] font-normal normal-case tracking-normal hover:bg-surface"
-                    >
-                      <LayoutGrid className="h-3.5 w-3.5" />
-                      Złóż scenę z podestów
-                    </button>
-                  ) : null}
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    {!readOnly && onOpenStagePlan ? (
+                      <button
+                        type="button"
+                        onClick={() => onOpenStagePlan(blockId, block.title?.trim() || `Blok ${index + 1}`)}
+                        className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] font-normal normal-case tracking-normal hover:bg-surface"
+                      >
+                        <LayoutGrid className="h-3.5 w-3.5" />
+                        Złóż scenę z podestów
+                      </button>
+                    ) : null}
+                    {!readOnly && onOpenLedScreens ? (
+                      <button
+                        type="button"
+                        onClick={() => onOpenLedScreens(blockId, block.title?.trim() || `Blok ${index + 1}`)}
+                        className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] font-normal normal-case tracking-normal hover:bg-surface"
+                      >
+                        Ekrany LED
+                      </button>
+                    ) : null}
+                  </span>
                 </h4>
 
                 <OrderEquipmentSection

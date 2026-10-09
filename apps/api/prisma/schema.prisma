@@ -191,6 +191,7 @@ model Order {
   documentDrafts  OrderDocumentDraft[]
   sharedOfferSession OrderSharedOfferSession?
   stagePlanProjects StagePlanProject[]
+  ledScreenProjects LedScreenProject[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -218,6 +219,7 @@ model OrderOfferBlock {
   equipmentItems  OrderEquipmentItem[]
   productionItems OrderProductionItem[]
   stagePlanProjects StagePlanProject[]
+  ledScreenProjects LedScreenProject[]
 
   @@index([orderId, sortOrder])
   @@map("order_offer_blocks")
@@ -580,4 +582,22 @@ model StagePlanProject {
   @@index([updatedAt])
   @@index([orderId, offerBlockId])
   @@map("stage_plan_projects")
+}
+
+/// Projekt kalkulatora LED (wiele ekranów w JSON) — jak StagePlanProject.
+model LedScreenProject {
+  id           String           @id @default(uuid())
+  name         String
+  projectJson  String           @db.Text
+  orderId      String?
+  order        Order?           @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  offerBlockId String?
+  offerBlock   OrderOfferBlock? @relation(fields: [offerBlockId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([updatedAt])
+  @@index([orderId, offerBlockId])
+  @@map("led_screen_projects")
 }

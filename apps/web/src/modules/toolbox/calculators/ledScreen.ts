@@ -325,3 +325,121 @@ export function formatMm(mm: number): string {
 export function formatPx(n: number): string {
   return `${Math.round(n).toLocaleString('pl-PL')} px`
 }
+
+/** Pojedynczy ekran w projekcie LED. */
+export interface LedScreenSpec {
+  id: string
+  label: string
+  cabinetWidthMm: number
+  cabinetHeightMm: number
+  pitchMm: number
+  columns: number
+  rows: number
+  /** Docelowa proporcja szer./wys. */
+  targetRatio: number
+  /** Pozycja na wspólnej CSS-scenie (metry). */
+  layoutXM: number
+  layoutYM: number
+}
+
+export interface LedScreenProjectPayload {
+  version: 1
+  activeScreenId: string
+  screens: LedScreenSpec[]
+}
+
+export function newLedScreenId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `led-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+}
+
+export function createDefaultLedScreen(partial?: Partial<LedScreenSpec>): LedScreenSpec {
+  return {
+    id: partial?.id ?? newLedScreenId(),
+    label: partial?.label ?? 'Main',
+    cabinetWidthMm: partial?.cabinetWidthMm ?? 500,
+    cabinetHeightMm: partial?.cabinetHeightMm ?? 500,
+    pitchMm: partial?.pitchMm ?? 2.6,
+    columns: partial?.columns ?? 16,
+    rows: partial?.rows ?? 9,
+    targetRatio: partial?.targetRatio ?? 16 / 9,
+    layoutXM: partial?.layoutXM ?? 0,
+    layoutYM: partial?.layoutYM ?? 0,
+  }
+}
+
+export function emptyLedScreenProject(): LedScreenProjectPayload {
+  const screen = createDefaultLedScreen()
+  return { version: 1, activeScreenId: screen.id, screens: [screen] }
+}
+
+export function serializeLedScreenProject(project: LedScreenProjectPayload): string {
+  return JSON.stringify(project)
+}
+
+export function parseLedScreenProjectJson(raw: string | null | undefined): LedScreenProjectPayload | null {
+  if (!raw || typeof raw !== 'string') return null
+  try {
+    const parsed = JSON.parse(raw) as Partial<LedScreenProjectPayload>
+    if (parsed.version !== 1 || !Array.isArray(parsed.screens) || parsed.screens.length === 0) {
+      return null
+    }
+    const screens: LedScreenSpec[] = []
+    for (const item of parsed.screens) {
+      if (!item || typeof item !== 'object') continue
+      const id = typeof item.id === 'string' && item.id ? item.id : newLedScreenId()
+      const label = typeof item.label === 'string' && item.label.trim() ? item.label.trim() : 'Ekran'
+      const cabinetWidthMm = Number(item.cabinetWidthMm)
+      const cabinetHeightMm = Number(item.cabinetHeightMm)
+      const pitchMm = Number(item.pitchMm)
+      const columns = Math.floor(Number(item.columns))
+      const rows = Math.floor(Number(item.rows))
+      const targetRatio = Number(item.targetRatio)
+      const layoutXM = Number(item.layoutXM)
+      const layoutYM = Number(item.layoutYM)
+      if (!(cabinetWidthMm > 0) || !(cabinetHeightMm > 0) || !(pitchMm > 0)) continue
+      if (!(columns >= 1) || !(rows >= 1) || !(targetRatio > 0)) continue
+      screens.push({
+        id,
+        label,
+        cabinetWidthMm,
+        cabinetHeightMm,
+        pitchMm,
+        columns,
+        rows,
+        targetRatio,
+        layoutXM: Number.isFinite(layoutXM) ? layoutXM : 0,
+        layoutYM: Number.isFinite(layoutYM) ? layoutYM : 0,
+      })
+    }
+    if (screens.length === 0) return null
+    const activeScreenId =
+      typeof parsed.activeScreenId === 'string' && screens.some((s) => s.id === parsed.activeScreenId)
+        ? parsed.activeScreenId
+        : screens[0]!.id
+    return { version: 1, activeScreenId, screens }
+  } catch {
+    return null
+  }
+}
+
+export function screenToInput(screen: LedScreenSpec): LedScreenInput {
+  return {
+    cabinetWidthMm: screen.cabinetWidthMm,
+    cabinetHeightMm: screen.cabinetHeightMm,
+    pitchMm: screen.pitchMm,
+    columns: screen.columns,
+    rows: screen.rows,
+    targetRatio: screen.targetRatio,
+  }
+}
+
+export function calculateScreenFromSpec(screen: LedScreenSpec): LedScreenCalcResult {
+  return calculateLedScreen(screenToInput(screen))
+}
+
+/** Limit canvas przeglądarki — powyżej ostrzegamy przed eksportem. */
+export const LED_PIXEL_MAP_MAX_EDGE = 8192
+

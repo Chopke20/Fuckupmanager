@@ -25,7 +25,7 @@ export const TOOLBOX_TOOLS: ToolboxTool[] = [
     slug: 'ekran-led',
     title: 'Kalkulator ekranu LED',
     description:
-      'Kabinet, pitch i wymiar → siatka, piksele, proporcja oraz rozjazd od 16:9 (lub innej).',
+      'Wiele ekranów w projekcie, podgląd CSS, pixel mapa PNG 1:1, zapis i przypięcie do zlecenia.',
     status: 'ready',
   },
   {

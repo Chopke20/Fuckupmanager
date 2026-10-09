@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   cabinetPixels,
   calculateLedScreen,
+  emptyLedScreenProject,
   formatAspectLabel,
   metersToCabinetGrid,
   otherSideFromAspect,
   parseAspectRatio,
+  parseLedScreenProjectJson,
+  serializeLedScreenProject,
   snapCabinetsToMm,
 } from './ledScreen'
 
@@ -111,5 +114,29 @@ describe('calculateLedScreen', () => {
       targetRatio: 16 / 9,
     })
     expect(r.ok).toBe(false)
+  })
+})
+
+describe('LedScreenProjectPayload', () => {
+  it('serializuje i parsuje projekt z wieloma ekranami', () => {
+    const project = emptyLedScreenProject()
+    const second = {
+      ...project.screens[0]!,
+      id: 'screen-2',
+      label: 'IMAG L',
+      columns: 8,
+      rows: 4,
+      layoutXM: -5,
+    }
+    const multi = {
+      version: 1 as const,
+      activeScreenId: second.id,
+      screens: [...project.screens, second],
+    }
+    const raw = serializeLedScreenProject(multi)
+    const parsed = parseLedScreenProjectJson(raw)
+    expect(parsed?.screens).toHaveLength(2)
+    expect(parsed?.activeScreenId).toBe('screen-2')
+    expect(parsed?.screens[1]?.label).toBe('IMAG L')
   })
 })
