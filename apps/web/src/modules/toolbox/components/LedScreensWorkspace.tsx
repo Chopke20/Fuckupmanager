@@ -550,7 +550,7 @@ export default function LedScreensWorkspace({
           </div>
 
           <div>
-            <div className="mb-1.5 text-xs font-medium">Jak podajesz ekran</div>
+            <div className="mb-1.5 text-xs font-medium">Wymiary ekranu</div>
             <div className="flex flex-wrap gap-1.5">
               {(
                 [

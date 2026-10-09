@@ -21,10 +21,6 @@ export default function LedScreenCalculatorPage({ publicMode = false }: { public
           </Link>
         )}
         <h1 className="mt-2 text-2xl font-bold">Kalkulator ekranu LED</h1>
-        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Kabinety, pitch, wiele ekranów w projekcie, podgląd CSS i export pixel mapy PNG 1:1. Wynik zawsze na
-          całych szafach.
-        </p>
       </div>
 
       {!publicMode ? <LedScreenProjectBar session={session} /> : null}
