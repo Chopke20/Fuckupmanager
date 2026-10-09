@@ -125,6 +125,37 @@ function safeFilePart(raw: string): string {
   return raw.replace(/[^\w\sąćęłńóśźżĄĆĘŁŃÓŚŹŻ-]/g, '').trim() || 'LED'
 }
 
+/** Stem daty/godziny do nazwy pliku, lokalnie: 2026-10-09_14-28-05 */
+export function pixelMapTimestamp(): string {
+  const d = new Date()
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`
+}
+
+/** Żółty wymiar na ciemnym tle — nie nachodzi na etykiety kabinetów. */
+function drawDimBadge(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  left: number,
+  bottom: number,
+  fontPx: number
+) {
+  ctx.font = `700 ${fontPx}px ui-monospace, Consolas, monospace`
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+  const padX = Math.max(4, Math.round(fontPx * 0.28))
+  const padY = Math.max(3, Math.round(fontPx * 0.22))
+  const metrics = ctx.measureText(text)
+  const tw = metrics.width
+  const th = fontPx
+  const x = left
+  const y = bottom - th - padY * 2
+  ctx.fillStyle = 'rgba(0,0,0,0.72)'
+  ctx.fillRect(x, y, tw + padX * 2, th + padY * 2)
+  ctx.fillStyle = '#ffe566'
+  ctx.fillText(text, x + padX, y + padY + th * 0.82)
+}
+
 export function pixelMapTooLarge(result: LedScreenResult): boolean {
   return result.screenPxW > LED_PIXEL_MAP_MAX_EDGE || result.screenPxH > LED_PIXEL_MAP_MAX_EDGE
 }
@@ -181,14 +212,16 @@ function paintScreenContent(
   // 2) Znak wodny logo — wyżej niż nazwa ekranu
   drawLogoWatermark(ctx, logo, cx, cy - h * 0.14, w * 0.48, h * 0.32)
 
-  // 3) Etykiety row,col (1-index) — lewy górny róg kabinetu
+  // 3) Etykiety row,col (1-index) — bez lewego dolnego kabinetu (tam jest WxH)
   const coordPx = Math.max(11, Math.min(cabW, cabH) * 0.16)
   ctx.font = `600 ${coordPx}px ui-monospace, Consolas, monospace`
   ctx.textAlign = 'left'
   ctx.textBaseline = 'top'
   ctx.fillStyle = '#ffffff'
+  const blRow = calc.rows - 1
   for (let r = 0; r < calc.rows; r += 1) {
     for (let c = 0; c < calc.columns; c += 1) {
+      if (r === blRow && c === 0) continue
       ctx.fillText(`${r + 1},${c + 1}`, originX + c * cabW + 4, originY + r * cabH + 3)
     }
   }
@@ -263,13 +296,9 @@ function paintScreenContent(
     `800 ${titlePx}px "Space Grotesk", Arial Black, sans-serif`
   )
 
-  // 6) Wymiary px — lewy dolny róg (żółty)
+  // 6) Wymiary px — lewy dolny róg, badge żeby nie nachodził na siatkę
   const dimPx = Math.max(12, Math.min(w, h) * 0.028, 28)
-  ctx.font = `700 ${dimPx}px ui-monospace, Consolas, monospace`
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'bottom'
-  ctx.fillStyle = '#ffe566'
-  ctx.fillText(`${w}x${h}`, originX + 6, originY + h - 6)
+  drawDimBadge(ctx, `${w}x${h}`, originX + 4, originY + h - 4, dimPx)
 
   // 7) Ramka ekranu
   ctx.strokeStyle = '#ffffff'
@@ -312,9 +341,10 @@ export async function downloadLedPixelMapPng(
 ): Promise<LedScreenResult> {
   const { canvas, result } = await renderLedPixelMapCanvas(screen, options)
   const safeLabel = safeFilePart(screen.label || 'LED')
+  const stamp = pixelMapTimestamp()
   await canvasToDownload(
     canvas,
-    `PixelMap-${safeLabel}-${result.screenPxW}x${result.screenPxH}px.png`
+    `PixelMap-${safeLabel}-${result.screenPxW}x${result.screenPxH}px_${stamp}.png`
   )
   return result
 }
@@ -420,16 +450,30 @@ export async function downloadCombinedLedPixelMapPng(
     )
   }
 
-  // Globalny wymiar całego canvasu — lewy dolny róg
+  // Globalny wymiar całego canvasu — prawy dolny róg (nie koliduje z WxH ekranów)
   const dimPx = Math.max(14, Math.min(widthPx, heightPx) * 0.02, 32)
   ctx.font = `700 ${dimPx}px ui-monospace, Consolas, monospace`
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'bottom'
+  const globalLabel = `${widthPx}x${heightPx}`
+  const padX = Math.max(4, Math.round(dimPx * 0.28))
+  const padY = Math.max(3, Math.round(dimPx * 0.22))
+  const tw = ctx.measureText(globalLabel).width
+  const boxW = tw + padX * 2
+  const boxH = dimPx + padY * 2
+  const boxX = widthPx - boxW - 6
+  const boxY = heightPx - boxH - 6
+  ctx.fillStyle = 'rgba(0,0,0,0.72)'
+  ctx.fillRect(boxX, boxY, boxW, boxH)
   ctx.fillStyle = '#ffe566'
-  ctx.fillText(`${widthPx}x${heightPx}`, 8, heightPx - 8)
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+  ctx.fillText(globalLabel, boxX + padX, boxY + padY + dimPx * 0.82)
 
   const name = (options.projectName || 'LED layout').trim()
   const safe = safeFilePart(name)
-  await canvasToDownload(canvas, `PixelMap-CANVAS-${safe}-${widthPx}x${heightPx}px.png`)
+  const stamp = pixelMapTimestamp()
+  await canvasToDownload(
+    canvas,
+    `PixelMap-CANVAS-${safe}-${widthPx}x${heightPx}px_${stamp}.png`
+  )
   return { widthPx, heightPx, screenCount: screens.length }
 }
