@@ -9,8 +9,6 @@ import {
   getLedScreenProjectByOrder,
   upsertLedScreenProjectForOrder,
 } from '../../toolbox/api/ledScreenProjects.api'
-import { useAuth } from '../../auth/AuthProvider'
-
 export default function LedScreensOrderModal({
   open,
   orderId,
@@ -24,7 +22,6 @@ export default function LedScreensOrderModal({
   orderLabel?: string
   onClose: () => void
 }) {
-  const { user } = useAuth()
   const [payload, setPayload] = useState<LedScreenProjectPayload>(() => emptyLedScreenProject())
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -128,7 +125,6 @@ export default function LedScreensOrderModal({
               project={payload}
               onChange={setPayload}
               projectName={orderLabel}
-              logoUrl={user?.logoDarkBgUrl ?? user?.logoLightBgUrl ?? null}
               compactHeader
             />
           )}

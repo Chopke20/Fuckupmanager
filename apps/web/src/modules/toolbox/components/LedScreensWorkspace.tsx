@@ -282,26 +282,25 @@ export default function LedScreensWorkspace({
     setExportError(null)
     const baseName = projectName?.trim() || 'Projekt LED'
     try {
+      // logoUrl z props = override; brak = domyślne logo Lama na mapie
+      const mapOpts = { logoUrl, variant: 'tech' as const }
       if (mode === 'active') {
         if (pixelMapTooLarge(result)) {
           throw new Error(`Za duża rozdzielczość (${result.screenPxW}×${result.screenPxH}).`)
         }
         await downloadLedPixelMapPng(active, {
+          ...mapOpts,
           projectName: `${baseName} · ${active.label}`,
-          logoUrl,
-          variant: 'tech',
         })
       } else if (mode === 'all-separate') {
         await downloadAllLedPixelMapsPng(project.screens, {
+          ...mapOpts,
           projectName: baseName,
-          logoUrl,
-          variant: 'tech',
         })
       } else {
         await downloadCombinedLedPixelMapPng(project.screens, {
+          ...mapOpts,
           projectName: baseName,
-          logoUrl,
-          variant: 'tech',
         })
       }
     } catch (e) {

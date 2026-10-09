@@ -1,6 +1,7 @@
 /**
- * Profesjonalna pixel mapa LED — PNG 1:1 (1 px obrazu = 1 dioda).
- * Tryby: pojedynczy ekran · wszystkie osobno · pełen canvas (layout).
+ * Profesjonalna pixel mapa LED (wzór diagnostyczny):
+ * kolorowe kabinety, row/col, X + koła, nazwa, TL, wymiary, logo Lama.
+ * Tryby: aktywny · wszystkie osobno · pełen canvas.
  */
 
 import {
@@ -12,14 +13,38 @@ import {
 
 export type LedPixelMapExportMode = 'active' | 'all-separate' | 'combined-canvas'
 
+/** Domyślne logo na mapach (białe na ciemnym tle kabinetów). */
+export const LED_PIXELMAP_DEFAULT_LOGO_URL = '/lama-logo-pixelmap.png'
+
 export interface LedPixelMapOptions {
   projectName?: string
-  /** URL logo (np. branding firmy). Brak → tekst LAMA STAGE. */
+  /** URL logo. null = bez logo; undefined = domyślne Lama. */
   logoUrl?: string | null
-  /** tech = siatka + numery; clean = siatka + logo + slate */
   variant?: 'tech' | 'clean'
-  /** Dla canvas łączonego: rysuj slate na całym płótnie. */
-  combinedSlate?: boolean
+  /** Pozycja TL tego ekranu na łączonym canvasie (px). */
+  canvasOriginPx?: { x: number; y: number }
+}
+
+/** Paleta kabinetów — sąsiednie komórki mają różne kolory (mapowanie / swapped tiles). */
+const CABINET_PALETTE = [
+  '#5c1a2e', // maroon
+  '#1a3d3a', // teal dark
+  '#2a1a4a', // purple
+  '#1a2a4a', // navy
+  '#3d3a1a', // olive
+  '#1a4a2a', // forest
+  '#4a2a1a', // brown
+  '#1a4a4a', // cyan dark
+  '#3a1a4a', // violet
+  '#2a4a1a', // lime dark
+  '#4a1a3a', // magenta dark
+  '#1a3a4a', // steel
+]
+
+function cabinetColor(row: number, col: number): string {
+  // Unika sąsiedztwa tego samego koloru w 4-kierunkach lepiej niż prosty (r+c)%n
+  const idx = (row * 3 + col * 5) % CABINET_PALETTE.length
+  return CABINET_PALETTE[idx]!
 }
 
 function loadImage(url: string): Promise<HTMLImageElement | null> {
@@ -32,23 +57,31 @@ function loadImage(url: string): Promise<HTMLImageElement | null> {
   })
 }
 
-function drawCenteredText(
+async function resolveLogo(options: LedPixelMapOptions): Promise<HTMLImageElement | null> {
+  if (options.logoUrl === null) return null
+  const url = options.logoUrl || LED_PIXELMAP_DEFAULT_LOGO_URL
+  return loadImage(url)
+}
+
+function drawTextShadow(
   ctx: CanvasRenderingContext2D,
   text: string,
   x: number,
   y: number,
   maxWidth: number,
-  fillStyle: string,
-  fontPx: number
+  fill: string,
+  font: string
 ) {
-  ctx.fillStyle = fillStyle
-  ctx.font = `600 ${fontPx}px "Space Grotesk", Arial, sans-serif`
+  ctx.font = font
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
+  ctx.fillStyle = 'rgba(0,0,0,0.65)'
+  ctx.fillText(text, x + 3, y + 3, maxWidth)
+  ctx.fillStyle = fill
   ctx.fillText(text, x, y, maxWidth)
 }
 
-function drawLogoOrWordmark(
+function drawLogoWatermark(
   ctx: CanvasRenderingContext2D,
   img: HTMLImageElement | null,
   cx: number,
@@ -56,15 +89,14 @@ function drawLogoOrWordmark(
   maxW: number,
   maxH: number
 ) {
-  if (img && img.naturalWidth > 0) {
-    const scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1)
-    const w = img.naturalWidth * scale
-    const h = img.naturalHeight * scale
-    ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h)
-    return
-  }
-  const fontPx = Math.max(24, Math.min(maxW * 0.12, maxH * 0.28, 120))
-  drawCenteredText(ctx, 'LAMA STAGE', cx, cy, maxW * 0.9, '#f5f5f5', fontPx)
+  if (!img || img.naturalWidth <= 0) return
+  const scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight)
+  const w = img.naturalWidth * scale
+  const h = img.naturalHeight * scale
+  ctx.save()
+  ctx.globalAlpha = 0.92
+  ctx.drawImage(img, cx - w / 2, cy - h / 2 - maxH * 0.08, w, h)
+  ctx.restore()
 }
 
 function canvasToDownload(canvas: HTMLCanvasElement, filename: string): Promise<void> {
@@ -96,7 +128,24 @@ export function pixelMapTooLarge(result: LedScreenResult): boolean {
   return result.screenPxW > LED_PIXEL_MAP_MAX_EDGE || result.screenPxH > LED_PIXEL_MAP_MAX_EDGE
 }
 
-/** Rysuje jeden ekran w (0,0) lokalnym — bez slate całego projektu. */
+function strokeCircle(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  r: number,
+  color: string,
+  lineWidth: number
+) {
+  ctx.strokeStyle = color
+  ctx.lineWidth = lineWidth
+  ctx.beginPath()
+  ctx.arc(cx, cy, r, 0, Math.PI * 2)
+  ctx.stroke()
+}
+
+/**
+ * Wzorcowa mapa diagnostyczna jednego ekranu (jak Grid-Main / Grid-L / Grid-R).
+ */
 function paintScreenContent(
   ctx: CanvasRenderingContext2D,
   screen: LedScreenSpec,
@@ -106,99 +155,122 @@ function paintScreenContent(
   originX: number,
   originY: number
 ) {
-  const variant = options.variant ?? 'tech'
   const cabW = calc.cabinetPxW
   const cabH = calc.cabinetPxH
   const w = calc.screenPxW
   const h = calc.screenPxH
+  const line = Math.max(1, Math.round(Math.min(w, h) / 900))
 
+  // 1) Kolorowe kabinety
   for (let r = 0; r < calc.rows; r += 1) {
     for (let c = 0; c < calc.columns; c += 1) {
       const x = originX + c * cabW
       const y = originY + r * cabH
-      const alt = (r + c) % 2 === 0
-      ctx.fillStyle = alt ? '#1a1a1a' : '#141414'
+      ctx.fillStyle = cabinetColor(r, c)
       ctx.fillRect(x, y, cabW, cabH)
+      ctx.strokeStyle = '#c9a227'
+      ctx.lineWidth = 1
+      ctx.strokeRect(x + 0.5, y + 0.5, cabW - 1, cabH - 1)
     }
   }
 
-  ctx.strokeStyle = '#3d3d3d'
-  ctx.lineWidth = 1
-  for (let c = 0; c <= calc.columns; c += 1) {
-    const x = originX + Math.min(c * cabW, w - 1) + 0.5
-    ctx.beginPath()
-    ctx.moveTo(x, originY)
-    ctx.lineTo(x, originY + h)
-    ctx.stroke()
-  }
-  for (let r = 0; r <= calc.rows; r += 1) {
-    const y = originY + Math.min(r * cabH, h - 1) + 0.5
-    ctx.beginPath()
-    ctx.moveTo(originX, y)
-    ctx.lineTo(originX + w, y)
-    ctx.stroke()
-  }
-
-  if (variant === 'tech') {
-    const labelPx = Math.max(10, Math.min(cabW, cabH) * 0.18)
-    ctx.fillStyle = '#8a8a8a'
-    ctx.font = `500 ${labelPx}px ui-monospace, monospace`
-    ctx.textAlign = 'left'
-    ctx.textBaseline = 'top'
-    for (let r = 0; r < calc.rows; r += 1) {
-      for (let c = 0; c < calc.columns; c += 1) {
-        const tag = `${String.fromCharCode(65 + (r % 26))}${c + 1}`
-        ctx.fillText(tag, originX + c * cabW + 4, originY + r * cabH + 4)
-      }
+  // 2) Etykiety row,col (1-index) — lewy górny róg kabinetu
+  const coordPx = Math.max(11, Math.min(cabW, cabH) * 0.16)
+  ctx.font = `600 ${coordPx}px ui-monospace, Consolas, monospace`
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'top'
+  ctx.fillStyle = '#ffffff'
+  for (let r = 0; r < calc.rows; r += 1) {
+    for (let c = 0; c < calc.columns; c += 1) {
+      ctx.fillText(`${r + 1},${c + 1}`, originX + c * cabW + 4, originY + r * cabH + 3)
     }
-    // Etykieta ekranu w lewym dolnym rogu kabinetu (czytelna na canvasie łączonym)
-    const titlePx = Math.max(14, Math.min(cabW, cabH) * 0.22)
-    ctx.fillStyle = '#e8e8e8'
-    ctx.font = `600 ${titlePx}px "Space Grotesk", Arial, sans-serif`
-    ctx.fillText(screen.label, originX + 8, originY + 8 + labelPx + 4)
   }
 
+  // TL na łączonym canvasie
+  if (options.canvasOriginPx) {
+    const tlPx = Math.max(coordPx, Math.min(cabW, cabH) * 0.2)
+    ctx.font = `700 ${tlPx}px ui-monospace, Consolas, monospace`
+    ctx.fillStyle = '#ffe566'
+    ctx.fillText(
+      `TL:${options.canvasOriginPx.x},${options.canvasOriginPx.y}`,
+      originX + 4,
+      originY + 3 + coordPx + 2
+    )
+  }
+
+  // 3) Geometria: X + koło środkowe + koła narożne (orientacja RGBY)
+  const x0 = originX
+  const y0 = originY
+  const x1 = originX + w
+  const y1 = originY + h
   const cx = originX + w / 2
   const cy = originY + h / 2
-  ctx.strokeStyle = '#e8e8e8'
-  ctx.lineWidth = Math.max(1, Math.round(Math.min(w, h) / 800))
-  const arm = Math.min(w, h) * 0.08
+
+  ctx.strokeStyle = '#5ec8d8'
+  ctx.lineWidth = line
   ctx.beginPath()
-  ctx.moveTo(cx - arm, cy)
-  ctx.lineTo(cx + arm, cy)
-  ctx.moveTo(cx, cy - arm)
-  ctx.lineTo(cx, cy + arm)
-  ctx.stroke()
-  ctx.beginPath()
-  ctx.arc(cx, cy, arm * 0.35, 0, Math.PI * 2)
+  ctx.moveTo(x0, y0)
+  ctx.lineTo(x1, y1)
+  ctx.moveTo(x1, y0)
+  ctx.lineTo(x0, y1)
   ctx.stroke()
 
-  drawLogoOrWordmark(ctx, logo, cx, cy, w * 0.28, h * 0.18)
+  const mainR = Math.min(w, h) * 0.42
+  strokeCircle(ctx, cx, cy, mainR, '#ffffff', line)
 
-  ctx.strokeStyle = '#f5f5f5'
-  ctx.lineWidth = 2
-  ctx.strokeRect(originX + 1, originY + 1, w - 2, h - 2)
-}
-
-function paintSlate(
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  lines: string[]
-) {
-  const slateH = Math.max(28, Math.min(72, Math.round(height * 0.045)))
-  ctx.fillStyle = 'rgba(0,0,0,0.72)'
-  ctx.fillRect(0, height - slateH, width, slateH)
-  const slateFont = Math.max(11, Math.round(slateH * 0.42))
-  drawCenteredText(
+  const cornerR = Math.min(cabW, cabH) * 0.38
+  // TL red, TR green, BL blue, BR yellow — jak we wzorcu
+  strokeCircle(ctx, originX + cabW / 2, originY + cabH / 2, cornerR, '#e53935', line)
+  strokeCircle(
     ctx,
-    lines.filter(Boolean).join('  ·  '),
-    width / 2,
-    height - slateH / 2,
-    width * 0.96,
-    '#f0f0f0',
-    slateFont
+    originX + (calc.columns - 0.5) * cabW,
+    originY + cabH / 2,
+    cornerR,
+    '#43a047',
+    line
   )
+  strokeCircle(
+    ctx,
+    originX + cabW / 2,
+    originY + (calc.rows - 0.5) * cabH,
+    cornerR,
+    '#1e88e5',
+    line
+  )
+  strokeCircle(
+    ctx,
+    originX + (calc.columns - 0.5) * cabW,
+    originY + (calc.rows - 0.5) * cabH,
+    cornerR,
+    '#fdd835',
+    line
+  )
+
+  // 4) Logo + nazwa ekranu na środku
+  drawLogoWatermark(ctx, logo, cx, cy - h * 0.02, w * 0.34, h * 0.22)
+  const titlePx = Math.max(28, Math.min(w * 0.09, h * 0.14, 160))
+  drawTextShadow(
+    ctx,
+    screen.label,
+    cx,
+    cy + h * 0.12,
+    w * 0.9,
+    '#ffe566',
+    `800 ${titlePx}px "Space Grotesk", Arial Black, sans-serif`
+  )
+
+  // 5) Wymiary px — lewy dolny róg (żółty)
+  const dimPx = Math.max(12, Math.min(w, h) * 0.028, 28)
+  ctx.font = `700 ${dimPx}px ui-monospace, Consolas, monospace`
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'bottom'
+  ctx.fillStyle = '#ffe566'
+  ctx.fillText(`${w}x${h}`, originX + 6, originY + h - 6)
+
+  // 6) Ramka ekranu
+  ctx.strokeStyle = '#ffffff'
+  ctx.lineWidth = Math.max(2, line)
+  ctx.strokeRect(originX + 1, originY + 1, w - 2, h - 2)
 }
 
 export async function renderLedPixelMapCanvas(
@@ -224,18 +296,8 @@ export async function renderLedPixelMapCanvas(
   ctx.fillStyle = '#0a0a0a'
   ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-  const logo = options.logoUrl ? await loadImage(options.logoUrl) : null
+  const logo = await resolveLogo(options)
   paintScreenContent(ctx, screen, calc, options, logo, 0, 0)
-
-  const name = (options.projectName || screen.label || 'LED').trim()
-  paintSlate(ctx, canvas.width, canvas.height, [
-    name,
-    `${calc.screenPxW}×${calc.screenPxH} px`,
-    `P${screen.pitchMm}`,
-    `${calc.screenWidthM}×${calc.screenHeightM} m`,
-    `${calc.columns}×${calc.rows} kab.`,
-    new Date().toLocaleDateString('pl-PL'),
-  ])
 
   return { canvas, result: calc }
 }
@@ -253,7 +315,6 @@ export async function downloadLedPixelMapPng(
   return result
 }
 
-/** Każdy ekran jako osobny PNG (kolejno). */
 export async function downloadAllLedPixelMapsPng(
   screens: LedScreenSpec[],
   options: LedPixelMapOptions = {}
@@ -267,16 +328,11 @@ export async function downloadAllLedPixelMapsPng(
         : screen.label,
     })
     count += 1
-    // Krótka przerwa — przeglądarki czasem gubią kolejne downloady
     await new Promise((r) => setTimeout(r, 280))
   }
   return count
 }
 
-/**
- * Pozycja ekranu na wspólnym canvasie 1:1.
- * Metry layoutu → px przy pitchu danego ekranu (przy tym samym P odstępy są fizycznie poprawne).
- */
 export function screenLayoutOriginPx(
   screen: LedScreenSpec,
   originXM: number,
@@ -333,7 +389,6 @@ export function combinedPixelMapBounds(screens: LedScreenSpec[]): {
   return { originXM, originYM, widthPx, heightPx, placements }
 }
 
-/** Jeden PNG: wszystkie ekrany na czarnym canvasie wg pozycji layoutu. */
 export async function downloadCombinedLedPixelMapPng(
   screens: LedScreenSpec[],
   options: LedPixelMapOptions = {}
@@ -348,21 +403,28 @@ export async function downloadCombinedLedPixelMapPng(
   ctx.fillStyle = '#050505'
   ctx.fillRect(0, 0, widthPx, heightPx)
 
-  const logo = options.logoUrl ? await loadImage(options.logoUrl) : null
+  const logo = await resolveLogo(options)
   for (const { screen, calc, x, y } of placements) {
-    paintScreenContent(ctx, screen, calc, options, logo, x, y)
+    paintScreenContent(
+      ctx,
+      screen,
+      calc,
+      { ...options, canvasOriginPx: { x, y } },
+      logo,
+      x,
+      y
+    )
   }
 
-  const pitches = [...new Set(screens.map((s) => s.pitchMm))]
-  const name = (options.projectName || 'LED layout').trim()
-  paintSlate(ctx, widthPx, heightPx, [
-    name,
-    `${widthPx}×${heightPx} px`,
-    `${screens.length} ekran${screens.length === 1 ? '' : 'y'}`,
-    pitches.length === 1 ? `P${pitches[0]}` : `P: ${pitches.join('/')}`,
-    new Date().toLocaleDateString('pl-PL'),
-  ])
+  // Globalny wymiar całego canvasu — lewy dolny róg
+  const dimPx = Math.max(14, Math.min(widthPx, heightPx) * 0.02, 32)
+  ctx.font = `700 ${dimPx}px ui-monospace, Consolas, monospace`
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'bottom'
+  ctx.fillStyle = '#ffe566'
+  ctx.fillText(`${widthPx}x${heightPx}`, 8, heightPx - 8)
 
+  const name = (options.projectName || 'LED layout').trim()
   const safe = safeFilePart(name)
   await canvasToDownload(canvas, `PixelMap-CANVAS-${safe}-${widthPx}x${heightPx}px.png`)
   return { widthPx, heightPx, screenCount: screens.length }

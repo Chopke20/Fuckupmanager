@@ -3,10 +3,7 @@ import { ArrowLeft } from 'lucide-react'
 import LedScreensWorkspace from '../components/LedScreensWorkspace'
 import LedScreenProjectBar from '../components/LedScreenProjectBar'
 import { useLedScreenProjectSession } from '../hooks/useLedScreenProjectSession'
-import { useAuth } from '../../auth/AuthProvider'
-
 export default function LedScreenCalculatorPage({ publicMode = false }: { publicMode?: boolean }) {
-  const { user } = useAuth()
   const session = useLedScreenProjectSession({ localOnly: publicMode })
 
   return (
@@ -39,7 +36,6 @@ export default function LedScreenCalculatorPage({ publicMode = false }: { public
           project={session.payload}
           onChange={session.setPayload}
           projectName={session.project?.name ?? (publicMode ? 'Demo' : undefined)}
-          logoUrl={user?.logoDarkBgUrl ?? user?.logoLightBgUrl ?? null}
         />
       )}
     </div>
