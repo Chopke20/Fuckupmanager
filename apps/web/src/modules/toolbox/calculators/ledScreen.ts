@@ -440,6 +440,10 @@ export function calculateScreenFromSpec(screen: LedScreenSpec): LedScreenCalcRes
   return calculateLedScreen(screenToInput(screen))
 }
 
-/** Limit canvas przeglądarki — powyżej ostrzegamy przed eksportem. */
-export const LED_PIXEL_MAP_MAX_EDGE = 8192
+/**
+ * Limit jednej krawędzi canvasu (px) przy eksporcie pixel mapy.
+ * Przeglądarki zwykle dopuszczają ~16k–32k, ale RAM rośnie z W×H —
+ * 16384 to bezpieczny sufit na typowe ściany LED (np. 3× 4K w rzędzie).
+ */
+export const LED_PIXEL_MAP_MAX_EDGE = 16384
 

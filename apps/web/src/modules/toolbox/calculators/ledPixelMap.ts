@@ -94,8 +94,9 @@ function drawLogoWatermark(
   const w = img.naturalWidth * scale
   const h = img.naturalHeight * scale
   ctx.save()
-  ctx.globalAlpha = 0.92
-  ctx.drawImage(img, cx - w / 2, cy - h / 2 - maxH * 0.08, w, h)
+  // Prawdziwy znak wodny: duży, niska krycie, pod geometrią/nazwą
+  ctx.globalAlpha = 0.22
+  ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h)
   ctx.restore()
 }
 
@@ -174,7 +175,13 @@ function paintScreenContent(
     }
   }
 
-  // 2) Etykiety row,col (1-index) — lewy górny róg kabinetu
+  const cx = originX + w / 2
+  const cy = originY + h / 2
+
+  // 2) Znak wodny logo — pod geometrią i nazwą
+  drawLogoWatermark(ctx, logo, cx, cy, w * 0.52, h * 0.4)
+
+  // 3) Etykiety row,col (1-index) — lewy górny róg kabinetu
   const coordPx = Math.max(11, Math.min(cabW, cabH) * 0.16)
   ctx.font = `600 ${coordPx}px ui-monospace, Consolas, monospace`
   ctx.textAlign = 'left'
@@ -198,13 +205,11 @@ function paintScreenContent(
     )
   }
 
-  // 3) Geometria: X + koło środkowe + koła narożne (orientacja RGBY)
+  // 4) Geometria: X + koło środkowe + koła narożne (orientacja RGBY)
   const x0 = originX
   const y0 = originY
   const x1 = originX + w
   const y1 = originY + h
-  const cx = originX + w / 2
-  const cy = originY + h / 2
 
   ctx.strokeStyle = '#5ec8d8'
   ctx.lineWidth = line
@@ -246,20 +251,19 @@ function paintScreenContent(
     line
   )
 
-  // 4) Logo + nazwa ekranu na środku
-  drawLogoWatermark(ctx, logo, cx, cy - h * 0.02, w * 0.34, h * 0.22)
+  // 5) Nazwa ekranu na środku (nad znakiem wodnym)
   const titlePx = Math.max(28, Math.min(w * 0.09, h * 0.14, 160))
   drawTextShadow(
     ctx,
     screen.label,
     cx,
-    cy + h * 0.12,
+    cy,
     w * 0.9,
     '#ffe566',
     `800 ${titlePx}px "Space Grotesk", Arial Black, sans-serif`
   )
 
-  // 5) Wymiary px — lewy dolny róg (żółty)
+  // 6) Wymiary px — lewy dolny róg (żółty)
   const dimPx = Math.max(12, Math.min(w, h) * 0.028, 28)
   ctx.font = `700 ${dimPx}px ui-monospace, Consolas, monospace`
   ctx.textAlign = 'left'
@@ -267,7 +271,7 @@ function paintScreenContent(
   ctx.fillStyle = '#ffe566'
   ctx.fillText(`${w}x${h}`, originX + 6, originY + h - 6)
 
-  // 6) Ramka ekranu
+  // 7) Ramka ekranu
   ctx.strokeStyle = '#ffffff'
   ctx.lineWidth = Math.max(2, line)
   ctx.strokeRect(originX + 1, originY + 1, w - 2, h - 2)
