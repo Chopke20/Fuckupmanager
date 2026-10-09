@@ -178,8 +178,8 @@ function paintScreenContent(
   const cx = originX + w / 2
   const cy = originY + h / 2
 
-  // 2) Znak wodny logo — pod geometrią i nazwą
-  drawLogoWatermark(ctx, logo, cx, cy, w * 0.52, h * 0.4)
+  // 2) Znak wodny logo — wyżej niż nazwa ekranu
+  drawLogoWatermark(ctx, logo, cx, cy - h * 0.14, w * 0.48, h * 0.32)
 
   // 3) Etykiety row,col (1-index) — lewy górny róg kabinetu
   const coordPx = Math.max(11, Math.min(cabW, cabH) * 0.16)
@@ -251,13 +251,13 @@ function paintScreenContent(
     line
   )
 
-  // 5) Nazwa ekranu na środku (nad znakiem wodnym)
+  // 5) Nazwa ekranu poniżej logo
   const titlePx = Math.max(28, Math.min(w * 0.09, h * 0.14, 160))
   drawTextShadow(
     ctx,
     screen.label,
     cx,
-    cy,
+    cy + h * 0.1,
     w * 0.9,
     '#ffe566',
     `800 ${titlePx}px "Space Grotesk", Arial Black, sans-serif`
