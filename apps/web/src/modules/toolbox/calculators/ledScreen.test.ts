@@ -140,3 +140,25 @@ describe('LedScreenProjectPayload', () => {
     expect(parsed?.screens[1]?.label).toBe('IMAG L')
   })
 })
+
+describe('combinedPixelMapBounds', () => {
+  it('układa dwa ekrany obok siebie na wspólnym canvasie', async () => {
+    const { combinedPixelMapBounds } = await import('./ledPixelMap')
+    const a = emptyLedScreenProject().screens[0]!
+    const b = {
+      ...a,
+      id: 'b',
+      label: 'Right',
+      columns: 8,
+      rows: 9,
+      layoutXM: 8,
+      layoutYM: 0,
+    }
+    const bounds = combinedPixelMapBounds([a, b])
+    // 16*192 + 8*192 przy P2.6 i layout 8 m = 8000/2.6 ≈ 3077 offset
+    expect(bounds.placements).toHaveLength(2)
+    expect(bounds.placements[0]!.x).toBe(0)
+    expect(bounds.placements[1]!.x).toBeGreaterThan(3000)
+    expect(bounds.widthPx).toBe(bounds.placements[1]!.x + bounds.placements[1]!.calc.screenPxW)
+  })
+})

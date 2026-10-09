@@ -14,7 +14,13 @@ import {
   type LedScreenProjectPayload,
   type LedScreenSpec,
 } from '../calculators/ledScreen'
-import { downloadLedPixelMapPng, pixelMapTooLarge } from '../calculators/ledPixelMap'
+import {
+  downloadAllLedPixelMapsPng,
+  downloadCombinedLedPixelMapPng,
+  downloadLedPixelMapPng,
+  pixelMapTooLarge,
+  type LedPixelMapExportMode,
+} from '../calculators/ledPixelMap'
 import LedScreenCssPreview from './LedScreenCssPreview'
 
 function parseNum(raw: string): number {
@@ -86,6 +92,7 @@ export default function LedScreensWorkspace({
   const [activePreset, setActivePreset] = useState<string | null>('500x500-p2.6')
   const [exportBusy, setExportBusy] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
+  const [exportMenuOpen, setExportMenuOpen] = useState(false)
 
   // Sync form from active screen when selection changes
   useEffect(() => {
@@ -268,19 +275,35 @@ export default function LedScreensWorkspace({
     setRowsRaw(String(rws))
   }
 
-  const onExport = async () => {
+  const onExport = async (mode: LedPixelMapExportMode) => {
     if (!active || !result.ok) return
+    setExportMenuOpen(false)
     setExportBusy(true)
     setExportError(null)
+    const baseName = projectName?.trim() || 'Projekt LED'
     try {
-      if (pixelMapTooLarge(result)) {
-        throw new Error(`Za duża rozdzielczość (${result.screenPxW}×${result.screenPxH}).`)
+      if (mode === 'active') {
+        if (pixelMapTooLarge(result)) {
+          throw new Error(`Za duża rozdzielczość (${result.screenPxW}×${result.screenPxH}).`)
+        }
+        await downloadLedPixelMapPng(active, {
+          projectName: `${baseName} · ${active.label}`,
+          logoUrl,
+          variant: 'tech',
+        })
+      } else if (mode === 'all-separate') {
+        await downloadAllLedPixelMapsPng(project.screens, {
+          projectName: baseName,
+          logoUrl,
+          variant: 'tech',
+        })
+      } else {
+        await downloadCombinedLedPixelMapPng(project.screens, {
+          projectName: baseName,
+          logoUrl,
+          variant: 'tech',
+        })
       }
-      await downloadLedPixelMapPng(active, {
-        projectName: projectName ? `${projectName} · ${active.label}` : active.label,
-        logoUrl,
-        variant: 'tech',
-      })
     } catch (e) {
       setExportError(e instanceof Error ? e.message : 'Export nieudany.')
     } finally {
@@ -337,15 +360,51 @@ export default function LedScreensWorkspace({
         >
           <Trash2 size={12} /> Usuń
         </button>
-        <button
-          type="button"
-          onClick={() => void onExport()}
-          disabled={exportBusy || !result.ok}
-          className="ml-auto inline-flex items-center gap-1.5 rounded border-2 border-primary px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/10 disabled:opacity-50"
-        >
-          <Download size={14} />
-          {exportBusy ? 'Generuję…' : 'Pixel mapa PNG'}
-        </button>
+        <div className="relative ml-auto">
+          <button
+            type="button"
+            onClick={() => setExportMenuOpen((open) => !open)}
+            disabled={exportBusy || !result.ok}
+            className="inline-flex items-center gap-1.5 rounded border-2 border-primary px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/10 disabled:opacity-50"
+          >
+            <Download size={14} />
+            {exportBusy ? 'Generuję…' : 'Pixel mapa PNG'}
+          </button>
+          {exportMenuOpen ? (
+            <div className="absolute right-0 z-30 mt-1 w-64 overflow-hidden rounded-md border border-border bg-surface shadow-lg">
+              <button
+                type="button"
+                className="block w-full px-3 py-2 text-left text-xs hover:bg-surface-2"
+                onClick={() => void onExport('active')}
+              >
+                <span className="font-medium">Tylko aktywny</span>
+                <span className="mt-0.5 block text-[10px] text-muted-foreground">
+                  {active.label} — jeden PNG 1:1
+                </span>
+              </button>
+              <button
+                type="button"
+                className="block w-full px-3 py-2 text-left text-xs hover:bg-surface-2"
+                onClick={() => void onExport('all-separate')}
+              >
+                <span className="font-medium">Wszystkie osobno</span>
+                <span className="mt-0.5 block text-[10px] text-muted-foreground">
+                  {project.screens.length} plików PNG (po jednym na ekran)
+                </span>
+              </button>
+              <button
+                type="button"
+                className="block w-full px-3 py-2 text-left text-xs hover:bg-surface-2"
+                onClick={() => void onExport('combined-canvas')}
+              >
+                <span className="font-medium">Pełen canvas</span>
+                <span className="mt-0.5 block text-[10px] text-muted-foreground">
+                  Jeden PNG — wszystkie ekrany wg pozycji na scenie
+                </span>
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
       {exportError ? (
         <p className="rounded border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-xs text-red-400">
@@ -357,6 +416,19 @@ export default function LedScreensWorkspace({
         screens={project.screens}
         activeScreenId={active.id}
         onSelectScreen={(id) => onChange({ ...project, activeScreenId: id })}
+        onMoveScreen={(id, layoutXM, layoutYM) => {
+          onChange({
+            ...project,
+            activeScreenId: id,
+            screens: project.screens.map((s) =>
+              s.id === id ? { ...s, layoutXM, layoutYM } : s
+            ),
+          })
+          if (id === active.id) {
+            setLayoutXRaw(String(layoutXM))
+            setLayoutYRaw(String(layoutYM))
+          }
+        }}
       />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
