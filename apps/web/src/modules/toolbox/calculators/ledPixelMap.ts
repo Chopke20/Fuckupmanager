@@ -450,23 +450,7 @@ export async function downloadCombinedLedPixelMapPng(
     )
   }
 
-  // Globalny wymiar całego canvasu — prawy dolny róg (nie koliduje z WxH ekranów)
-  const dimPx = Math.max(14, Math.min(widthPx, heightPx) * 0.02, 32)
-  ctx.font = `700 ${dimPx}px ui-monospace, Consolas, monospace`
-  const globalLabel = `${widthPx}x${heightPx}`
-  const padX = Math.max(4, Math.round(dimPx * 0.28))
-  const padY = Math.max(3, Math.round(dimPx * 0.22))
-  const tw = ctx.measureText(globalLabel).width
-  const boxW = tw + padX * 2
-  const boxH = dimPx + padY * 2
-  const boxX = widthPx - boxW - 6
-  const boxY = heightPx - boxH - 6
-  ctx.fillStyle = 'rgba(0,0,0,0.72)'
-  ctx.fillRect(boxX, boxY, boxW, boxH)
-  ctx.fillStyle = '#ffe566'
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'alphabetic'
-  ctx.fillText(globalLabel, boxX + padX, boxY + padY + dimPx * 0.82)
+  // Bez globalnej rozdzielczości pliku — canvas ma wolne miejsce; sensowny jest WxH każdego ekranu.
 
   const name = (options.projectName || 'LED layout').trim()
   const safe = safeFilePart(name)
