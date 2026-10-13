@@ -169,6 +169,65 @@ export function hourMarks(time: PlannerTimeSettings): number[] {
   return marks
 }
 
+export interface BlockLayoutSlot {
+  col: number
+  colCount: number
+}
+
+/** Układ jak w Google Calendar: nakładające się bloki w dniu dostają kolumny obok siebie. */
+export function layoutOverlappingBlocks(blocks: PlannerBlock[]): Map<string, BlockLayoutSlot> {
+  const result = new Map<string, BlockLayoutSlot>()
+  if (blocks.length === 0) return result
+
+  const sorted = [...blocks].sort(
+    (a, b) => a.startMin - b.startMin || b.endMin - a.endMin || a.id.localeCompare(b.id)
+  )
+
+  const clusters: PlannerBlock[][] = []
+  let current: PlannerBlock[] = []
+  let clusterEnd = -1
+  for (const b of sorted) {
+    if (current.length === 0 || b.startMin < clusterEnd) {
+      current.push(b)
+      clusterEnd = Math.max(clusterEnd, b.endMin)
+    } else {
+      clusters.push(current)
+      current = [b]
+      clusterEnd = b.endMin
+    }
+  }
+  if (current.length) clusters.push(current)
+
+  for (const cluster of clusters) {
+    const colEnds: number[] = []
+    const cols = new Map<string, number>()
+    const ordered = [...cluster].sort(
+      (a, b) => a.startMin - b.startMin || b.endMin - a.endMin || a.id.localeCompare(b.id)
+    )
+    for (const b of ordered) {
+      let placed = false
+      for (let c = 0; c < colEnds.length; c++) {
+        const end = colEnds[c]
+        if (end !== undefined && end <= b.startMin) {
+          cols.set(b.id, c)
+          colEnds[c] = b.endMin
+          placed = true
+          break
+        }
+      }
+      if (!placed) {
+        cols.set(b.id, colEnds.length)
+        colEnds.push(b.endMin)
+      }
+    }
+    const colCount = Math.max(1, colEnds.length)
+    for (const b of cluster) {
+      result.set(b.id, { col: cols.get(b.id) ?? 0, colCount })
+    }
+  }
+  return result
+}
+
 export function normalizePlannerBoard(raw: unknown): PlannerBoardPayload | null {
   if (!raw || typeof raw !== 'object') return null
   const obj = raw as Record<string, unknown>

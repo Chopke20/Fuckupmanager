@@ -10,6 +10,7 @@ import {
   dayOffsets,
   formatDayHeader,
   hourMarks,
+  layoutOverlappingBlocks,
   minutesToLabel,
   newId,
   snapMinutes,
@@ -66,6 +67,16 @@ export default function PlannerWorkspace({
   const gridHeight = (totalMin / 60) * PX_PER_HOUR
   const days = useMemo(() => dayOffsets(board.range.dayCount), [board.range.dayCount])
   const hours = useMemo(() => hourMarks(board.time), [board.time])
+  const layoutsByDay = useMemo(() => {
+    const map = new Map<number, ReturnType<typeof layoutOverlappingBlocks>>()
+    for (const offset of days) {
+      map.set(
+        offset,
+        layoutOverlappingBlocks(board.blocks.filter((b) => b.dayOffset === offset))
+      )
+    }
+    return map
+  }, [board.blocks, days])
 
   const patch = (partial: Partial<PlannerBoardPayload>) => {
     onChange({ ...board, ...partial })
@@ -102,6 +113,27 @@ export default function PlannerWorkspace({
 
   const minToY = (min: number) => ((min - dayStartMin) / 60) * PX_PER_HOUR
 
+  const insertBlock = (partial: {
+    dayOffset: number
+    startMin: number
+    endMin: number
+    title?: string
+  }) => {
+    const color = PLANNER_BLOCK_COLORS[board.blocks.length % PLANNER_BLOCK_COLORS.length]
+    const block: PlannerBlock = {
+      id: newId('blk'),
+      dayOffset: partial.dayOffset,
+      startMin: partial.startMin,
+      endMin: partial.endMin,
+      title: partial.title ?? 'Blok',
+      color,
+    }
+    onChange({ ...board, blocks: [...board.blocks, block] })
+    setSelectedBlockId(block.id)
+    setSelectedNoteId(null)
+    return block
+  }
+
   const createBlockAt = (dayOffset: number, clientY: number, columnEl: HTMLElement) => {
     const rect = columnEl.getBoundingClientRect()
     const y = clientY - rect.top
@@ -110,23 +142,26 @@ export default function PlannerWorkspace({
       yToMin(y) + PLANNER_DEFAULT_BLOCK_DURATION_MIN,
       board.time
     )
-    const color = PLANNER_BLOCK_COLORS[board.blocks.length % PLANNER_BLOCK_COLORS.length]
-    const block: PlannerBlock = {
-      id: newId('blk'),
+    insertBlock({
       dayOffset,
       startMin: start.startMin,
       endMin: start.endMin,
-      title: 'Blok',
-      color,
-    }
-    onChange({ ...board, blocks: [...board.blocks, block] })
-    setSelectedBlockId(block.id)
-    setSelectedNoteId(null)
+    })
+  }
+
+  const addParallelTo = (source: PlannerBlock) => {
+    insertBlock({
+      dayOffset: source.dayOffset,
+      startMin: source.startMin,
+      endMin: source.endMin,
+    })
   }
 
   const onColumnPointerDown = (dayOffset: number, e: ReactPointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return
-    if ((e.target as HTMLElement).closest('[data-planner-block]')) return
+    const onBlock = (e.target as HTMLElement).closest('[data-planner-block]')
+    // Alt/Ctrl+klik — nowy blok nawet nad istniejącym (równolegle w czasie)
+    if (onBlock && !(e.altKey || e.ctrlKey || e.metaKey)) return
     e.preventDefault()
     createBlockAt(dayOffset, e.clientY, e.currentTarget)
   }
@@ -137,6 +172,8 @@ export default function PlannerWorkspace({
     e: ReactPointerEvent<HTMLElement>
   ) => {
     if (e.button !== 0) return
+    // Oddaj Alt/Ctrl+klik kolumnie (tworzenie równoległego)
+    if (e.altKey || e.ctrlKey || e.metaKey) return
     e.stopPropagation()
     e.preventDefault()
     const grid = gridRef.current
@@ -500,16 +537,24 @@ export default function PlannerWorkspace({
                       const top = minToY(block.startMin)
                       const height = Math.max(18, minToY(block.endMin) - top)
                       const selected = selectedBlockId === block.id
+                      const slot = layoutsByDay.get(offset)?.get(block.id)
+                      const col = slot?.col ?? 0
+                      const colCount = slot?.colCount ?? 1
+                      const gapPx = 2
+                      const widthPct = 100 / colCount
+                      const leftPct = widthPct * col
                       return (
                         <div
                           key={block.id}
                           data-planner-block
-                          className={`absolute inset-x-1 z-[1] overflow-hidden rounded-md border px-1.5 py-1 text-xs text-white shadow-sm ${
-                            selected ? 'ring-2 ring-white/80' : ''
+                          className={`absolute z-[1] overflow-hidden rounded-md border px-1.5 py-1 text-xs text-white shadow-sm ${
+                            selected ? 'ring-2 ring-white/80 z-[2]' : ''
                           }`}
                           style={{
                             top,
                             height,
+                            left: `calc(${leftPct}% + ${gapPx}px)`,
+                            width: `calc(${widthPct}% - ${gapPx * 2}px)`,
                             backgroundColor: block.color || PLANNER_BLOCK_COLORS[0],
                             borderColor: 'rgba(0,0,0,0.2)',
                           }}
@@ -570,6 +615,13 @@ export default function PlannerWorkspace({
           </label>
           <button
             type="button"
+            className="inline-flex items-center gap-1 rounded border border-border px-2 py-1.5 text-xs hover:border-primary/40"
+            onClick={() => addParallelTo(selectedBlock)}
+          >
+            <Plus size={12} /> Równoległy
+          </button>
+          <button
+            type="button"
             className="ml-auto inline-flex items-center gap-1 rounded border border-red-500/40 px-2 py-1.5 text-xs text-red-400 hover:bg-red-500/10"
             onClick={() => removeBlock(selectedBlock.id)}
           >
@@ -578,8 +630,8 @@ export default function PlannerWorkspace({
         </div>
       ) : (
         <p className="text-xs text-muted-foreground">
-          Kliknij pustą komórkę, żeby dodać blok. Przeciągnij, żeby przesunąć; dolny brzeg = zmiana
-          długości.
+          Kliknij pustą komórkę, żeby dodać blok. Alt+klik (lub Ctrl) na istniejący = kolejny w tym
+          samym czasie. Przeciągnij / dolny brzeg = przesunięcie i długość.
         </p>
       )}
     </div>

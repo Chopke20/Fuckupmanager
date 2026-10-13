@@ -3,10 +3,12 @@ import {
   addDaysIso,
   clampBlockToDay,
   emptyPlannerBoard,
+  layoutOverlappingBlocks,
   normalizePlannerBoard,
   parsePlannerBoardJson,
   serializePlannerBoard,
   snapMinutes,
+  type PlannerBlock,
 } from './plannerTypes'
 
 describe('plannerTypes', () => {
@@ -36,5 +38,17 @@ describe('plannerTypes', () => {
 
   it('rejects wrong version', () => {
     expect(normalizePlannerBoard({ version: 2, range: {}, time: {}, blocks: [], notes: [] })).toBeNull()
+  })
+
+  it('lays out concurrent blocks side by side', () => {
+    const blocks: PlannerBlock[] = [
+      { id: 'a', dayOffset: 0, startMin: 9 * 60, endMin: 11 * 60, title: 'A' },
+      { id: 'b', dayOffset: 0, startMin: 10 * 60, endMin: 12 * 60, title: 'B' },
+      { id: 'c', dayOffset: 0, startMin: 14 * 60, endMin: 15 * 60, title: 'C' },
+    ]
+    const layout = layoutOverlappingBlocks(blocks)
+    expect(layout.get('a')).toEqual({ col: 0, colCount: 2 })
+    expect(layout.get('b')).toEqual({ col: 1, colCount: 2 })
+    expect(layout.get('c')).toEqual({ col: 0, colCount: 1 })
   })
 })
