@@ -59,6 +59,7 @@ describe('plannerTypes', () => {
     })
     expect(parsed?.blocks[0]?.sections).toHaveLength(1)
     expect(parsed?.blocks[0]?.sections[0]?.text).toBe('stara notatka')
+    expect(parsed?.blocks[0]?.sections[0]?.title).toBe('')
   })
 
   it('lays out concurrent blocks side by side', () => {

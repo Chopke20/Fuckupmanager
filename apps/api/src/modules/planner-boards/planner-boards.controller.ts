@@ -6,6 +6,7 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 
 const blockSectionSchema = z.object({
   id: z.string().min(1).max(80),
+  title: z.string().max(120).default(''),
   text: z.string().max(4000),
 })
 

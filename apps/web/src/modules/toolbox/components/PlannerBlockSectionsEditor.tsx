@@ -10,8 +10,8 @@ export default function PlannerBlockSectionsEditor({
   onChange: (next: PlannerBlockSection[]) => void
   compact?: boolean
 }) {
-  const updateText = (id: string, text: string) => {
-    onChange(sections.map((s) => (s.id === id ? { ...s, text } : s)))
+  const update = (id: string, patch: Partial<PlannerBlockSection>) => {
+    onChange(sections.map((s) => (s.id === id ? { ...s, ...patch } : s)))
   }
 
   const remove = (id: string) => {
@@ -23,22 +23,23 @@ export default function PlannerBlockSectionsEditor({
   }
 
   return (
-    <div className={`space-y-2 ${compact ? '' : ''}`}>
+    <div className="space-y-2">
       {sections.length === 0 ? (
         <p className="text-xs text-muted-foreground">Brak sekcji — dodaj pierwszą.</p>
       ) : (
         sections.map((section, index) => (
-          <div
-            key={section.id}
-            className="rounded border border-border bg-background p-2"
-          >
-            <div className="mb-1 flex items-center justify-between gap-2">
-              <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                Sekcja {index + 1}
-              </span>
+          <div key={section.id} className="rounded border border-border bg-background p-2">
+            <div className="mb-1 flex items-center gap-2">
+              <input
+                className="min-w-0 flex-1 bg-transparent text-xs font-semibold outline-none placeholder:text-muted-foreground"
+                value={section.title}
+                placeholder={`Sekcja ${index + 1}`}
+                onChange={(e) => update(section.id, { title: e.target.value })}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
               <button
                 type="button"
-                className="text-muted-foreground hover:text-red-400"
+                className="shrink-0 text-muted-foreground hover:text-red-400"
                 onClick={() => remove(section.id)}
                 aria-label={`Usuń sekcję ${index + 1}`}
               >
@@ -47,11 +48,11 @@ export default function PlannerBlockSectionsEditor({
             </div>
             <textarea
               className={`w-full resize-y rounded border border-border bg-surface px-2 py-1 text-sm outline-none focus:border-primary/50 ${
-                compact ? 'min-h-[4rem]' : 'min-h-[5rem]'
+                compact ? 'min-h-[3.5rem]' : 'min-h-[5rem]'
               }`}
               value={section.text}
-              placeholder="Treść sekcji…"
-              onChange={(e) => updateText(section.id, e.target.value)}
+              placeholder="Treść…"
+              onChange={(e) => update(section.id, { text: e.target.value })}
               onPointerDown={(e) => e.stopPropagation()}
             />
           </div>

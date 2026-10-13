@@ -57,6 +57,7 @@ function PlannerDayBlock({
   onMovePointerDown,
   onResizePointerDown,
   onExpand,
+  onChangeBlock,
 }: {
   block: PlannerBlock
   top: number
@@ -68,9 +69,11 @@ function PlannerDayBlock({
   onMovePointerDown: (e: ReactPointerEvent<HTMLElement>) => void
   onResizePointerDown: (e: ReactPointerEvent<HTMLElement>) => void
   onExpand: () => void
+  onChangeBlock: (patch: Partial<PlannerBlock>) => void
 }) {
   const contentRef = useRef<HTMLDivElement>(null)
   const [overflows, setOverflows] = useState(false)
+  const sections = block.sections ?? []
 
   useEffect(() => {
     const el = contentRef.current
@@ -80,13 +83,29 @@ function PlannerDayBlock({
     const ro = new ResizeObserver(check)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [block.title, block.sections, height, width])
+  }, [block.title, block.sections, height, width, selected])
+
+  const updateSection = (id: string, patch: { title?: string; text?: string }) => {
+    onChangeBlock({
+      sections: sections.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+    })
+  }
+
+  const addSection = () => {
+    onChangeBlock({ sections: [...sections, emptyBlockSection()] })
+  }
+
+  const removeSection = (id: string) => {
+    onChangeBlock({ sections: sections.filter((s) => s.id !== id) })
+  }
+
+  const stopDrag: React.PointerEventHandler = (e) => e.stopPropagation()
 
   return (
     <div
       data-planner-block
-      className={`absolute z-[1] cursor-grab overflow-hidden rounded-md border px-1.5 py-1 text-xs text-white shadow-sm active:cursor-grabbing ${
-        selected ? 'ring-2 ring-white/80 z-[2]' : ''
+      className={`absolute z-[1] overflow-hidden rounded-md border px-1.5 py-1 text-xs text-white shadow-sm ${
+        selected ? 'ring-2 ring-white/80 z-[2] cursor-default' : 'cursor-grab active:cursor-grabbing'
       } ${dragging ? 'cursor-grabbing' : ''}`}
       style={{
         top,
@@ -96,27 +115,92 @@ function PlannerDayBlock({
         backgroundColor: block.color || PLANNER_BLOCK_COLORS[0],
         borderColor: 'rgba(0,0,0,0.2)',
       }}
-      onPointerDown={onMovePointerDown}
+      onPointerDown={(e) => {
+        if ((e.target as HTMLElement).closest('input, textarea, button')) return
+        onMovePointerDown(e)
+      }}
       onDoubleClick={(e) => {
+        if ((e.target as HTMLElement).closest('input, textarea, button')) return
         e.stopPropagation()
         onExpand()
       }}
     >
-      <div ref={contentRef} className="h-full overflow-hidden pb-2">
-        <div className="truncate font-medium leading-tight">{block.title}</div>
+      <div ref={contentRef} className="flex h-full flex-col gap-0.5 overflow-hidden pb-3">
+        {selected ? (
+          <input
+            className="w-full truncate bg-transparent text-xs font-semibold text-white outline-none placeholder:text-white/60"
+            value={block.title}
+            placeholder="Tytuł bloku"
+            onChange={(e) => onChangeBlock({ title: e.target.value })}
+            onPointerDown={stopDrag}
+          />
+        ) : (
+          <div className="truncate font-medium leading-tight">{block.title}</div>
+        )}
         <div className="truncate text-[10px] opacity-90">
           {minutesToLabel(block.startMin)}–{minutesToLabel(block.endMin)}
         </div>
-        {(block.sections ?? []).map((section) =>
-          section.text.trim() ? (
-            <p
-              key={section.id}
-              className="mt-0.5 whitespace-pre-wrap break-words text-[10px] leading-snug opacity-95"
-            >
-              {section.text}
-            </p>
-          ) : null
-        )}
+
+        {selected
+          ? sections.map((section, index) => (
+              <div
+                key={section.id}
+                className="mt-0.5 rounded bg-black/20 px-1 py-0.5"
+                onPointerDown={stopDrag}
+              >
+                <div className="flex items-center gap-1">
+                  <input
+                    className="min-w-0 flex-1 bg-transparent text-[10px] font-semibold text-white outline-none placeholder:text-white/55"
+                    value={section.title}
+                    placeholder={`Sekcja ${index + 1}`}
+                    onChange={(e) => updateSection(section.id, { title: e.target.value })}
+                    onPointerDown={stopDrag}
+                  />
+                  <button
+                    type="button"
+                    className="shrink-0 text-white/70 hover:text-white"
+                    onClick={() => removeSection(section.id)}
+                    onPointerDown={stopDrag}
+                    aria-label="Usuń sekcję"
+                  >
+                    <Trash2 size={10} />
+                  </button>
+                </div>
+                <textarea
+                  className="mt-0.5 max-h-16 w-full resize-none bg-transparent text-[10px] leading-snug text-white outline-none placeholder:text-white/50"
+                  rows={2}
+                  value={section.text}
+                  placeholder="Treść…"
+                  onChange={(e) => updateSection(section.id, { text: e.target.value })}
+                  onPointerDown={stopDrag}
+                />
+              </div>
+            ))
+          : sections.map((section) =>
+              section.title.trim() || section.text.trim() ? (
+                <div key={section.id} className="mt-0.5 leading-snug">
+                  {section.title.trim() ? (
+                    <div className="truncate text-[10px] font-semibold opacity-95">{section.title}</div>
+                  ) : null}
+                  {section.text.trim() ? (
+                    <p className="whitespace-pre-wrap break-words text-[10px] opacity-90">
+                      {section.text}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null
+            )}
+
+        {selected ? (
+          <button
+            type="button"
+            className="mt-0.5 inline-flex w-fit items-center gap-0.5 rounded bg-black/25 px-1 py-0.5 text-[9px] text-white/90 hover:bg-black/40"
+            onClick={addSection}
+            onPointerDown={stopDrag}
+          >
+            <Plus size={10} /> sekcja
+          </button>
+        ) : null}
       </div>
       {overflows ? (
         <>
@@ -125,7 +209,7 @@ function PlannerDayBlock({
             type="button"
             className="absolute bottom-2 right-1 z-[2] inline-flex items-center gap-0.5 rounded bg-black/45 px-1 py-0.5 text-[9px] text-white hover:bg-black/60"
             title="Tekst się nie mieści — rozwiń do edycji"
-            onPointerDown={(e) => e.stopPropagation()}
+            onPointerDown={stopDrag}
             onClick={(e) => {
               e.stopPropagation()
               onExpand()
@@ -670,6 +754,7 @@ export default function PlannerWorkspace({
                             setSelectedBlockId(block.id)
                             setExpandedBlockId(block.id)
                           }}
+                          onChangeBlock={(patch) => updateBlock(block.id, patch)}
                         />
                       )
                     })}
@@ -681,68 +766,53 @@ export default function PlannerWorkspace({
       </div>
 
       {selectedBlock ? (
-        <div className="space-y-3 rounded-lg border border-border bg-surface px-3 py-3">
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="text-xs">
-              <span className="mb-1 block text-muted-foreground">Tytuł bloku</span>
-              <input
-                className="min-w-[12rem] rounded border border-border bg-background px-2 py-1 text-sm"
-                value={selectedBlock.title}
-                onChange={(e) => updateBlock(selectedBlock.id, { title: e.target.value })}
-              />
-            </label>
-            <label className="text-xs">
-              <span className="mb-1 block text-muted-foreground">Kolor</span>
-              <div className="flex gap-1">
-                {PLANNER_BLOCK_COLORS.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    className={`h-6 w-6 rounded border ${
-                      selectedBlock.color === c ? 'ring-2 ring-primary' : 'border-border'
-                    }`}
-                    style={{ backgroundColor: c }}
-                    onClick={() => updateBlock(selectedBlock.id, { color: c })}
-                    aria-label={`Kolor ${c}`}
-                  />
-                ))}
-              </div>
-            </label>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded border border-border px-2 py-1.5 text-xs hover:border-primary/40"
-              onClick={() => addParallelTo(selectedBlock)}
-            >
-              <Plus size={12} /> Równoległy
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded border border-border px-2 py-1.5 text-xs hover:border-primary/40"
-              onClick={() => setExpandedBlockId(selectedBlock.id)}
-            >
-              <Maximize2 size={12} /> Duży edytor
-            </button>
-            <button
-              type="button"
-              className="ml-auto inline-flex items-center gap-1 rounded border border-red-500/40 px-2 py-1.5 text-xs text-red-400 hover:bg-red-500/10"
-              onClick={() => removeBlock(selectedBlock.id)}
-            >
-              <Trash2 size={12} /> Usuń blok
-            </button>
-          </div>
-          <div>
-            <div className="mb-1.5 text-xs font-medium text-muted-foreground">Sekcje</div>
-            <PlannerBlockSectionsEditor
-              sections={selectedBlock.sections ?? []}
-              onChange={(sections) => updateBlock(selectedBlock.id, { sections })}
-            />
-          </div>
+        <div className="flex flex-wrap items-end gap-2 rounded-lg border border-border bg-surface px-3 py-2">
+          <p className="mr-auto self-center text-xs text-muted-foreground">
+            Sekcje edytujesz na bloku (tytuł + treść). Gdy się nie mieszczą — „więcej”.
+          </p>
+          <label className="text-xs">
+            <span className="mb-1 block text-muted-foreground">Kolor</span>
+            <div className="flex gap-1">
+              {PLANNER_BLOCK_COLORS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  className={`h-6 w-6 rounded border ${
+                    selectedBlock.color === c ? 'ring-2 ring-primary' : 'border-border'
+                  }`}
+                  style={{ backgroundColor: c }}
+                  onClick={() => updateBlock(selectedBlock.id, { color: c })}
+                  aria-label={`Kolor ${c}`}
+                />
+              ))}
+            </div>
+          </label>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 rounded border border-border px-2 py-1.5 text-xs hover:border-primary/40"
+            onClick={() => addParallelTo(selectedBlock)}
+          >
+            <Plus size={12} /> Równoległy
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 rounded border border-border px-2 py-1.5 text-xs hover:border-primary/40"
+            onClick={() => setExpandedBlockId(selectedBlock.id)}
+          >
+            <Maximize2 size={12} /> Duży edytor
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 rounded border border-red-500/40 px-2 py-1.5 text-xs text-red-400 hover:bg-red-500/10"
+            onClick={() => removeBlock(selectedBlock.id)}
+          >
+            <Trash2 size={12} /> Usuń blok
+          </button>
         </div>
       ) : (
         <p className="text-xs text-muted-foreground">
-          Kliknij pustą komórkę, żeby dodać blok. Alt+klik (lub Ctrl) na istniejący = kolejny w tym
-          samym czasie. Przeciągnij / dolny brzeg = przesunięcie i długość. Gdy tekst się nie mieści
-          w bloku — „więcej” lub dwuklik otwiera duży edytor.
+          Kliknij blok, żeby pisać sekcje bezpośrednio na nim. Alt+klik = równoległy. Gdy tekst się
+          nie mieści — „więcej” / dwuklik.
         </p>
       )}
 

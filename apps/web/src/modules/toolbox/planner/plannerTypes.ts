@@ -33,6 +33,7 @@ export interface PlannerTimeSettings {
 
 export interface PlannerBlockSection {
   id: string
+  title: string
   text: string
 }
 
@@ -244,17 +245,18 @@ export function normalizeBlockSections(raw: Record<string, unknown>): PlannerBlo
     if (typeof s.id !== 'string' || !s.id) continue
     out.push({
       id: s.id.slice(0, 80),
+      title: typeof s.title === 'string' ? s.title.slice(0, 120) : '',
       text: typeof s.text === 'string' ? s.text.slice(0, 4000) : '',
     })
   }
   if (out.length === 0 && typeof raw.body === 'string' && raw.body.trim()) {
-    out.push({ id: newId('sec'), text: raw.body.slice(0, 4000) })
+    out.push({ id: newId('sec'), title: '', text: raw.body.slice(0, 4000) })
   }
   return out
 }
 
-export function emptyBlockSection(): PlannerBlockSection {
-  return { id: newId('sec'), text: '' }
+export function emptyBlockSection(title = ''): PlannerBlockSection {
+  return { id: newId('sec'), title, text: '' }
 }
 
 export function normalizePlannerBoard(raw: unknown): PlannerBoardPayload | null {
