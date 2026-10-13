@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
+import { Maximize2, Plus, Trash2 } from 'lucide-react'
 import {
   PLANNER_BLOCK_COLORS,
   PLANNER_DEFAULT_BLOCK_DURATION_MIN,
@@ -8,6 +8,7 @@ import {
   addDaysIso,
   clampBlockToDay,
   dayOffsets,
+  emptyBlockSection,
   formatDayHeader,
   hourMarks,
   layoutOverlappingBlocks,
@@ -18,6 +19,7 @@ import {
   type PlannerBoardPayload,
   type PlannerNote,
 } from '../planner/plannerTypes'
+import PlannerBlockSectionsEditor from './PlannerBlockSectionsEditor'
 
 const PX_PER_HOUR = 56
 const TIME_GUTTER_W = 52
@@ -44,6 +46,103 @@ interface NoteDrag {
   originY: number
 }
 
+function PlannerDayBlock({
+  block,
+  top,
+  height,
+  left,
+  width,
+  selected,
+  dragging,
+  onMovePointerDown,
+  onResizePointerDown,
+  onExpand,
+}: {
+  block: PlannerBlock
+  top: number
+  height: number
+  left: string
+  width: string
+  selected: boolean
+  dragging: boolean
+  onMovePointerDown: (e: ReactPointerEvent<HTMLElement>) => void
+  onResizePointerDown: (e: ReactPointerEvent<HTMLElement>) => void
+  onExpand: () => void
+}) {
+  const contentRef = useRef<HTMLDivElement>(null)
+  const [overflows, setOverflows] = useState(false)
+
+  useEffect(() => {
+    const el = contentRef.current
+    if (!el) return
+    const check = () => setOverflows(el.scrollHeight > el.clientHeight + 1)
+    check()
+    const ro = new ResizeObserver(check)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [block.title, block.sections, height, width])
+
+  return (
+    <div
+      data-planner-block
+      className={`absolute z-[1] cursor-grab overflow-hidden rounded-md border px-1.5 py-1 text-xs text-white shadow-sm active:cursor-grabbing ${
+        selected ? 'ring-2 ring-white/80 z-[2]' : ''
+      } ${dragging ? 'cursor-grabbing' : ''}`}
+      style={{
+        top,
+        height,
+        left,
+        width,
+        backgroundColor: block.color || PLANNER_BLOCK_COLORS[0],
+        borderColor: 'rgba(0,0,0,0.2)',
+      }}
+      onPointerDown={onMovePointerDown}
+      onDoubleClick={(e) => {
+        e.stopPropagation()
+        onExpand()
+      }}
+    >
+      <div ref={contentRef} className="h-full overflow-hidden pb-2">
+        <div className="truncate font-medium leading-tight">{block.title}</div>
+        <div className="truncate text-[10px] opacity-90">
+          {minutesToLabel(block.startMin)}–{minutesToLabel(block.endMin)}
+        </div>
+        {(block.sections ?? []).map((section) =>
+          section.text.trim() ? (
+            <p
+              key={section.id}
+              className="mt-0.5 whitespace-pre-wrap break-words text-[10px] leading-snug opacity-95"
+            >
+              {section.text}
+            </p>
+          ) : null
+        )}
+      </div>
+      {overflows ? (
+        <>
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-black/50 to-transparent" />
+          <button
+            type="button"
+            className="absolute bottom-2 right-1 z-[2] inline-flex items-center gap-0.5 rounded bg-black/45 px-1 py-0.5 text-[9px] text-white hover:bg-black/60"
+            title="Tekst się nie mieści — rozwiń do edycji"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              onExpand()
+            }}
+          >
+            <Maximize2 size={10} /> więcej
+          </button>
+        </>
+      ) : null}
+      <div
+        className="absolute inset-x-0 bottom-0 h-2 cursor-ns-resize"
+        onPointerDown={onResizePointerDown}
+      />
+    </div>
+  )
+}
+
 export default function PlannerWorkspace({
   board,
   onChange,
@@ -58,6 +157,7 @@ export default function PlannerWorkspace({
   onChangeRef.current = onChange
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
+  const [expandedBlockId, setExpandedBlockId] = useState<string | null>(null)
   const [drag, setDrag] = useState<ActiveDrag | null>(null)
   const [noteDrag, setNoteDrag] = useState<NoteDrag | null>(null)
 
@@ -126,6 +226,7 @@ export default function PlannerWorkspace({
       startMin: partial.startMin,
       endMin: partial.endMin,
       title: partial.title ?? 'Blok',
+      sections: [emptyBlockSection()],
       color,
     }
     onChange({ ...board, blocks: [...board.blocks, block] })
@@ -554,31 +655,22 @@ export default function PlannerWorkspace({
                       const widthPct = 100 / colCount
                       const leftPct = widthPct * col
                       return (
-                        <div
+                        <PlannerDayBlock
                           key={block.id}
-                          data-planner-block
-                          className={`absolute z-[1] cursor-grab overflow-hidden rounded-md border px-1.5 py-1 text-xs text-white shadow-sm active:cursor-grabbing ${
-                            selected ? 'ring-2 ring-white/80 z-[2]' : ''
-                          } ${drag?.blockId === block.id ? 'cursor-grabbing' : ''}`}
-                          style={{
-                            top,
-                            height,
-                            left: `calc(${leftPct}% + ${gapPx}px)`,
-                            width: `calc(${widthPct}% - ${gapPx * 2}px)`,
-                            backgroundColor: block.color || PLANNER_BLOCK_COLORS[0],
-                            borderColor: 'rgba(0,0,0,0.2)',
+                          block={block}
+                          top={top}
+                          height={height}
+                          left={`calc(${leftPct}% + ${gapPx}px)`}
+                          width={`calc(${widthPct}% - ${gapPx * 2}px)`}
+                          selected={selected}
+                          dragging={drag?.blockId === block.id}
+                          onMovePointerDown={(e) => beginBlockDrag('move', block, e)}
+                          onResizePointerDown={(e) => beginBlockDrag('resize', block, e)}
+                          onExpand={() => {
+                            setSelectedBlockId(block.id)
+                            setExpandedBlockId(block.id)
                           }}
-                          onPointerDown={(e) => beginBlockDrag('move', block, e)}
-                        >
-                          <div className="truncate font-medium leading-tight">{block.title}</div>
-                          <div className="truncate text-[10px] opacity-90">
-                            {minutesToLabel(block.startMin)}–{minutesToLabel(block.endMin)}
-                          </div>
-                          <div
-                            className="absolute inset-x-0 bottom-0 h-2 cursor-ns-resize"
-                            onPointerDown={(e) => beginBlockDrag('resize', block, e)}
-                          />
-                        </div>
+                        />
                       )
                     })}
                 </div>
@@ -589,61 +681,120 @@ export default function PlannerWorkspace({
       </div>
 
       {selectedBlock ? (
-        <div className="flex flex-wrap items-end gap-2 rounded-lg border border-border bg-surface px-3 py-2">
-          <label className="text-xs">
-            <span className="mb-1 block text-muted-foreground">Tytuł bloku</span>
-            <input
-              className="min-w-[12rem] rounded border border-border bg-background px-2 py-1 text-sm"
-              value={selectedBlock.title}
-              onChange={(e) => updateBlock(selectedBlock.id, { title: e.target.value })}
+        <div className="space-y-3 rounded-lg border border-border bg-surface px-3 py-3">
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="text-xs">
+              <span className="mb-1 block text-muted-foreground">Tytuł bloku</span>
+              <input
+                className="min-w-[12rem] rounded border border-border bg-background px-2 py-1 text-sm"
+                value={selectedBlock.title}
+                onChange={(e) => updateBlock(selectedBlock.id, { title: e.target.value })}
+              />
+            </label>
+            <label className="text-xs">
+              <span className="mb-1 block text-muted-foreground">Kolor</span>
+              <div className="flex gap-1">
+                {PLANNER_BLOCK_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    className={`h-6 w-6 rounded border ${
+                      selectedBlock.color === c ? 'ring-2 ring-primary' : 'border-border'
+                    }`}
+                    style={{ backgroundColor: c }}
+                    onClick={() => updateBlock(selectedBlock.id, { color: c })}
+                    aria-label={`Kolor ${c}`}
+                  />
+                ))}
+              </div>
+            </label>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded border border-border px-2 py-1.5 text-xs hover:border-primary/40"
+              onClick={() => addParallelTo(selectedBlock)}
+            >
+              <Plus size={12} /> Równoległy
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded border border-border px-2 py-1.5 text-xs hover:border-primary/40"
+              onClick={() => setExpandedBlockId(selectedBlock.id)}
+            >
+              <Maximize2 size={12} /> Duży edytor
+            </button>
+            <button
+              type="button"
+              className="ml-auto inline-flex items-center gap-1 rounded border border-red-500/40 px-2 py-1.5 text-xs text-red-400 hover:bg-red-500/10"
+              onClick={() => removeBlock(selectedBlock.id)}
+            >
+              <Trash2 size={12} /> Usuń blok
+            </button>
+          </div>
+          <div>
+            <div className="mb-1.5 text-xs font-medium text-muted-foreground">Sekcje</div>
+            <PlannerBlockSectionsEditor
+              sections={selectedBlock.sections ?? []}
+              onChange={(sections) => updateBlock(selectedBlock.id, { sections })}
             />
-          </label>
-          <label className="text-xs">
-            <span className="mb-1 block text-muted-foreground">Notatka</span>
-            <input
-              className="min-w-[16rem] rounded border border-border bg-background px-2 py-1 text-sm"
-              value={selectedBlock.body ?? ''}
-              onChange={(e) => updateBlock(selectedBlock.id, { body: e.target.value })}
-            />
-          </label>
-          <label className="text-xs">
-            <span className="mb-1 block text-muted-foreground">Kolor</span>
-            <div className="flex gap-1">
-              {PLANNER_BLOCK_COLORS.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  className={`h-6 w-6 rounded border ${
-                    selectedBlock.color === c ? 'ring-2 ring-primary' : 'border-border'
-                  }`}
-                  style={{ backgroundColor: c }}
-                  onClick={() => updateBlock(selectedBlock.id, { color: c })}
-                  aria-label={`Kolor ${c}`}
-                />
-              ))}
-            </div>
-          </label>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 rounded border border-border px-2 py-1.5 text-xs hover:border-primary/40"
-            onClick={() => addParallelTo(selectedBlock)}
-          >
-            <Plus size={12} /> Równoległy
-          </button>
-          <button
-            type="button"
-            className="ml-auto inline-flex items-center gap-1 rounded border border-red-500/40 px-2 py-1.5 text-xs text-red-400 hover:bg-red-500/10"
-            onClick={() => removeBlock(selectedBlock.id)}
-          >
-            <Trash2 size={12} /> Usuń blok
-          </button>
+          </div>
         </div>
       ) : (
         <p className="text-xs text-muted-foreground">
           Kliknij pustą komórkę, żeby dodać blok. Alt+klik (lub Ctrl) na istniejący = kolejny w tym
-          samym czasie. Przeciągnij / dolny brzeg = przesunięcie i długość.
+          samym czasie. Przeciągnij / dolny brzeg = przesunięcie i długość. Gdy tekst się nie mieści
+          w bloku — „więcej” lub dwuklik otwiera duży edytor.
         </p>
       )}
+
+      {expandedBlockId && board.blocks.some((b) => b.id === expandedBlockId) ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setExpandedBlockId(null)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setExpandedBlockId(null)
+          }}
+        >
+          <div
+            className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-lg border border-border bg-surface p-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {(() => {
+              const block = board.blocks.find((b) => b.id === expandedBlockId)
+              if (!block) return null
+              return (
+                <>
+                  <div className="mb-3 flex items-start justify-between gap-2">
+                    <div>
+                      <h2 className="text-base font-semibold">{block.title || 'Blok'}</h2>
+                      <p className="text-xs text-muted-foreground">
+                        {minutesToLabel(block.startMin)}–{minutesToLabel(block.endMin)} · pełna
+                        edycja sekcji
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded border border-border px-2 py-1 text-xs"
+                      onClick={() => setExpandedBlockId(null)}
+                    >
+                      Zamknij
+                    </button>
+                  </div>
+                  <input
+                    className="mb-3 w-full rounded border border-border bg-background px-2 py-1.5 text-sm font-medium"
+                    value={block.title}
+                    onChange={(e) => updateBlock(block.id, { title: e.target.value })}
+                    aria-label="Tytuł"
+                  />
+                  <PlannerBlockSectionsEditor
+                    sections={block.sections ?? []}
+                    onChange={(sections) => updateBlock(block.id, { sections })}
+                  />
+                </>
+              )
+            })()}
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

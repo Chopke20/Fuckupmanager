@@ -31,13 +31,20 @@ export interface PlannerTimeSettings {
   snapMinutes: number
 }
 
+export interface PlannerBlockSection {
+  id: string
+  text: string
+}
+
 export interface PlannerBlock {
   id: string
   dayOffset: number
   startMin: number
   endMin: number
   title: string
+  /** @deprecated migracja → sections */
   body?: string
+  sections: PlannerBlockSection[]
   color?: string
 }
 
@@ -228,6 +235,28 @@ export function layoutOverlappingBlocks(blocks: PlannerBlock[]): Map<string, Blo
   return result
 }
 
+export function normalizeBlockSections(raw: Record<string, unknown>): PlannerBlockSection[] {
+  const sectionsIn = Array.isArray(raw.sections) ? raw.sections : []
+  const out: PlannerBlockSection[] = []
+  for (const item of sectionsIn.slice(0, 40)) {
+    if (!item || typeof item !== 'object') continue
+    const s = item as Record<string, unknown>
+    if (typeof s.id !== 'string' || !s.id) continue
+    out.push({
+      id: s.id.slice(0, 80),
+      text: typeof s.text === 'string' ? s.text.slice(0, 4000) : '',
+    })
+  }
+  if (out.length === 0 && typeof raw.body === 'string' && raw.body.trim()) {
+    out.push({ id: newId('sec'), text: raw.body.slice(0, 4000) })
+  }
+  return out
+}
+
+export function emptyBlockSection(): PlannerBlockSection {
+  return { id: newId('sec'), text: '' }
+}
+
 export function normalizePlannerBoard(raw: unknown): PlannerBoardPayload | null {
   if (!raw || typeof raw !== 'object') return null
   const obj = raw as Record<string, unknown>
@@ -269,15 +298,15 @@ export function normalizePlannerBoard(raw: unknown): PlannerBoardPayload | null 
     const dayOffset = clampInt(Number(b.dayOffset), 0, dayCount - 1)
     const clamped = clampBlockToDay(Number(b.startMin), Number(b.endMin), time)
     const title = typeof b.title === 'string' && b.title.trim() ? b.title.trim().slice(0, 120) : 'Blok'
-    const body = typeof b.body === 'string' ? b.body.slice(0, 2000) : undefined
     const color = typeof b.color === 'string' ? b.color.slice(0, 32) : undefined
+    const sections = normalizeBlockSections(b)
     blocks.push({
       id: b.id.slice(0, 80),
       dayOffset,
       startMin: clamped.startMin,
       endMin: clamped.endMin,
       title,
-      ...(body ? { body } : {}),
+      sections,
       ...(color ? { color } : {}),
     })
   }

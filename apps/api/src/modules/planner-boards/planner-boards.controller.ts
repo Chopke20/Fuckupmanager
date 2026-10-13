@@ -4,6 +4,11 @@ import { prisma } from '../../prisma/client'
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 
+const blockSectionSchema = z.object({
+  id: z.string().min(1).max(80),
+  text: z.string().max(4000),
+})
+
 const blockSchema = z.object({
   id: z.string().min(1).max(80),
   dayOffset: z.number().int().min(0).max(13),
@@ -11,6 +16,7 @@ const blockSchema = z.object({
   endMin: z.number().int().min(0).max(24 * 60),
   title: z.string().trim().min(1).max(120),
   body: z.string().max(2000).optional(),
+  sections: z.array(blockSectionSchema).max(40).default([]),
   color: z.string().max(32).optional(),
 })
 
