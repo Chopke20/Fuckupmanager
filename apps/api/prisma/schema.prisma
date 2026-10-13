@@ -601,3 +601,16 @@ model LedScreenProject {
   @@index([orderId, offerBlockId])
   @@map("led_screen_projects")
 }
+
+/// Tablica planera (harmonogram + notatki) — JSON w boardJson, bez powiązania ze zleceniem w v1.
+model PlannerBoard {
+  id        String   @id @default(uuid())
+  name      String
+  boardJson String   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([updatedAt])
+  @@map("planner_boards")
+}

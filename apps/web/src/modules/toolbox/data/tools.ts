@@ -29,6 +29,13 @@ export const TOOLBOX_TOOLS: ToolboxTool[] = [
     status: 'ready',
   },
   {
+    slug: 'planer',
+    title: 'Planer',
+    description:
+      'Harmonogram wybranych dni (nie całego tygodnia) + wolne notatki, drag & drop, nazwane tablice.',
+    status: 'ready',
+  },
+  {
     slug: 'transport-km',
     title: 'Transport km',
     description: 'Wycena transportu z przedziałów km i stawki za kilometr.',
