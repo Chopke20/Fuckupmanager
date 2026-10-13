@@ -194,6 +194,16 @@ export default function PlannerWorkspace({
     })
   }
 
+  // Podczas drag kursoł łapka na całym dokumencie (kolumna ma crosshair).
+  useEffect(() => {
+    if (!drag && !noteDrag) return
+    const prev = document.body.style.cursor
+    document.body.style.cursor = drag?.mode === 'resize' ? 'ns-resize' : 'grabbing'
+    return () => {
+      document.body.style.cursor = prev
+    }
+  }, [drag, noteDrag])
+
   // Document-level listeners — blok może zmienić kolumnę dnia podczas drag.
   useEffect(() => {
     if (!drag) return
@@ -547,9 +557,9 @@ export default function PlannerWorkspace({
                         <div
                           key={block.id}
                           data-planner-block
-                          className={`absolute z-[1] overflow-hidden rounded-md border px-1.5 py-1 text-xs text-white shadow-sm ${
+                          className={`absolute z-[1] cursor-grab overflow-hidden rounded-md border px-1.5 py-1 text-xs text-white shadow-sm active:cursor-grabbing ${
                             selected ? 'ring-2 ring-white/80 z-[2]' : ''
-                          }`}
+                          } ${drag?.blockId === block.id ? 'cursor-grabbing' : ''}`}
                           style={{
                             top,
                             height,
