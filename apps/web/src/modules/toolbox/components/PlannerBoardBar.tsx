@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react'
-import { FolderOpen, Plus, Save } from 'lucide-react'
+import { FolderOpen, Plus, Save, Trash2 } from 'lucide-react'
 import type { PlannerBoardSession } from '../hooks/usePlannerBoardSession'
 
 export default function PlannerBoardBar({ session }: { session: PlannerBoardSession }) {
@@ -20,6 +20,12 @@ export default function PlannerBoardBar({ session }: { session: PlannerBoardSess
     const trimmed = nameDraft.trim()
     if (!trimmed || !session.board || trimmed === session.board.name) return
     void session.renameBoard(trimmed)
+  }
+
+  const confirmDelete = (id: string, name: string) => {
+    const ok = window.confirm(`Usunąć tablicę „${name}”? Tej operacji nie da się cofnąć.`)
+    if (!ok) return
+    void session.deleteBoard(id)
   }
 
   return (
@@ -69,6 +75,17 @@ export default function PlannerBoardBar({ session }: { session: PlannerBoardSess
         >
           <Plus size={12} /> Nowa
         </button>
+        <button
+          type="button"
+          disabled={!session.board || session.saving}
+          onClick={() => {
+            if (!session.board) return
+            confirmDelete(session.board.id, session.board.name)
+          }}
+          className="inline-flex items-center gap-1 rounded border border-red-500/40 px-2 py-1 text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-50"
+        >
+          <Trash2 size={12} /> Usuń
+        </button>
       </div>
       {session.error ? <p className="text-xs text-red-400">{session.error}</p> : null}
 
@@ -78,19 +95,34 @@ export default function PlannerBoardBar({ session }: { session: PlannerBoardSess
             <p className="text-xs text-muted-foreground">Brak tablic.</p>
           ) : (
             session.boards.map((b) => (
-              <button
+              <div
                 key={b.id}
-                type="button"
-                onClick={() => void session.openBoard(b.id)}
-                className={`flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-surface-2 ${
-                  session.board?.id === b.id ? 'bg-primary/10 text-primary' : ''
+                className={`flex w-full items-center gap-1 rounded px-1 py-0.5 ${
+                  session.board?.id === b.id ? 'bg-primary/10' : ''
                 }`}
               >
-                <span className="font-medium">{b.name}</span>
-                <span className="text-muted-foreground">
-                  {new Date(b.updatedAt).toLocaleDateString('pl-PL')}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => void session.openBoard(b.id)}
+                  className={`flex min-w-0 flex-1 items-center justify-between gap-2 rounded px-1 py-1 text-left text-xs hover:bg-surface-2 ${
+                    session.board?.id === b.id ? 'text-primary' : ''
+                  }`}
+                >
+                  <span className="truncate font-medium">{b.name}</span>
+                  <span className="shrink-0 text-muted-foreground">
+                    {new Date(b.updatedAt).toLocaleDateString('pl-PL')}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="shrink-0 rounded p-1 text-muted-foreground hover:bg-red-500/10 hover:text-red-400"
+                  title={`Usuń „${b.name}”`}
+                  aria-label={`Usuń tablicę ${b.name}`}
+                  onClick={() => confirmDelete(b.id, b.name)}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
             ))
           )}
           <button

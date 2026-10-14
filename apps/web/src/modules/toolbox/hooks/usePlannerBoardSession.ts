@@ -8,6 +8,7 @@ import {
 } from '../planner/plannerTypes'
 import {
   createPlannerBoard,
+  deletePlannerBoard,
   getPlannerBoard,
   lastPlannerBoardStorageKey,
   listPlannerBoards,
@@ -33,6 +34,14 @@ function writeLastBoardId(companyCode: string, boardId: string) {
   }
 }
 
+function clearLastBoardId(companyCode: string) {
+  try {
+    window.localStorage.removeItem(lastPlannerBoardStorageKey(companyCode))
+  } catch {
+    //
+  }
+}
+
 export interface PlannerBoardSession {
   loading: boolean
   saving: boolean
@@ -50,6 +59,7 @@ export interface PlannerBoardSession {
   openBoard: (id: string) => Promise<void>
   createNewBoard: () => Promise<void>
   renameBoard: (name: string) => Promise<void>
+  deleteBoard: (id?: string) => Promise<void>
   refreshBoards: () => Promise<PlannerBoard[]>
 }
 
@@ -235,6 +245,41 @@ export function usePlannerBoardSession(): PlannerBoardSession {
     setBoards((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
   }, [])
 
+  const deleteBoard = useCallback(
+    async (id?: string) => {
+      const targetId = id ?? boardRef.current?.id
+      if (!targetId) return
+      setSaving(true)
+      setError(null)
+      try {
+        await deletePlannerBoard(targetId)
+        const remaining = boards.filter((b) => b.id !== targetId)
+        setBoards(remaining)
+
+        const wasActive = boardRef.current?.id === targetId
+        if (!wasActive) return
+
+        clearLastBoardId(companyCode)
+        if (remaining[0]) {
+          const next = await getPlannerBoard(remaining[0].id)
+          activateBoard(next)
+        } else {
+          const created = await createPlannerBoard({
+            name: 'Planer',
+            boardJson: serializePlannerBoard(emptyPlannerBoard()),
+          })
+          activateBoard(created)
+          setBoards([created])
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Nie usunięto tablicy.')
+      } finally {
+        setSaving(false)
+      }
+    },
+    [activateBoard, boards, companyCode]
+  )
+
   return useMemo(
     () => ({
       loading,
@@ -253,6 +298,7 @@ export function usePlannerBoardSession(): PlannerBoardSession {
       openBoard,
       createNewBoard,
       renameBoard,
+      deleteBoard,
       refreshBoards,
     }),
     [
@@ -270,6 +316,7 @@ export function usePlannerBoardSession(): PlannerBoardSession {
       openBoard,
       createNewBoard,
       renameBoard,
+      deleteBoard,
       refreshBoards,
     ]
   )
