@@ -276,6 +276,7 @@ export default function PlannerWorkspace({
   const removeBlock = (id: string) => {
     onChange({ ...board, blocks: board.blocks.filter((b) => b.id !== id) })
     if (selectedBlockId === id) setSelectedBlockId(null)
+    if (expandedBlockId === id) setExpandedBlockId(null)
   }
 
   const updateNote = (id: string, next: Partial<PlannerNote>) => {
@@ -765,20 +766,41 @@ export default function PlannerWorkspace({
         </div>
       </div>
 
+      {!selectedBlock ? (
+        <p className="text-xs text-muted-foreground">
+          Kliknij blok, żeby pisać sekcje na nim. Panel narzędzi pojawia się w prawym dolnym rogu.
+        </p>
+      ) : null}
+
       {selectedBlock ? (
-        <div className="flex flex-wrap items-end gap-2 rounded-lg border border-border bg-surface px-3 py-2">
-          <p className="mr-auto self-center text-xs text-muted-foreground">
-            Sekcje edytujesz na bloku (tytuł + treść). Gdy się nie mieszczą — „więcej”.
-          </p>
-          <label className="text-xs">
-            <span className="mb-1 block text-muted-foreground">Kolor</span>
-            <div className="flex gap-1">
+        <div className="fixed bottom-4 right-4 z-40 w-[min(20rem,calc(100vw-2rem))] rounded-lg border border-border bg-surface p-3 shadow-2xl">
+          <div className="mb-2 flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold">{selectedBlock.title || 'Blok'}</div>
+              <div className="text-[10px] text-muted-foreground">
+                {minutesToLabel(selectedBlock.startMin)}–{minutesToLabel(selectedBlock.endMin)}
+              </div>
+            </div>
+            <button
+              type="button"
+              className="shrink-0 rounded border border-border px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => setSelectedBlockId(null)}
+              aria-label="Zamknij panel bloku"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="mb-2">
+            <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              Kolor
+            </div>
+            <div className="flex flex-wrap gap-1.5">
               {PLANNER_BLOCK_COLORS.map((c) => (
                 <button
                   key={c}
                   type="button"
-                  className={`h-6 w-6 rounded border ${
-                    selectedBlock.color === c ? 'ring-2 ring-primary' : 'border-border'
+                  className={`h-7 w-7 rounded-md border ${
+                    selectedBlock.color === c ? 'ring-2 ring-primary ring-offset-1 ring-offset-surface' : 'border-border'
                   }`}
                   style={{ backgroundColor: c }}
                   onClick={() => updateBlock(selectedBlock.id, { color: c })}
@@ -786,35 +808,32 @@ export default function PlannerWorkspace({
                 />
               ))}
             </div>
-          </label>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 rounded border border-border px-2 py-1.5 text-xs hover:border-primary/40"
-            onClick={() => addParallelTo(selectedBlock)}
-          >
-            <Plus size={12} /> Równoległy
-          </button>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 rounded border border-border px-2 py-1.5 text-xs hover:border-primary/40"
-            onClick={() => setExpandedBlockId(selectedBlock.id)}
-          >
-            <Maximize2 size={12} /> Duży edytor
-          </button>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 rounded border border-red-500/40 px-2 py-1.5 text-xs text-red-400 hover:bg-red-500/10"
-            onClick={() => removeBlock(selectedBlock.id)}
-          >
-            <Trash2 size={12} /> Usuń blok
-          </button>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              className="inline-flex flex-1 items-center justify-center gap-1 rounded border border-border px-2 py-1.5 text-xs hover:border-primary/40"
+              onClick={() => addParallelTo(selectedBlock)}
+            >
+              <Plus size={12} /> Równoległy
+            </button>
+            <button
+              type="button"
+              className="inline-flex flex-1 items-center justify-center gap-1 rounded border border-border px-2 py-1.5 text-xs hover:border-primary/40"
+              onClick={() => setExpandedBlockId(selectedBlock.id)}
+            >
+              <Maximize2 size={12} /> Edytor
+            </button>
+            <button
+              type="button"
+              className="inline-flex w-full items-center justify-center gap-1 rounded border border-red-500/40 px-2 py-1.5 text-xs text-red-400 hover:bg-red-500/10"
+              onClick={() => removeBlock(selectedBlock.id)}
+            >
+              <Trash2 size={12} /> Usuń blok
+            </button>
+          </div>
         </div>
-      ) : (
-        <p className="text-xs text-muted-foreground">
-          Kliknij blok, żeby pisać sekcje bezpośrednio na nim. Alt+klik = równoległy. Gdy tekst się
-          nie mieści — „więcej” / dwuklik.
-        </p>
-      )}
+      ) : null}
 
       {expandedBlockId && board.blocks.some((b) => b.id === expandedBlockId) ? (
         <div
@@ -855,6 +874,25 @@ export default function PlannerWorkspace({
                     onChange={(e) => updateBlock(block.id, { title: e.target.value })}
                     aria-label="Tytuł"
                   />
+                  <div className="mb-3">
+                    <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      Kolor
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {PLANNER_BLOCK_COLORS.map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          className={`h-7 w-7 rounded-md border ${
+                            block.color === c ? 'ring-2 ring-primary' : 'border-border'
+                          }`}
+                          style={{ backgroundColor: c }}
+                          onClick={() => updateBlock(block.id, { color: c })}
+                          aria-label={`Kolor ${c}`}
+                        />
+                      ))}
+                    </div>
+                  </div>
                   <PlannerBlockSectionsEditor
                     sections={block.sections ?? []}
                     onChange={(sections) => updateBlock(block.id, { sections })}
