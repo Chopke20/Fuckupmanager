@@ -18,7 +18,24 @@ export const PLANNER_BLOCK_COLORS = [
   '#64748b',
 ] as const
 
+/** Kolory wyróżniające sekcje na bloku (niezależne od koloru bloku). */
+export const PLANNER_SECTION_COLORS = [
+  '#fde68a', // amber
+  '#bbf7d0', // green
+  '#bfdbfe', // blue
+  '#fbcfe8', // pink
+  '#ddd6fe', // violet
+  '#a5f3fc', // cyan
+  '#fed7aa', // orange
+  '#e2e8f0', // slate
+] as const
+
 export type PlannerBlockColor = (typeof PLANNER_BLOCK_COLORS)[number]
+
+export function sectionAccentColor(index: number, color?: string | null): string {
+  if (color && /^#[0-9a-fA-F]{3,8}$/.test(color)) return color
+  return PLANNER_SECTION_COLORS[index % PLANNER_SECTION_COLORS.length] ?? PLANNER_SECTION_COLORS[0]
+}
 
 export interface PlannerRange {
   startDate: string
@@ -35,6 +52,8 @@ export interface PlannerBlockSection {
   id: string
   title: string
   text: string
+  /** Akcent sekcji (hex); gdy brak — z indeksu. */
+  color?: string
 }
 
 export interface PlannerBlock {
@@ -243,10 +262,12 @@ export function normalizeBlockSections(raw: Record<string, unknown>): PlannerBlo
     if (!item || typeof item !== 'object') continue
     const s = item as Record<string, unknown>
     if (typeof s.id !== 'string' || !s.id) continue
+    const color = typeof s.color === 'string' ? s.color.slice(0, 32) : undefined
     out.push({
       id: s.id.slice(0, 80),
       title: typeof s.title === 'string' ? s.title.slice(0, 120) : '',
       text: typeof s.text === 'string' ? s.text.slice(0, 4000) : '',
+      ...(color ? { color } : {}),
     })
   }
   if (out.length === 0 && typeof raw.body === 'string' && raw.body.trim()) {
@@ -255,8 +276,13 @@ export function normalizeBlockSections(raw: Record<string, unknown>): PlannerBlo
   return out
 }
 
-export function emptyBlockSection(title = ''): PlannerBlockSection {
-  return { id: newId('sec'), title, text: '' }
+export function emptyBlockSection(title = '', color?: string): PlannerBlockSection {
+  return {
+    id: newId('sec'),
+    title,
+    text: '',
+    ...(color ? { color } : {}),
+  }
 }
 
 export function normalizePlannerBoard(raw: unknown): PlannerBoardPayload | null {

@@ -8,12 +8,14 @@ import {
   addDaysIso,
   clampBlockToDay,
   dayOffsets,
+  PLANNER_SECTION_COLORS,
   emptyBlockSection,
   formatDayHeader,
   hourMarks,
   layoutOverlappingBlocks,
   minutesToLabel,
   newId,
+  sectionAccentColor,
   snapMinutes,
   type PlannerBlock,
   type PlannerBoardPayload,
@@ -85,14 +87,18 @@ function PlannerDayBlock({
     return () => ro.disconnect()
   }, [block.title, block.sections, height, width, selected])
 
-  const updateSection = (id: string, patch: { title?: string; text?: string }) => {
+  const updateSection = (
+    id: string,
+    patch: { title?: string; text?: string; color?: string }
+  ) => {
     onChangeBlock({
       sections: sections.map((s) => (s.id === id ? { ...s, ...patch } : s)),
     })
   }
 
   const addSection = () => {
-    onChangeBlock({ sections: [...sections, emptyBlockSection()] })
+    const color = sectionAccentColor(sections.length)
+    onChangeBlock({ sections: [...sections, emptyBlockSection('', color)] })
   }
 
   const removeSection = (id: string) => {
@@ -125,65 +131,108 @@ function PlannerDayBlock({
         onExpand()
       }}
     >
-      <div ref={contentRef} className="flex h-full flex-col gap-0.5 overflow-hidden pb-3">
+      <div ref={contentRef} className="flex h-full flex-col gap-1 overflow-hidden pb-3">
         {selected ? (
           <input
-            className="w-full truncate bg-transparent text-xs font-semibold text-white outline-none placeholder:text-white/60"
+            className="w-full truncate bg-transparent text-[13px] font-bold leading-tight text-white outline-none placeholder:text-white/60"
             value={block.title}
             placeholder="Tytuł bloku"
             onChange={(e) => onChangeBlock({ title: e.target.value })}
             onPointerDown={stopDrag}
           />
         ) : (
-          <div className="truncate font-medium leading-tight">{block.title}</div>
+          <div className="truncate text-[13px] font-bold leading-tight">{block.title}</div>
         )}
-        <div className="truncate text-[10px] opacity-90">
+        <div className="truncate text-[10px] font-medium text-white/75">
           {minutesToLabel(block.startMin)}–{minutesToLabel(block.endMin)}
         </div>
 
         {selected
-          ? sections.map((section, index) => (
-              <div
-                key={section.id}
-                className="mt-0.5 rounded bg-black/20 px-1 py-0.5"
-                onPointerDown={stopDrag}
-              >
-                <div className="flex items-center gap-1">
-                  <input
-                    className="min-w-0 flex-1 bg-transparent text-[10px] font-semibold text-white outline-none placeholder:text-white/55"
-                    value={section.title}
-                    placeholder={`Sekcja ${index + 1}`}
-                    onChange={(e) => updateSection(section.id, { title: e.target.value })}
+          ? sections.map((section, index) => {
+              const accent = sectionAccentColor(index, section.color)
+              return (
+                <div
+                  key={section.id}
+                  className="mt-0.5 rounded-md px-1.5 py-1 shadow-sm"
+                  style={{
+                    backgroundColor: 'rgba(0,0,0,0.28)',
+                    borderLeft: `3px solid ${accent}`,
+                  }}
+                  onPointerDown={stopDrag}
+                >
+                  <div className="flex items-center gap-1">
+                    <span
+                      className="h-2 w-2 shrink-0 rounded-full"
+                      style={{ backgroundColor: accent }}
+                      aria-hidden
+                    />
+                    <input
+                      className="min-w-0 flex-1 bg-transparent text-[10px] font-bold uppercase tracking-wide text-white outline-none placeholder:text-white/50"
+                      value={section.title}
+                      placeholder={`Sekcja ${index + 1}`}
+                      onChange={(e) => updateSection(section.id, { title: e.target.value })}
+                      onPointerDown={stopDrag}
+                    />
+                    <button
+                      type="button"
+                      className="shrink-0 text-white/70 hover:text-white"
+                      onClick={() => removeSection(section.id)}
+                      onPointerDown={stopDrag}
+                      aria-label="Usuń sekcję"
+                    >
+                      <Trash2 size={10} />
+                    </button>
+                  </div>
+                  <div className="mt-0.5 flex flex-wrap gap-0.5">
+                    {PLANNER_SECTION_COLORS.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        className={`h-2.5 w-2.5 rounded-full ${
+                          accent === c ? 'ring-1 ring-white' : 'opacity-70'
+                        }`}
+                        style={{ backgroundColor: c }}
+                        onClick={() => updateSection(section.id, { color: c })}
+                        onPointerDown={stopDrag}
+                        aria-label={`Kolor sekcji ${c}`}
+                      />
+                    ))}
+                  </div>
+                  <textarea
+                    className="mt-0.5 max-h-16 w-full resize-none bg-transparent text-[10px] font-normal leading-snug text-white/95 outline-none placeholder:text-white/45"
+                    rows={2}
+                    value={section.text}
+                    placeholder="Treść…"
+                    onChange={(e) => updateSection(section.id, { text: e.target.value })}
                     onPointerDown={stopDrag}
                   />
-                  <button
-                    type="button"
-                    className="shrink-0 text-white/70 hover:text-white"
-                    onClick={() => removeSection(section.id)}
-                    onPointerDown={stopDrag}
-                    aria-label="Usuń sekcję"
-                  >
-                    <Trash2 size={10} />
-                  </button>
                 </div>
-                <textarea
-                  className="mt-0.5 max-h-16 w-full resize-none bg-transparent text-[10px] leading-snug text-white outline-none placeholder:text-white/50"
-                  rows={2}
-                  value={section.text}
-                  placeholder="Treść…"
-                  onChange={(e) => updateSection(section.id, { text: e.target.value })}
-                  onPointerDown={stopDrag}
-                />
-              </div>
-            ))
-          : sections.map((section) =>
+              )
+            })
+          : sections.map((section, index) =>
               section.title.trim() || section.text.trim() ? (
-                <div key={section.id} className="mt-0.5 leading-snug">
+                <div
+                  key={section.id}
+                  className="mt-0.5 rounded-md px-1.5 py-1 leading-snug"
+                  style={{
+                    backgroundColor: 'rgba(0,0,0,0.22)',
+                    borderLeft: `3px solid ${sectionAccentColor(index, section.color)}`,
+                  }}
+                >
                   {section.title.trim() ? (
-                    <div className="truncate text-[10px] font-semibold opacity-95">{section.title}</div>
+                    <div className="mb-0.5 flex items-center gap-1">
+                      <span
+                        className="h-1.5 w-1.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: sectionAccentColor(index, section.color) }}
+                        aria-hidden
+                      />
+                      <div className="truncate text-[10px] font-bold uppercase tracking-wide text-white">
+                        {section.title}
+                      </div>
+                    </div>
                   ) : null}
                   {section.text.trim() ? (
-                    <p className="whitespace-pre-wrap break-words text-[10px] opacity-90">
+                    <p className="whitespace-pre-wrap break-words text-[10px] font-normal text-white/90">
                       {section.text}
                     </p>
                   ) : null}
@@ -194,7 +243,7 @@ function PlannerDayBlock({
         {selected ? (
           <button
             type="button"
-            className="mt-0.5 inline-flex w-fit items-center gap-0.5 rounded bg-black/25 px-1 py-0.5 text-[9px] text-white/90 hover:bg-black/40"
+            className="mt-0.5 inline-flex w-fit items-center gap-0.5 rounded bg-black/30 px-1.5 py-0.5 text-[9px] font-medium text-white/90 hover:bg-black/45"
             onClick={addSection}
             onPointerDown={stopDrag}
           >
@@ -311,7 +360,7 @@ export default function PlannerWorkspace({
       startMin: partial.startMin,
       endMin: partial.endMin,
       title: partial.title ?? 'Blok',
-      sections: [emptyBlockSection()],
+      sections: [emptyBlockSection('', sectionAccentColor(0))],
       color,
     }
     onChange({ ...board, blocks: [...board.blocks, block] })
