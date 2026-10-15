@@ -139,7 +139,7 @@ function PlannerDayBlock({
     <div
       ref={rootRef}
       data-planner-block
-      className={`absolute rounded-md border px-1.5 py-1 text-xs text-white shadow-sm ${
+      className={`absolute rounded-md border px-1.5 py-1 text-xs text-white shadow-sm transition-[width,transform,box-shadow,max-height] duration-150 ease-out ${
         peekOpen
           ? 'z-30 overflow-auto shadow-2xl ring-2 ring-white/90'
           : selected
@@ -148,8 +148,14 @@ function PlannerDayBlock({
       } ${dragging ? 'cursor-grabbing' : ''}`}
       style={{
         top,
-        left,
-        width,
+        // Peek: rozszerz na boki (pełny dzień, min. ~280px), po odkliknięciu wraca do slotu.
+        ...(peekOpen
+          ? {
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: 'min(360px, max(calc(100% - 8px), 280px))',
+            }
+          : { left, width, transform: undefined }),
         height: peekOpen ? 'auto' : height,
         minHeight: height,
         maxHeight: peekOpen ? 'min(70vh, 520px)' : undefined,
@@ -296,7 +302,7 @@ function PlannerDayBlock({
           <button
             type="button"
             className="absolute bottom-2 right-1 z-[2] inline-flex items-center gap-0.5 rounded bg-black/45 px-1 py-0.5 text-[9px] text-white hover:bg-black/60"
-            title="Rozwiń chwilowo, żeby czytać i edytować"
+            title="Rozszerz na boki do czytania i edycji"
             onPointerDown={stopDrag}
             onClick={(e) => {
               e.stopPropagation()
