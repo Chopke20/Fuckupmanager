@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { Maximize2, Plus, Trash2 } from 'lucide-react'
+import { Maximize2, Minimize2, Plus, Trash2 } from 'lucide-react'
 import {
   PLANNER_BLOCK_COLORS,
   PLANNER_DEFAULT_BLOCK_DURATION_MIN,
@@ -58,7 +58,7 @@ function PlannerDayBlock({
   dragging,
   onMovePointerDown,
   onResizePointerDown,
-  onExpand,
+  onSelect,
   onChangeBlock,
 }: {
   block: PlannerBlock
@@ -70,14 +70,20 @@ function PlannerDayBlock({
   dragging: boolean
   onMovePointerDown: (e: ReactPointerEvent<HTMLElement>) => void
   onResizePointerDown: (e: ReactPointerEvent<HTMLElement>) => void
-  onExpand: () => void
+  onSelect: () => void
   onChangeBlock: (patch: Partial<PlannerBlock>) => void
 }) {
+  const rootRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const [overflows, setOverflows] = useState(false)
+  const [peekOpen, setPeekOpen] = useState(false)
   const sections = block.sections ?? []
 
   useEffect(() => {
+    if (peekOpen) {
+      setOverflows(false)
+      return
+    }
     const el = contentRef.current
     if (!el) return
     const check = () => setOverflows(el.scrollHeight > el.clientHeight + 1)
@@ -85,7 +91,33 @@ function PlannerDayBlock({
     const ro = new ResizeObserver(check)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [block.title, block.sections, height, width, selected])
+  }, [block.title, block.sections, height, width, selected, peekOpen])
+
+  // Zwiń po kliknięciu poza blokiem
+  useEffect(() => {
+    if (!peekOpen) return
+    const onDoc = (e: PointerEvent) => {
+      const root = rootRef.current
+      if (!root) return
+      if (e.target instanceof Node && !root.contains(e.target)) {
+        setPeekOpen(false)
+      }
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPeekOpen(false)
+    }
+    document.addEventListener('pointerdown', onDoc, true)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('pointerdown', onDoc, true)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [peekOpen])
+
+  const openPeek = () => {
+    onSelect()
+    setPeekOpen(true)
+  }
 
   const updateSection = (
     id: string,
@@ -106,33 +138,45 @@ function PlannerDayBlock({
   }
 
   const stopDrag: React.PointerEventHandler = (e) => e.stopPropagation()
+  const editing = selected || peekOpen
 
   return (
     <div
+      ref={rootRef}
       data-planner-block
-      className={`absolute z-[1] overflow-hidden rounded-md border px-1.5 py-1 text-xs text-white shadow-sm ${
-        selected ? 'ring-2 ring-white/80 z-[2] cursor-default' : 'cursor-grab active:cursor-grabbing'
+      className={`absolute rounded-md border px-1.5 py-1 text-xs text-white shadow-sm ${
+        peekOpen
+          ? 'z-30 overflow-auto shadow-2xl ring-2 ring-white/90'
+          : selected
+            ? 'z-[2] cursor-default overflow-hidden ring-2 ring-white/80'
+            : 'z-[1] cursor-grab overflow-hidden active:cursor-grabbing'
       } ${dragging ? 'cursor-grabbing' : ''}`}
       style={{
         top,
-        height,
         left,
         width,
+        height: peekOpen ? 'auto' : height,
+        minHeight: height,
+        maxHeight: peekOpen ? 'min(70vh, 520px)' : undefined,
         backgroundColor: block.color || PLANNER_BLOCK_COLORS[0],
         borderColor: 'rgba(0,0,0,0.2)',
       }}
       onPointerDown={(e) => {
         if ((e.target as HTMLElement).closest('input, textarea, button')) return
+        if (peekOpen) return
         onMovePointerDown(e)
       }}
       onDoubleClick={(e) => {
         if ((e.target as HTMLElement).closest('input, textarea, button')) return
         e.stopPropagation()
-        onExpand()
+        openPeek()
       }}
     >
-      <div ref={contentRef} className="flex h-full flex-col gap-1 overflow-hidden pb-3">
-        {selected ? (
+      <div
+        ref={contentRef}
+        className={`flex flex-col gap-1 pb-3 ${peekOpen ? '' : 'h-full overflow-hidden'}`}
+      >
+        {editing ? (
           <input
             className="w-full truncate bg-transparent text-[13px] font-bold leading-tight text-white outline-none placeholder:text-white/60"
             value={block.title}
@@ -147,7 +191,7 @@ function PlannerDayBlock({
           {minutesToLabel(block.startMin)}–{minutesToLabel(block.endMin)}
         </div>
 
-        {selected
+        {editing
           ? sections.map((section, index) => {
               const accent = sectionAccentColor(index, section.color)
               return (
@@ -199,8 +243,10 @@ function PlannerDayBlock({
                     ))}
                   </div>
                   <textarea
-                    className="mt-0.5 max-h-16 w-full resize-none bg-transparent text-[10px] font-normal leading-snug text-white/95 outline-none placeholder:text-white/45"
-                    rows={2}
+                    className={`mt-0.5 w-full bg-transparent text-[10px] font-normal leading-snug text-white/95 outline-none placeholder:text-white/45 ${
+                      peekOpen ? 'min-h-[4.5rem] resize-y' : 'max-h-16 resize-none'
+                    }`}
+                    rows={peekOpen ? 4 : 2}
                     value={section.text}
                     placeholder="Treść…"
                     onChange={(e) => updateSection(section.id, { text: e.target.value })}
@@ -240,7 +286,7 @@ function PlannerDayBlock({
               ) : null
             )}
 
-        {selected ? (
+        {editing ? (
           <button
             type="button"
             className="mt-0.5 inline-flex w-fit items-center gap-0.5 rounded bg-black/30 px-1.5 py-0.5 text-[9px] font-medium text-white/90 hover:bg-black/45"
@@ -251,27 +297,42 @@ function PlannerDayBlock({
           </button>
         ) : null}
       </div>
-      {overflows ? (
+      {peekOpen ? (
+        <button
+          type="button"
+          className="sticky bottom-1 float-right z-[2] inline-flex items-center gap-0.5 rounded bg-black/55 px-1.5 py-0.5 text-[9px] text-white hover:bg-black/70"
+          title="Zwiń do wysokości czasu"
+          onPointerDown={stopDrag}
+          onClick={(e) => {
+            e.stopPropagation()
+            setPeekOpen(false)
+          }}
+        >
+          <Minimize2 size={10} /> zwiń
+        </button>
+      ) : overflows ? (
         <>
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-black/50 to-transparent" />
           <button
             type="button"
             className="absolute bottom-2 right-1 z-[2] inline-flex items-center gap-0.5 rounded bg-black/45 px-1 py-0.5 text-[9px] text-white hover:bg-black/60"
-            title="Tekst się nie mieści — rozwiń do edycji"
+            title="Rozwiń chwilowo, żeby czytać i edytować"
             onPointerDown={stopDrag}
             onClick={(e) => {
               e.stopPropagation()
-              onExpand()
+              openPeek()
             }}
           >
             <Maximize2 size={10} /> więcej
           </button>
         </>
       ) : null}
-      <div
-        className="absolute inset-x-0 bottom-0 h-2 cursor-ns-resize"
-        onPointerDown={onResizePointerDown}
-      />
+      {!peekOpen ? (
+        <div
+          className="absolute inset-x-0 bottom-0 h-2 cursor-ns-resize"
+          onPointerDown={onResizePointerDown}
+        />
+      ) : null}
     </div>
   )
 }
@@ -800,9 +861,9 @@ export default function PlannerWorkspace({
                           dragging={drag?.blockId === block.id}
                           onMovePointerDown={(e) => beginBlockDrag('move', block, e)}
                           onResizePointerDown={(e) => beginBlockDrag('resize', block, e)}
-                          onExpand={() => {
+                          onSelect={() => {
                             setSelectedBlockId(block.id)
-                            setExpandedBlockId(block.id)
+                            setSelectedNoteId(null)
                           }}
                           onChangeBlock={(patch) => updateBlock(block.id, patch)}
                         />
