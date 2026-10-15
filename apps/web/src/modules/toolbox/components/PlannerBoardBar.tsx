@@ -1,10 +1,12 @@
 import { FormEvent, useEffect, useState } from 'react'
-import { FolderOpen, Plus, Save, Trash2 } from 'lucide-react'
+import { FileDown, FolderOpen, Plus, Save, Trash2 } from 'lucide-react'
+import { downloadPlannerPdf } from '../api/plannerBoards.api'
 import type { PlannerBoardSession } from '../hooks/usePlannerBoardSession'
 
 export default function PlannerBoardBar({ session }: { session: PlannerBoardSession }) {
   const [nameDraft, setNameDraft] = useState(session.board?.name ?? '')
   const [saveAsName, setSaveAsName] = useState('')
+  const [pdfBusy, setPdfBusy] = useState(false)
 
   useEffect(() => {
     setNameDraft(session.board?.name ?? '')
@@ -26,6 +28,18 @@ export default function PlannerBoardBar({ session }: { session: PlannerBoardSess
     const ok = window.confirm(`Usunąć tablicę „${name}”? Tej operacji nie da się cofnąć.`)
     if (!ok) return
     void session.deleteBoard(id)
+  }
+
+  const onDownloadPdf = async () => {
+    const title = (session.board?.name || nameDraft || 'Planer').trim() || 'Planer'
+    setPdfBusy(true)
+    try {
+      await downloadPlannerPdf(title, session.payload)
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Nie udało się wygenerować PDF.')
+    } finally {
+      setPdfBusy(false)
+    }
   }
 
   return (
@@ -51,6 +65,14 @@ export default function PlannerBoardBar({ session }: { session: PlannerBoardSess
           className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:border-primary/40 disabled:opacity-50"
         >
           <Save size={12} /> Zapisz
+        </button>
+        <button
+          type="button"
+          onClick={() => void onDownloadPdf()}
+          disabled={!session.board || pdfBusy}
+          className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:border-primary/40 disabled:opacity-50"
+        >
+          <FileDown size={12} /> {pdfBusy ? 'PDF…' : 'PDF'}
         </button>
         <button
           type="button"

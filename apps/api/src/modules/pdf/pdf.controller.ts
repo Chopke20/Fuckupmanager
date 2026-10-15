@@ -9,6 +9,8 @@ import { buildOfferHtmlV5, type OrderLike } from './offer-v5-builder'
 import { buildOfferExcel, offerExcelFilename } from './offer-excel-builder'
 import { buildWarehousePdfHtml } from './warehouse-pdf-builder'
 import { buildStagePlanPdfHtml } from './stage-plan-pdf-builder'
+import { buildPlannerPdfHtml } from './planner-pdf-builder'
+import { boardPayloadSchema } from '../planner-boards/planner-boards.controller'
 import {
   buildDefaultDraft,
   buildDocumentNumber,
@@ -1224,7 +1226,55 @@ export class PdfController {
     }
   }
 
-  private async renderPdf(html: string): Promise<Buffer> {
+  async generatePlannerPreviewPdf(req: Request, res: Response) {
+    try {
+      const boardJson = typeof req.body?.boardJson === 'string' ? req.body.boardJson : ''
+      const name =
+        typeof req.body?.name === 'string' && req.body.name.trim()
+          ? req.body.name.trim()
+          : 'Planer'
+      let parsedJson: unknown
+      try {
+        parsedJson = JSON.parse(boardJson)
+      } catch {
+        return res.status(400).json({ error: 'Nieprawidłowy JSON tablicy planera.' })
+      }
+      const board = boardPayloadSchema.parse(parsedJson)
+      const generatedAt = new Date().toISOString()
+      const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
+      const companyName =
+        typeof appSettings?.brandName === 'string' && appSettings.brandName.trim()
+          ? appSettings.brandName.trim()
+          : null
+
+      const html = buildPlannerPdfHtml({
+        name,
+        board,
+        issuedAt: generatedAt,
+        companyName,
+      })
+      const pdfBuffer = await this.renderPdf(html, { landscape: true, simpleMargins: true })
+      const safeName = name.replace(/[^\w\sąćęłńóśźżĄĆĘŁŃÓŚŹŻ-]/g, '').trim() || 'Planer'
+      const range = `${board.range.startDate}_${board.range.dayCount}d`
+      res.setHeader('Content-Type', 'application/pdf')
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="Planer-${safeName}-${range}.pdf"`
+      )
+      res.send(pdfBuffer)
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({ error: 'Nieprawidłowa treść tablicy planera.' })
+      }
+      console.error('Błąd generowania PDF planera:', error)
+      res.status(500).json({ error: 'Błąd generowania PDF planera' })
+    }
+  }
+
+  private async renderPdf(
+    html: string,
+    opts?: { landscape?: boolean; simpleMargins?: boolean }
+  ): Promise<Buffer> {
     const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH?.trim()
     const launchTimeoutMs = Number(process.env.PUPPETEER_LAUNCH_TIMEOUT_MS ?? 90000)
     const browser = await puppeteer.launch({
@@ -1281,14 +1331,18 @@ export class PdfController {
       timeout: Number.isFinite(contentTimeoutMs) && contentTimeoutMs > 0 ? contentTimeoutMs : 45000,
     })
     await page.emulateMediaType('print')
+    const simple = opts?.simpleMargins === true
     const pdfBuffer = await page.pdf({
       format: 'A4',
+      landscape: opts?.landscape === true,
       printBackground: true,
       preferCSSPageSize: false,
-      displayHeaderFooter: true,
+      displayHeaderFooter: !simple,
       headerTemplate: '<span></span>',
-      footerTemplate,
-      margin: { top: '0px', right: '0px', bottom: '25mm', left: '0px' },
+      footerTemplate: simple ? '<span></span>' : footerTemplate,
+      margin: simple
+        ? { top: '10mm', right: '10mm', bottom: '10mm', left: '10mm' }
+        : { top: '0px', right: '0px', bottom: '25mm', left: '0px' },
     })
     await browser.close()
     return Buffer.from(pdfBuffer)

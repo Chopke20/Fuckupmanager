@@ -30,7 +30,7 @@ const noteSchema = z.object({
   color: z.string().max(32).optional(),
 })
 
-const boardPayloadSchema = z
+export const boardPayloadSchema = z
   .object({
     version: z.literal(1),
     range: z.object({
