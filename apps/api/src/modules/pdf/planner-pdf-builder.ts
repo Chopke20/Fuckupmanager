@@ -23,8 +23,6 @@ export interface PlannerPdfSection {
   title: string
   text: string
   color?: string
-  orderId?: string
-  orderLabel?: string
 }
 
 export interface PlannerPdfBlock {
@@ -35,6 +33,8 @@ export interface PlannerPdfBlock {
   title: string
   sections: PlannerPdfSection[]
   color?: string
+  orderId?: string
+  orderLabel?: string
 }
 
 export interface PlannerPdfNote {
@@ -288,21 +288,21 @@ export function buildPlannerPdfHtml(params: {
               const accent = sectionAccent(i)
               const title = (s.title || '').trim() || `Sekcja ${i + 1}`
               const text = (s.text || '').trim()
-              const attach =
-                (s.orderLabel || '').trim() ||
-                (s.orderId ? `Zlecenie ${s.orderId.slice(0, 8)}…` : '')
               return `<div class="section" style="border-left-color:${escapeHtml(accent)}">
                 <div class="section__title"><span class="dot" style="background:${escapeHtml(accent)}"></span>${escapeHtml(title)}</div>
                 ${text ? `<div class="section__body">${escapeHtml(text).replace(/\n/g, '<br/>')}</div>` : '<div class="section__body muted">—</div>'}
-                ${attach ? `<div class="section__attach">Załącznik: ${escapeHtml(attach)}</div>` : ''}
               </div>`
             })
             .join('')
+          const attach =
+            (block.orderLabel || '').trim() ||
+            (block.orderId ? `Zlecenie ${block.orderId.slice(0, 8)}…` : '')
           return `<article class="card">
             <div class="card__bar" style="background:${escapeHtml(bg)}"></div>
             <div class="card__body">
               <h3>${escapeHtml(block.title)}</h3>
               <div class="card__time">${escapeHtml(minutesToLabel(block.startMin))}–${escapeHtml(minutesToLabel(block.endMin))}</div>
+              ${attach ? `<div class="block__attach">Załącznik: ${escapeHtml(attach)}</div>` : ''}
               ${sections || '<p class="muted">Brak sekcji.</p>'}
             </div>
           </article>`
@@ -458,7 +458,7 @@ export function buildPlannerPdfHtml(params: {
     width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
   }
   .section__body { font-size: 9pt; white-space: pre-wrap; }
-  .section__attach { margin-top: 4px; font-size: 8pt; color: #475569; }
+  .block__attach { margin: 4px 0 8px; font-size: 8pt; color: #475569; }
 </style>
 </head>
 <body>

@@ -9,8 +9,6 @@ const blockSectionSchema = z.object({
   title: z.string().max(120).default(''),
   text: z.string().max(4000),
   color: z.string().max(32).optional(),
-  orderId: z.string().uuid().optional(),
-  orderLabel: z.string().max(120).optional(),
 })
 
 const blockSchema = z.object({
@@ -22,6 +20,8 @@ const blockSchema = z.object({
   body: z.string().max(2000).optional(),
   sections: z.array(blockSectionSchema).max(40).default([]),
   color: z.string().max(32).optional(),
+  orderId: z.string().uuid().optional(),
+  orderLabel: z.string().max(120).optional(),
 })
 
 const noteSchema = z.object({
@@ -75,6 +75,39 @@ export const boardPayloadSchema = z
     }
   })
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+/** Stare przypięcie na sekcji → na blok (przed Zod strip). */
+function liftSectionOrdersToBlocks(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object') return raw
+  const obj = raw as Record<string, unknown>
+  if (!Array.isArray(obj.blocks)) return raw
+  return {
+    ...obj,
+    blocks: obj.blocks.map((item) => {
+      if (!item || typeof item !== 'object') return item
+      const b = item as Record<string, unknown>
+      if (typeof b.orderId === 'string' && UUID_RE.test(b.orderId)) return b
+      if (!Array.isArray(b.sections)) return b
+      for (const sec of b.sections) {
+        if (!sec || typeof sec !== 'object') continue
+        const s = sec as Record<string, unknown>
+        if (typeof s.orderId === 'string' && UUID_RE.test(s.orderId)) {
+          return {
+            ...b,
+            orderId: s.orderId,
+            ...(typeof s.orderLabel === 'string' && s.orderLabel.trim()
+              ? { orderLabel: s.orderLabel.trim().slice(0, 120) }
+              : {}),
+          }
+        }
+      }
+      return b
+    }),
+  }
+}
+
 function parseBoardJson(raw: string): string {
   let parsed: unknown
   try {
@@ -88,7 +121,7 @@ function parseBoardJson(raw: string): string {
       },
     ])
   }
-  const payload = boardPayloadSchema.parse(parsed)
+  const payload = boardPayloadSchema.parse(liftSectionOrdersToBlocks(parsed))
   return JSON.stringify(payload)
 }
 

@@ -54,10 +54,6 @@ export interface PlannerBlockSection {
   text: string
   /** Akcent sekcji (hex); gdy brak — z indeksu. */
   color?: string
-  /** Załączone zlecenie (UUID). */
-  orderId?: string
-  /** Cache etykiety do UI/PDF (np. „ORD-26-0042 · Nazwa”). */
-  orderLabel?: string
 }
 
 export interface PlannerBlock {
@@ -70,6 +66,10 @@ export interface PlannerBlock {
   body?: string
   sections: PlannerBlockSection[]
   color?: string
+  /** Załączone zlecenie (UUID) — jedno na cały blok. */
+  orderId?: string
+  /** Cache etykiety do UI/PDF (np. „ORD-26-0042 · Nazwa”). */
+  orderLabel?: string
 }
 
 export interface PlannerNote {
@@ -267,21 +267,11 @@ export function normalizeBlockSections(raw: Record<string, unknown>): PlannerBlo
     const s = item as Record<string, unknown>
     if (typeof s.id !== 'string' || !s.id) continue
     const color = typeof s.color === 'string' ? s.color.slice(0, 32) : undefined
-    const orderId =
-      typeof s.orderId === 'string' &&
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s.orderId)
-        ? s.orderId
-        : undefined
-    const orderLabel =
-      orderId && typeof s.orderLabel === 'string' && s.orderLabel.trim()
-        ? s.orderLabel.trim().slice(0, 120)
-        : undefined
     out.push({
       id: s.id.slice(0, 80),
       title: typeof s.title === 'string' ? s.title.slice(0, 120) : '',
       text: typeof s.text === 'string' ? s.text.slice(0, 4000) : '',
       ...(color ? { color } : {}),
-      ...(orderId ? { orderId, ...(orderLabel ? { orderLabel } : {}) } : {}),
     })
   }
   if (out.length === 0 && typeof raw.body === 'string' && raw.body.trim()) {
@@ -342,6 +332,29 @@ export function normalizePlannerBoard(raw: unknown): PlannerBoardPayload | null 
     const title = typeof b.title === 'string' && b.title.trim() ? b.title.trim().slice(0, 120) : 'Blok'
     const color = typeof b.color === 'string' ? b.color.slice(0, 32) : undefined
     const sections = normalizeBlockSections(b)
+    const uuidRe =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    let orderId =
+      typeof b.orderId === 'string' && uuidRe.test(b.orderId) ? b.orderId : undefined
+    let orderLabel =
+      orderId && typeof b.orderLabel === 'string' && b.orderLabel.trim()
+        ? b.orderLabel.trim().slice(0, 120)
+        : undefined
+    // Migracja: stare przypięcie na sekcji → na blok
+    if (!orderId && Array.isArray(b.sections)) {
+      for (const item of b.sections) {
+        if (!item || typeof item !== 'object') continue
+        const s = item as Record<string, unknown>
+        if (typeof s.orderId === 'string' && uuidRe.test(s.orderId)) {
+          orderId = s.orderId
+          orderLabel =
+            typeof s.orderLabel === 'string' && s.orderLabel.trim()
+              ? s.orderLabel.trim().slice(0, 120)
+              : undefined
+          break
+        }
+      }
+    }
     blocks.push({
       id: b.id.slice(0, 80),
       dayOffset,
@@ -350,6 +363,7 @@ export function normalizePlannerBoard(raw: unknown): PlannerBoardPayload | null 
       title,
       sections,
       ...(color ? { color } : {}),
+      ...(orderId ? { orderId, ...(orderLabel ? { orderLabel } : {}) } : {}),
     })
   }
 

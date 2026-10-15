@@ -21,7 +21,7 @@ import {
   type PlannerNote,
 } from '../planner/plannerTypes'
 import PlannerBlockSectionsEditor from './PlannerBlockSectionsEditor'
-import PlannerSectionOrderAttach from './PlannerSectionOrderAttach'
+import PlannerBlockOrderAttach from './PlannerBlockOrderAttach'
 
 const PX_PER_HOUR = 56
 const TIME_GUTTER_W = 52
@@ -119,17 +119,9 @@ function PlannerDayBlock({
     setPeekOpen(true)
   }
 
-  const updateSection = (id: string, patch: Partial<PlannerBlock['sections'][number]>) => {
+  const updateSection = (id: string, patch: { title?: string; text?: string }) => {
     onChangeBlock({
-      sections: sections.map((s) => {
-        if (s.id !== id) return s
-        const next = { ...s, ...patch }
-        if ('orderId' in patch && !patch.orderId) {
-          delete next.orderId
-          delete next.orderLabel
-        }
-        return next
-      }),
+      sections: sections.map((s) => (s.id === id ? { ...s, ...patch } : s)),
     })
   }
 
@@ -201,6 +193,18 @@ function PlannerDayBlock({
           {minutesToLabel(block.startMin)}–{minutesToLabel(block.endMin)}
         </div>
 
+        {editing || block.orderId ? (
+          <PlannerBlockOrderAttach
+            orderId={block.orderId}
+            orderLabel={block.orderLabel}
+            variant="dark"
+            compact
+            readOnly={!editing}
+            onAttach={(orderId, orderLabel) => onChangeBlock({ orderId, orderLabel })}
+            onDetach={() => onChangeBlock({ orderId: undefined, orderLabel: undefined })}
+          />
+        ) : null}
+
         {editing
           ? sections.map((section, index) => {
               const accent = sectionAccentColor(index)
@@ -247,19 +251,11 @@ function PlannerDayBlock({
                     onChange={(e) => updateSection(section.id, { text: e.target.value })}
                     onPointerDown={stopDrag}
                   />
-                  <PlannerSectionOrderAttach
-                    orderId={section.orderId}
-                    orderLabel={section.orderLabel}
-                    variant="dark"
-                    compact
-                    onAttach={(orderId, orderLabel) => updateSection(section.id, { orderId, orderLabel })}
-                    onDetach={() => updateSection(section.id, { orderId: undefined, orderLabel: undefined })}
-                  />
                 </div>
               )
             })
           : sections.map((section, index) =>
-              section.title.trim() || section.text.trim() || section.orderId ? (
+              section.title.trim() || section.text.trim() ? (
                 <div
                   key={section.id}
                   className="mt-0.5 rounded-md px-1.5 py-1 leading-snug"
@@ -284,17 +280,6 @@ function PlannerDayBlock({
                     <p className="whitespace-pre-wrap break-words text-[10px] font-normal text-white/90">
                       {section.text}
                     </p>
-                  ) : null}
-                  {section.orderId ? (
-                    <PlannerSectionOrderAttach
-                      orderId={section.orderId}
-                      orderLabel={section.orderLabel}
-                      variant="dark"
-                      compact
-                      readOnly
-                      onAttach={() => undefined}
-                      onDetach={() => undefined}
-                    />
                   ) : null}
                 </div>
               ) : null
@@ -393,7 +378,15 @@ export default function PlannerWorkspace({
   const updateBlock = (id: string, next: Partial<PlannerBlock>) => {
     onChange({
       ...board,
-      blocks: board.blocks.map((b) => (b.id === id ? { ...b, ...next } : b)),
+      blocks: board.blocks.map((b) => {
+        if (b.id !== id) return b
+        const merged: PlannerBlock = { ...b, ...next }
+        if ('orderId' in next && !next.orderId) {
+          delete merged.orderId
+          delete merged.orderLabel
+        }
+        return merged
+      }),
     })
   }
 
@@ -933,6 +926,18 @@ export default function PlannerWorkspace({
               ))}
             </div>
           </div>
+          <div className="mb-2">
+            <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              Zlecenie
+            </div>
+            <PlannerBlockOrderAttach
+              orderId={selectedBlock.orderId}
+              orderLabel={selectedBlock.orderLabel}
+              variant="light"
+              onAttach={(orderId, orderLabel) => updateBlock(selectedBlock.id, { orderId, orderLabel })}
+              onDetach={() => updateBlock(selectedBlock.id, { orderId: undefined, orderLabel: undefined })}
+            />
+          </div>
           <div className="flex flex-wrap gap-1.5">
             <button
               type="button"
@@ -1016,6 +1021,18 @@ export default function PlannerWorkspace({
                         />
                       ))}
                     </div>
+                  </div>
+                  <div className="mb-3">
+                    <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      Zlecenie
+                    </div>
+                    <PlannerBlockOrderAttach
+                      orderId={block.orderId}
+                      orderLabel={block.orderLabel}
+                      variant="light"
+                      onAttach={(orderId, orderLabel) => updateBlock(block.id, { orderId, orderLabel })}
+                      onDetach={() => updateBlock(block.id, { orderId: undefined, orderLabel: undefined })}
+                    />
                   </div>
                   <PlannerBlockSectionsEditor
                     sections={block.sections ?? []}

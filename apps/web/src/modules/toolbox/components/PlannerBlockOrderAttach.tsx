@@ -18,7 +18,7 @@ function buildOrderLabel(order: OrderHit): string {
   return num !== '—' ? `${num} · ${name}`.slice(0, 120) : name.slice(0, 120)
 }
 
-export default function PlannerSectionOrderAttach({
+export default function PlannerBlockOrderAttach({
   orderId,
   orderLabel,
   onAttach,
