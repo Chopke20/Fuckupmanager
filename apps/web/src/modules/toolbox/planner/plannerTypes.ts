@@ -32,8 +32,8 @@ export const PLANNER_SECTION_COLORS = [
 
 export type PlannerBlockColor = (typeof PLANNER_BLOCK_COLORS)[number]
 
-export function sectionAccentColor(index: number, color?: string | null): string {
-  if (color && /^#[0-9a-fA-F]{3,8}$/.test(color)) return color
+/** Kolor sekcji zawsze z kolejności (1., 2., 3.…); zapisane color jest ignorowane. */
+export function sectionAccentColor(index: number, _color?: string | null): string {
   return PLANNER_SECTION_COLORS[index % PLANNER_SECTION_COLORS.length] ?? PLANNER_SECTION_COLORS[0]
 }
 

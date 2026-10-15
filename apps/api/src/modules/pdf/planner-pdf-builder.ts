@@ -104,8 +104,8 @@ function minutesToLabel(min: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
-function sectionAccent(index: number, color?: string): string {
-  if (color && /^#[0-9a-fA-F]{3,8}$/.test(color)) return color
+/** Kolor sekcji zawsze z kolejności (1., 2., 3.…). */
+function sectionAccent(index: number): string {
   return SECTION_COLORS[index % SECTION_COLORS.length] ?? SECTION_COLORS[0]
 }
 
