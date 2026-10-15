@@ -9,6 +9,8 @@ const blockSectionSchema = z.object({
   title: z.string().max(120).default(''),
   text: z.string().max(4000),
   color: z.string().max(32).optional(),
+  orderId: z.string().uuid().optional(),
+  orderLabel: z.string().max(120).optional(),
 })
 
 const blockSchema = z.object({

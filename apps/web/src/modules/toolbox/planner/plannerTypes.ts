@@ -54,6 +54,10 @@ export interface PlannerBlockSection {
   text: string
   /** Akcent sekcji (hex); gdy brak — z indeksu. */
   color?: string
+  /** Załączone zlecenie (UUID). */
+  orderId?: string
+  /** Cache etykiety do UI/PDF (np. „ORD-26-0042 · Nazwa”). */
+  orderLabel?: string
 }
 
 export interface PlannerBlock {
@@ -263,11 +267,21 @@ export function normalizeBlockSections(raw: Record<string, unknown>): PlannerBlo
     const s = item as Record<string, unknown>
     if (typeof s.id !== 'string' || !s.id) continue
     const color = typeof s.color === 'string' ? s.color.slice(0, 32) : undefined
+    const orderId =
+      typeof s.orderId === 'string' &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s.orderId)
+        ? s.orderId
+        : undefined
+    const orderLabel =
+      orderId && typeof s.orderLabel === 'string' && s.orderLabel.trim()
+        ? s.orderLabel.trim().slice(0, 120)
+        : undefined
     out.push({
       id: s.id.slice(0, 80),
       title: typeof s.title === 'string' ? s.title.slice(0, 120) : '',
       text: typeof s.text === 'string' ? s.text.slice(0, 4000) : '',
       ...(color ? { color } : {}),
+      ...(orderId ? { orderId, ...(orderLabel ? { orderLabel } : {}) } : {}),
     })
   }
   if (out.length === 0 && typeof raw.body === 'string' && raw.body.trim()) {

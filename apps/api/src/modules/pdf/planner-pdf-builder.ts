@@ -23,6 +23,8 @@ export interface PlannerPdfSection {
   title: string
   text: string
   color?: string
+  orderId?: string
+  orderLabel?: string
 }
 
 export interface PlannerPdfBlock {
@@ -286,9 +288,13 @@ export function buildPlannerPdfHtml(params: {
               const accent = sectionAccent(i)
               const title = (s.title || '').trim() || `Sekcja ${i + 1}`
               const text = (s.text || '').trim()
+              const attach =
+                (s.orderLabel || '').trim() ||
+                (s.orderId ? `Zlecenie ${s.orderId.slice(0, 8)}…` : '')
               return `<div class="section" style="border-left-color:${escapeHtml(accent)}">
                 <div class="section__title"><span class="dot" style="background:${escapeHtml(accent)}"></span>${escapeHtml(title)}</div>
                 ${text ? `<div class="section__body">${escapeHtml(text).replace(/\n/g, '<br/>')}</div>` : '<div class="section__body muted">—</div>'}
+                ${attach ? `<div class="section__attach">Załącznik: ${escapeHtml(attach)}</div>` : ''}
               </div>`
             })
             .join('')
@@ -452,6 +458,7 @@ export function buildPlannerPdfHtml(params: {
     width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
   }
   .section__body { font-size: 9pt; white-space: pre-wrap; }
+  .section__attach { margin-top: 4px; font-size: 8pt; color: #475569; }
 </style>
 </head>
 <body>

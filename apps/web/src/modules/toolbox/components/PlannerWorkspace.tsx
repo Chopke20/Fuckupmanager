@@ -21,6 +21,7 @@ import {
   type PlannerNote,
 } from '../planner/plannerTypes'
 import PlannerBlockSectionsEditor from './PlannerBlockSectionsEditor'
+import PlannerSectionOrderAttach from './PlannerSectionOrderAttach'
 
 const PX_PER_HOUR = 56
 const TIME_GUTTER_W = 52
@@ -118,9 +119,17 @@ function PlannerDayBlock({
     setPeekOpen(true)
   }
 
-  const updateSection = (id: string, patch: { title?: string; text?: string }) => {
+  const updateSection = (id: string, patch: Partial<PlannerBlock['sections'][number]>) => {
     onChangeBlock({
-      sections: sections.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+      sections: sections.map((s) => {
+        if (s.id !== id) return s
+        const next = { ...s, ...patch }
+        if ('orderId' in patch && !patch.orderId) {
+          delete next.orderId
+          delete next.orderLabel
+        }
+        return next
+      }),
     })
   }
 
@@ -238,11 +247,19 @@ function PlannerDayBlock({
                     onChange={(e) => updateSection(section.id, { text: e.target.value })}
                     onPointerDown={stopDrag}
                   />
+                  <PlannerSectionOrderAttach
+                    orderId={section.orderId}
+                    orderLabel={section.orderLabel}
+                    variant="dark"
+                    compact
+                    onAttach={(orderId, orderLabel) => updateSection(section.id, { orderId, orderLabel })}
+                    onDetach={() => updateSection(section.id, { orderId: undefined, orderLabel: undefined })}
+                  />
                 </div>
               )
             })
           : sections.map((section, index) =>
-              section.title.trim() || section.text.trim() ? (
+              section.title.trim() || section.text.trim() || section.orderId ? (
                 <div
                   key={section.id}
                   className="mt-0.5 rounded-md px-1.5 py-1 leading-snug"
@@ -267,6 +284,17 @@ function PlannerDayBlock({
                     <p className="whitespace-pre-wrap break-words text-[10px] font-normal text-white/90">
                       {section.text}
                     </p>
+                  ) : null}
+                  {section.orderId ? (
+                    <PlannerSectionOrderAttach
+                      orderId={section.orderId}
+                      orderLabel={section.orderLabel}
+                      variant="dark"
+                      compact
+                      readOnly
+                      onAttach={() => undefined}
+                      onDetach={() => undefined}
+                    />
                   ) : null}
                 </div>
               ) : null

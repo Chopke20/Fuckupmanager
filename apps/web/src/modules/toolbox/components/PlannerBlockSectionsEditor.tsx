@@ -4,6 +4,7 @@ import {
   sectionAccentColor,
   type PlannerBlockSection,
 } from '../planner/plannerTypes'
+import PlannerSectionOrderAttach from './PlannerSectionOrderAttach'
 
 export default function PlannerBlockSectionsEditor({
   sections,
@@ -14,8 +15,18 @@ export default function PlannerBlockSectionsEditor({
   onChange: (next: PlannerBlockSection[]) => void
   compact?: boolean
 }) {
-  const update = (id: string, patch: Partial<Pick<PlannerBlockSection, 'title' | 'text'>>) => {
-    onChange(sections.map((s) => (s.id === id ? { ...s, ...patch } : s)))
+  const update = (id: string, patch: Partial<PlannerBlockSection>) => {
+    onChange(
+      sections.map((s) => {
+        if (s.id !== id) return s
+        const next: PlannerBlockSection = { ...s, ...patch }
+        if ('orderId' in patch && !patch.orderId) {
+          delete next.orderId
+          delete next.orderLabel
+        }
+        return next
+      })
+    )
   }
 
   const remove = (id: string) => {
@@ -69,6 +80,13 @@ export default function PlannerBlockSectionsEditor({
                 placeholder="Treść…"
                 onChange={(e) => update(section.id, { text: e.target.value })}
                 onPointerDown={(e) => e.stopPropagation()}
+              />
+              <PlannerSectionOrderAttach
+                orderId={section.orderId}
+                orderLabel={section.orderLabel}
+                variant="light"
+                onAttach={(orderId, orderLabel) => update(section.id, { orderId, orderLabel })}
+                onDetach={() => update(section.id, { orderId: undefined, orderLabel: undefined })}
               />
             </div>
           )
