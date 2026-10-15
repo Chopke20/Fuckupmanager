@@ -1,6 +1,5 @@
 import { Plus, Trash2 } from 'lucide-react'
 import {
-  PLANNER_SECTION_COLORS,
   emptyBlockSection,
   sectionAccentColor,
   type PlannerBlockSection,
@@ -15,7 +14,7 @@ export default function PlannerBlockSectionsEditor({
   onChange: (next: PlannerBlockSection[]) => void
   compact?: boolean
 }) {
-  const update = (id: string, patch: Partial<PlannerBlockSection>) => {
+  const update = (id: string, patch: Partial<Pick<PlannerBlockSection, 'title' | 'text'>>) => {
     onChange(sections.map((s) => (s.id === id ? { ...s, ...patch } : s)))
   }
 
@@ -24,8 +23,7 @@ export default function PlannerBlockSectionsEditor({
   }
 
   const add = () => {
-    const color = sectionAccentColor(sections.length)
-    onChange([...sections, emptyBlockSection('', color)])
+    onChange([...sections, emptyBlockSection()])
   }
 
   return (
@@ -34,7 +32,7 @@ export default function PlannerBlockSectionsEditor({
         <p className="text-xs text-muted-foreground">Brak sekcji — dodaj pierwszą.</p>
       ) : (
         sections.map((section, index) => {
-          const accent = sectionAccentColor(index, section.color)
+          const accent = sectionAccentColor(index)
           return (
             <div
               key={section.id}
@@ -62,21 +60,6 @@ export default function PlannerBlockSectionsEditor({
                 >
                   <Trash2 size={12} />
                 </button>
-              </div>
-              <div className="mb-1.5 flex flex-wrap gap-1">
-                {PLANNER_SECTION_COLORS.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    className={`h-4 w-4 rounded-full border ${
-                      accent === c ? 'ring-2 ring-primary ring-offset-1 ring-offset-background' : 'border-black/20'
-                    }`}
-                    style={{ backgroundColor: c }}
-                    onClick={() => update(section.id, { color: c })}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    aria-label={`Kolor sekcji ${c}`}
-                  />
-                ))}
               </div>
               <textarea
                 className={`w-full resize-y rounded border border-border bg-surface px-2 py-1 text-sm outline-none focus:border-primary/50 ${

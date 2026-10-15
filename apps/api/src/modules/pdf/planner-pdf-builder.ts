@@ -283,7 +283,7 @@ export function buildPlannerPdfHtml(params: {
           const bg = block.color && /^#/.test(block.color) ? block.color : DEFAULT_BLOCK_COLOR
           const sections = (block.sections ?? [])
             .map((s, i) => {
-              const accent = sectionAccent(i, s.color)
+              const accent = sectionAccent(i)
               const title = (s.title || '').trim() || `Sekcja ${i + 1}`
               const text = (s.text || '').trim()
               return `<div class="section" style="border-left-color:${escapeHtml(accent)}">

@@ -8,7 +8,6 @@ import {
   addDaysIso,
   clampBlockToDay,
   dayOffsets,
-  PLANNER_SECTION_COLORS,
   emptyBlockSection,
   formatDayHeader,
   hourMarks,
@@ -119,18 +118,14 @@ function PlannerDayBlock({
     setPeekOpen(true)
   }
 
-  const updateSection = (
-    id: string,
-    patch: { title?: string; text?: string; color?: string }
-  ) => {
+  const updateSection = (id: string, patch: { title?: string; text?: string }) => {
     onChangeBlock({
       sections: sections.map((s) => (s.id === id ? { ...s, ...patch } : s)),
     })
   }
 
   const addSection = () => {
-    const color = sectionAccentColor(sections.length)
-    onChangeBlock({ sections: [...sections, emptyBlockSection('', color)] })
+    onChangeBlock({ sections: [...sections, emptyBlockSection()] })
   }
 
   const removeSection = (id: string) => {
@@ -193,7 +188,7 @@ function PlannerDayBlock({
 
         {editing
           ? sections.map((section, index) => {
-              const accent = sectionAccentColor(index, section.color)
+              const accent = sectionAccentColor(index)
               return (
                 <div
                   key={section.id}
@@ -227,21 +222,6 @@ function PlannerDayBlock({
                       <Trash2 size={10} />
                     </button>
                   </div>
-                  <div className="mt-0.5 flex flex-wrap gap-0.5">
-                    {PLANNER_SECTION_COLORS.map((c) => (
-                      <button
-                        key={c}
-                        type="button"
-                        className={`h-2.5 w-2.5 rounded-full ${
-                          accent === c ? 'ring-1 ring-white' : 'opacity-70'
-                        }`}
-                        style={{ backgroundColor: c }}
-                        onClick={() => updateSection(section.id, { color: c })}
-                        onPointerDown={stopDrag}
-                        aria-label={`Kolor sekcji ${c}`}
-                      />
-                    ))}
-                  </div>
                   <textarea
                     className={`mt-0.5 w-full bg-transparent text-[10px] font-normal leading-snug text-white/95 outline-none placeholder:text-white/45 ${
                       peekOpen ? 'min-h-[4.5rem] resize-y' : 'max-h-16 resize-none'
@@ -262,14 +242,14 @@ function PlannerDayBlock({
                   className="mt-0.5 rounded-md px-1.5 py-1 leading-snug"
                   style={{
                     backgroundColor: 'rgba(0,0,0,0.22)',
-                    borderLeft: `3px solid ${sectionAccentColor(index, section.color)}`,
+                    borderLeft: `3px solid ${sectionAccentColor(index)}`,
                   }}
                 >
                   {section.title.trim() ? (
                     <div className="mb-0.5 flex items-center gap-1">
                       <span
                         className="h-1.5 w-1.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: sectionAccentColor(index, section.color) }}
+                        style={{ backgroundColor: sectionAccentColor(index) }}
                         aria-hidden
                       />
                       <div className="truncate text-[10px] font-bold uppercase tracking-wide text-white">
@@ -421,7 +401,7 @@ export default function PlannerWorkspace({
       startMin: partial.startMin,
       endMin: partial.endMin,
       title: partial.title ?? 'Blok',
-      sections: [emptyBlockSection('', sectionAccentColor(0))],
+      sections: [emptyBlockSection()],
       color,
     }
     onChange({ ...board, blocks: [...board.blocks, block] })
