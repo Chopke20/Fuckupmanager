@@ -38,7 +38,6 @@ interface ActiveDrag {
   originDayOffset: number
   originStartMin: number
   originEndMin: number
-  dayWidth: number
 }
 
 interface NoteDrag {
@@ -143,10 +142,12 @@ function PlannerDayBlock({
       className={`absolute rounded-md border px-1.5 py-1 text-xs text-white shadow-sm transition-[width,transform,box-shadow,max-height] duration-150 ease-out ${
         peekOpen
           ? 'z-30 overflow-auto shadow-2xl ring-2 ring-white/90'
-          : selected
-            ? 'z-[2] cursor-default overflow-hidden ring-2 ring-white/80'
-            : 'z-[1] cursor-grab overflow-hidden active:cursor-grabbing'
-      } ${dragging ? 'cursor-grabbing' : ''}`}
+          : dragging
+            ? 'z-20 cursor-grabbing overflow-hidden ring-2 ring-white/70 opacity-95'
+            : selected
+              ? 'z-[2] cursor-default overflow-hidden ring-2 ring-white/80'
+              : 'z-[1] cursor-grab overflow-hidden active:cursor-grabbing'
+      }`}
       style={{
         top,
         // Peek: rozszerz na boki (pełny dzień, min. ~280px), po odkliknięciu wraca do slotu.
@@ -479,9 +480,7 @@ export default function PlannerWorkspace({
     if (e.altKey || e.ctrlKey || e.metaKey) return
     e.stopPropagation()
     e.preventDefault()
-    const grid = gridRef.current
-    if (!grid) return
-    const dayWidth = Math.max(40, (grid.clientWidth - TIME_GUTTER_W) / board.range.dayCount)
+    if (!gridRef.current) return
     setSelectedBlockId(block.id)
     setSelectedNoteId(null)
     setDrag({
@@ -493,7 +492,6 @@ export default function PlannerWorkspace({
       originDayOffset: block.dayOffset,
       originStartMin: block.startMin,
       originEndMin: block.endMin,
-      dayWidth,
     })
   }
 
@@ -510,19 +508,46 @@ export default function PlannerWorkspace({
   // Document-level listeners — blok może zmienić kolumnę dnia podczas drag.
   useEffect(() => {
     if (!drag) return
+
+    /** Dzień spod kursora (nie dx/dayWidth — psuło się przy wąskich slotach równoległych / scrollu). */
+    const resolveDayOffsetAtClientX = (clientX: number, fallback: number): number => {
+      const grid = gridRef.current
+      if (!grid) return fallback
+      const cols = grid.querySelectorAll<HTMLElement>('[data-planner-day]')
+      if (cols.length === 0) return fallback
+      for (const el of cols) {
+        const rect = el.getBoundingClientRect()
+        if (clientX >= rect.left && clientX < rect.right) {
+          const n = Number(el.dataset.plannerDay)
+          return Number.isFinite(n) ? n : fallback
+        }
+      }
+      let best = fallback
+      let bestDist = Infinity
+      for (const el of cols) {
+        const rect = el.getBoundingClientRect()
+        const mid = (rect.left + rect.right) / 2
+        const d = Math.abs(clientX - mid)
+        if (d < bestDist) {
+          bestDist = d
+          const n = Number(el.dataset.plannerDay)
+          if (Number.isFinite(n)) best = n
+        }
+      }
+      return best
+    }
+
     const onMove = (e: PointerEvent) => {
       if (e.pointerId !== drag.pointerId) return
       const current = boardRef.current
-      const dx = e.clientX - drag.originClientX
       const dy = e.clientY - drag.originClientY
       const deltaMin = snapMinutes((dy / PX_PER_HOUR) * 60, current.time.snapMinutes)
-      const dayDelta = Math.round(dx / drag.dayWidth)
 
       if (drag.mode === 'move') {
         const duration = drag.originEndMin - drag.originStartMin
         const nextDay = Math.min(
           current.range.dayCount - 1,
-          Math.max(0, drag.originDayOffset + dayDelta)
+          Math.max(0, resolveDayOffsetAtClientX(e.clientX, drag.originDayOffset))
         )
         const clamped = clampBlockToDay(
           drag.originStartMin + deltaMin,
@@ -834,6 +859,7 @@ export default function PlannerWorkspace({
               {days.map((offset) => (
                 <div
                   key={offset}
+                  data-planner-day={offset}
                   className="relative cursor-crosshair border-r border-border last:border-r-0"
                   onPointerDown={(e) => onColumnPointerDown(offset, e)}
                 >
