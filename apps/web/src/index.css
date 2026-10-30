@@ -258,20 +258,21 @@
   font-family: Tahoma, 'Segoe UI', sans-serif;
 }
 
-.spinacz-balloon-tail {
+/* Ogon dymka w prawo → w stronę spinacza */
+.spinacz-balloon-tail-side {
   position: absolute;
-  right: 2.1rem;
-  bottom: -7px;
+  right: -7px;
+  bottom: 1.1rem;
   width: 12px;
   height: 12px;
   border-right: 1px solid #c9b87a;
-  border-bottom: 1px solid #c9b87a;
+  border-top: 1px solid #c9b87a;
   background: #f5e7a8;
   transform: rotate(45deg);
 }
 
 .spinacz-panel {
-  border-radius: 12px;
+  border-radius: 14px;
   border: 1px solid hsl(0 0% 22%);
   background: hsl(0 0% 8% / 0.96);
   box-shadow:
@@ -284,8 +285,8 @@
   border-radius: 9999px;
   border: 1px solid hsl(0 0% 24%);
   background: transparent;
-  padding: 0.35rem 0.7rem;
-  font-size: 12px;
+  padding: 0.4rem 0.8rem;
+  font-size: 13px;
   line-height: 1.2;
   color: hsl(0 0% 62%);
   transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
@@ -314,8 +315,8 @@
 
 .spinacz-segment-btn {
   background: hsl(0 0% 9%);
-  padding: 0.42rem 0.25rem;
-  font-size: 12px;
+  padding: 0.5rem 0.3rem;
+  font-size: 13px;
   line-height: 1.15;
   color: hsl(0 0% 58%);
   transition: background 0.12s ease, color 0.12s ease;
@@ -332,13 +333,13 @@
 
 .spinacz-textarea {
   width: 100%;
-  min-height: 5.5rem;
+  min-height: 7rem;
   resize: vertical;
-  border-radius: 9px;
+  border-radius: 10px;
   border: 1px solid hsl(0 0% 22%);
   background: hsl(0 0% 5%);
-  padding: 0.65rem 0.75rem;
-  font-size: 14px;
+  padding: 0.75rem 0.85rem;
+  font-size: 15px;
   line-height: 1.4;
   color: hsl(0 0% 94%);
   outline: none;
@@ -358,8 +359,8 @@
   border-radius: 8px;
   background: #f5e7a8;
   border: 1px solid #c9b87a;
-  padding: 0.48rem 1rem;
-  font-size: 13px;
+  padding: 0.55rem 1.15rem;
+  font-size: 14px;
   font-weight: 600;
   color: #1a1a1a;
   transition: filter 0.12s ease;
@@ -370,7 +371,7 @@
 }
 
 .spinacz-ghost {
-  font-size: 12px;
+  font-size: 13px;
   color: hsl(0 0% 48%);
   transition: color 0.12s ease;
 }

@@ -27,13 +27,16 @@ import {
 const DRAFT_KEY = 'lama-spinacz-draft-v1'
 const COLLAPSED_KEY = 'lama-spinacz-collapsed-v1'
 const DAY_COUNT_KEY = 'lama-spinacz-day-count-v1'
-const POS_KEY = 'lama-spinacz-pos-v1'
+/** right/bottom — kotwica przy dolnym-prawym rogu (avatar nie spada poza ekran przy otwarciu). */
+const POS_KEY = 'lama-spinacz-pos-v2'
 const NEUTRAL_PLACEHOLDER = 'Co nie gra na tym ekranie?'
 const DRAG_THRESHOLD_PX = 5
 const AVATAR_SCALE = 1.2
+const EDGE_MARGIN = 4
 
 type PanelState = 'idle' | 'open' | 'sending' | 'success' | 'error'
-type WidgetPos = { left: number; top: number }
+/** Odległość prawej/dolnej krawędzi widgetu od krawędzi viewportu. */
+type WidgetPos = { right: number; bottom: number }
 
 function todayKey(): string {
   const d = new Date()
@@ -106,10 +109,10 @@ function readPos(): WidgetPos | null {
   try {
     const raw = window.localStorage.getItem(POS_KEY)
     if (!raw) return null
-    const parsed = JSON.parse(raw) as { left?: number; top?: number }
-    if (typeof parsed.left !== 'number' || typeof parsed.top !== 'number') return null
-    if (!Number.isFinite(parsed.left) || !Number.isFinite(parsed.top)) return null
-    return { left: parsed.left, top: parsed.top }
+    const parsed = JSON.parse(raw) as { right?: number; bottom?: number }
+    if (typeof parsed.right !== 'number' || typeof parsed.bottom !== 'number') return null
+    if (!Number.isFinite(parsed.right) || !Number.isFinite(parsed.bottom)) return null
+    return { right: parsed.right, bottom: parsed.bottom }
   } catch {
     return null
   }
@@ -124,12 +127,11 @@ function writePos(pos: WidgetPos) {
 }
 
 function clampPos(pos: WidgetPos, width: number, height: number): WidgetPos {
-  const margin = 8
-  const maxLeft = Math.max(margin, window.innerWidth - width - margin)
-  const maxTop = Math.max(margin, window.innerHeight - height - margin)
+  const maxRight = Math.max(EDGE_MARGIN, window.innerWidth - width - EDGE_MARGIN)
+  const maxBottom = Math.max(EDGE_MARGIN, window.innerHeight - height - EDGE_MARGIN)
   return {
-    left: Math.min(maxLeft, Math.max(margin, pos.left)),
-    top: Math.min(maxTop, Math.max(margin, pos.top)),
+    right: Math.min(maxRight, Math.max(EDGE_MARGIN, pos.right)),
+    bottom: Math.min(maxBottom, Math.max(EDGE_MARGIN, pos.bottom)),
   }
 }
 
@@ -143,8 +145,8 @@ export default function SpinaczWidget() {
     pointerId: number
     startX: number
     startY: number
-    origLeft: number
-    origTop: number
+    origRight: number
+    origBottom: number
     moved: boolean
   } | null>(null)
   const posRef = useRef<WidgetPos | null>(readPos())
@@ -197,12 +199,37 @@ export default function SpinaczWidget() {
     writeDraft(message, type, urgency)
   }, [message, type, urgency, panel])
 
+  // Po otwarciu / zmianie wysokości — dociśnij do viewportu (rośnie w górę, nie znika w dół)
+  useEffect(() => {
+    const el = rootRef.current
+    if (!el) return
+    const current = posRef.current ?? {
+      right: EDGE_MARGIN,
+      bottom: raiseForPlanner ? 112 : 16,
+    }
+    const next = clampPos(current, el.offsetWidth, el.offsetHeight)
+    if (posRef.current && (next.right !== current.right || next.bottom !== current.bottom)) {
+      writePos(next)
+      updatePos(next)
+    } else if (!posRef.current) {
+      // bez zapisu — tylko upewnij się że default nie wystaje
+      const def = clampPos(
+        { right: EDGE_MARGIN, bottom: raiseForPlanner ? 112 : 16 },
+        el.offsetWidth,
+        el.offsetHeight,
+      )
+      if (def.bottom !== (raiseForPlanner ? 112 : 16) || def.right !== EDGE_MARGIN) {
+        updatePos(def)
+        writePos(def)
+      }
+    }
+  }, [panel, isFormOpen, raiseForPlanner])
+
   useEffect(() => {
     const onResize = () => {
       const prev = posRef.current
       if (!prev || !rootRef.current) return
-      const rect = rootRef.current.getBoundingClientRect()
-      const next = clampPos(prev, rect.width, rect.height)
+      const next = clampPos(prev, rootRef.current.offsetWidth, rootRef.current.offsetHeight)
       writePos(next)
       updatePos(next)
     }
@@ -368,13 +395,13 @@ export default function SpinaczWidget() {
     if (posRef.current) return posRef.current
     const el = rootRef.current
     if (!el) {
-      return {
-        left: Math.max(8, window.innerWidth - 400),
-        top: Math.max(8, window.innerHeight - 280),
-      }
+      return { right: EDGE_MARGIN, bottom: raiseForPlanner ? 112 : 16 }
     }
     const rect = el.getBoundingClientRect()
-    return { left: rect.left, top: rect.top }
+    return {
+      right: Math.max(EDGE_MARGIN, window.innerWidth - rect.right),
+      bottom: Math.max(EDGE_MARGIN, window.innerHeight - rect.bottom),
+    }
   }
 
   const onDragPointerDown = (e: ReactPointerEvent<HTMLElement>) => {
@@ -383,15 +410,14 @@ export default function SpinaczWidget() {
     if (target.closest('button[aria-label="Zamknij"], a, input, textarea, select')) return
 
     const current = ensurePosFromDom()
-    // Jeśli jeszcze nie było custom pos — zapisz start z DOM, żeby nie skakało przy pierwszym ruchu
     if (!posRef.current) updatePos(current)
 
     dragRef.current = {
       pointerId: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
-      origLeft: current.left,
-      origTop: current.top,
+      origRight: current.right,
+      origBottom: current.bottom,
       moved: false,
     }
     setDragging(true)
@@ -408,10 +434,11 @@ export default function SpinaczWidget() {
     drag.moved = true
 
     const el = rootRef.current
-    const width = el?.offsetWidth ?? 320
-    const height = el?.offsetHeight ?? 200
+    const width = el?.offsetWidth ?? 360
+    const height = el?.offsetHeight ?? 220
+    // ruch w prawo → mniejszy `right`; ruch w dół → mniejszy `bottom`
     const next = clampPos(
-      { left: drag.origLeft + dx, top: drag.origTop + dy },
+      { right: drag.origRight - dx, bottom: drag.origBottom - dy },
       width,
       height,
     )
@@ -435,49 +462,69 @@ export default function SpinaczWidget() {
     }
   }
 
-  const bottomPad = raiseForPlanner ? 112 : 16
+  const defaultBottom = raiseForPlanner ? 112 : 16
   const positionStyle = pos
-    ? { left: pos.left, top: pos.top, right: 'auto' as const, bottom: 'auto' as const }
-    : { right: 16, bottom: bottomPad, left: 'auto' as const, top: 'auto' as const }
+    ? { right: pos.right, bottom: pos.bottom, left: 'auto' as const, top: 'auto' as const }
+    : { right: EDGE_MARGIN, bottom: defaultBottom, left: 'auto' as const, top: 'auto' as const }
 
   return (
     <div
       ref={rootRef}
-      className={`spinacz-root fixed z-50 flex flex-col items-end gap-2 ${
-        showCollapsedOnly ? '' : 'w-[min(24rem,calc(100vw-1.5rem))]'
-      } ${dragging ? 'spinacz-dragging' : ''}`}
+      className={`spinacz-root fixed z-50 flex flex-row-reverse items-end gap-2 ${
+        dragging ? 'spinacz-dragging' : ''
+      }`}
       style={positionStyle}
     >
-      {isFormOpen && bubble ? (
-        <div
-          className="spinacz-balloon spinacz-drag-handle relative w-full px-4 py-3 pr-9"
-          onPointerDown={onDragPointerDown}
-          onPointerMove={onDragPointerMove}
-          onPointerUp={onDragPointerUp}
-          onPointerCancel={onDragPointerUp}
-        >
-          <p className="text-[14px] leading-snug text-[#1a1a1a]">{bubble}</p>
-          {ticketId && panel === 'success' ? (
-            <p className="mt-1.5 font-mono text-[12px] text-[#3d5a1f]">{ticketId}</p>
-          ) : null}
-          <button
-            type="button"
-            onClick={panel === 'open' ? cancel : () => setPanel('idle')}
-            className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded text-[#666] hover:bg-black/5 hover:text-[#222]"
-            aria-label="Zamknij"
-          >
-            ×
-          </button>
-          <span className="spinacz-balloon-tail" aria-hidden />
-        </div>
-      ) : null}
+      {/* Avatar — zawsze przy prawej krawędzi widgetu */}
+      <button
+        type="button"
+        title={
+          panel === 'idle'
+            ? `${pickSpinaczLine('tooltip', { isAdmin })} (przeciągnij, żeby przesunąć)`
+            : 'Przeciągnij Pana Spinacza'
+        }
+        onClick={panel === 'idle' ? openPanel : undefined}
+        onPointerDown={onDragPointerDown}
+        onPointerMove={onDragPointerMove}
+        onPointerUp={onDragPointerUp}
+        onPointerCancel={onDragPointerUp}
+        className="spinacz-hit spinacz-drag-handle shrink-0 cursor-grab"
+        aria-label={panel === 'idle' ? 'Otwórz Pana Spinacza — zgłoś problem' : 'Przesuń Pana Spinacza'}
+      >
+        <SpinaczAvatar mood={mood} scale={AVATAR_SCALE} />
+      </button>
 
-      <div className="flex w-full items-end gap-1">
-        {isFormOpen ? (
-          <div className="spinacz-panel min-w-0 flex-1 overflow-hidden">
+      {/* Dymek + panel po LEWEJ od spinacza */}
+      {!showCollapsedOnly && isFormOpen ? (
+        <div className="spinacz-side flex w-[min(28rem,calc(100vw-6.5rem))] flex-col items-stretch gap-2">
+          {bubble ? (
+            <div
+              className="spinacz-balloon spinacz-balloon-side spinacz-drag-handle relative px-4 py-3.5 pr-9"
+              onPointerDown={onDragPointerDown}
+              onPointerMove={onDragPointerMove}
+              onPointerUp={onDragPointerUp}
+              onPointerCancel={onDragPointerUp}
+            >
+              <p className="text-[15px] leading-snug text-[#1a1a1a]">{bubble}</p>
+              {ticketId && panel === 'success' ? (
+                <p className="mt-1.5 font-mono text-[12px] text-[#3d5a1f]">{ticketId}</p>
+              ) : null}
+              <button
+                type="button"
+                onClick={panel === 'open' ? cancel : () => setPanel('idle')}
+                className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded text-[#666] hover:bg-black/5 hover:text-[#222]"
+                aria-label="Zamknij"
+              >
+                ×
+              </button>
+              <span className="spinacz-balloon-tail-side" aria-hidden />
+            </div>
+          ) : null}
+
+          <div className="spinacz-panel overflow-hidden">
             {panel === 'open' && (
-              <form onSubmit={onSubmit} className="p-3 space-y-3">
-                <div className="flex flex-wrap gap-1" role="group" aria-label="Typ problemu">
+              <form onSubmit={onSubmit} className="p-4 space-y-3.5">
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Typ problemu">
                   {(Object.keys(BUG_TYPE_LABELS) as BugReportType[]).map((key) => (
                     <button
                       key={key}
@@ -513,7 +560,7 @@ export default function SpinaczWidget() {
                       void send()
                     }
                   }}
-                  rows={4}
+                  rows={5}
                   placeholder={NEUTRAL_PLACEHOLDER}
                   className="spinacz-textarea"
                 />
@@ -530,11 +577,11 @@ export default function SpinaczWidget() {
             )}
 
             {panel === 'sending' && (
-              <div className="px-3 py-3 text-sm text-zinc-400">Pakuję maila…</div>
+              <div className="px-4 py-4 text-sm text-zinc-400">Pakuję maila…</div>
             )}
 
             {(panel === 'success' || panel === 'error') && (
-              <div className="flex items-center justify-end gap-2 px-3 py-3">
+              <div className="flex items-center justify-end gap-2 px-4 py-3.5">
                 {panel === 'error' ? (
                   <button type="button" onClick={() => void send()} className="spinacz-send">
                     Ponów
@@ -546,28 +593,8 @@ export default function SpinaczWidget() {
               </div>
             )}
           </div>
-        ) : null}
-
-        <button
-          type="button"
-          title={
-            panel === 'idle'
-              ? `${pickSpinaczLine('tooltip', { isAdmin })} (przeciągnij, żeby przesunąć)`
-              : 'Przeciągnij Pana Spinacza'
-          }
-          onClick={panel === 'idle' ? openPanel : undefined}
-          onPointerDown={onDragPointerDown}
-          onPointerMove={onDragPointerMove}
-          onPointerUp={onDragPointerUp}
-          onPointerCancel={onDragPointerUp}
-          className={`spinacz-hit spinacz-drag-handle shrink-0 ${
-            panel === 'idle' ? 'cursor-grab' : 'cursor-grab'
-          }`}
-          aria-label={panel === 'idle' ? 'Otwórz Pana Spinacza — zgłoś problem' : 'Przesuń Pana Spinacza'}
-        >
-          <SpinaczAvatar mood={mood} scale={AVATAR_SCALE} />
-        </button>
-      </div>
+        </div>
+      ) : null}
     </div>
   )
 }
