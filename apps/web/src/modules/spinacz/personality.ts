@@ -322,9 +322,9 @@ export function timeBonusContext(now = new Date()): SpinaczContext | null {
 
 export const BUG_TYPE_LABELS: Record<BugReportType, string> = {
   broken: 'Nie działa',
-  wrong: 'Działa, ale głupio',
-  missing: 'Brakuje mi czegoś',
-  ugly: 'Brzydko wygląda',
+  wrong: 'Działa źle',
+  missing: 'Brakuje',
+  ugly: 'Brzydko',
 }
 
 export const BUG_URGENCY_LABELS: Record<BugUrgency, string> = {

@@ -1,85 +1,201 @@
-/** Własny spinacz (nie oryginalne assety Microsoft) — oczy + brwi na metalowym drucie. */
+import { useEffect, useRef, useState } from 'react'
+
+/** Oryginalny Clippy (Office Assistant) — sprite sheet z clippy.js / Microsoft Agent. */
 
 export type SpinaczMood = 'idle' | 'talk' | 'think' | 'send' | 'done' | 'mad'
 
 interface SpinaczAvatarProps {
   mood?: SpinaczMood
-  size?: number
+  /** Skala względem oryginalnej klatki 124×93. */
+  scale?: number
   className?: string
+  /** @deprecated użyj scale */
+  size?: number
 }
 
-export default function SpinaczAvatar({ mood = 'idle', size = 72, className = '' }: SpinaczAvatarProps) {
-  const browLift = mood === 'mad' || mood === 'talk' ? -2 : mood === 'think' ? 2 : 0
-  const eyeScaleY = mood === 'done' ? 0.35 : 1
-  const sway =
-    mood === 'send'
-      ? 'spinacz-sway-fast'
-      : mood === 'idle'
-        ? 'spinacz-sway'
-        : mood === 'think'
-          ? 'spinacz-bob'
-          : ''
+type AgentFrame = {
+  duration: number
+  images?: [number, number][]
+  branching?: { branches: Array<{ weight: number; frameIndex: number }> }
+}
+
+type AgentAnimation = {
+  frames: AgentFrame[]
+}
+
+type AgentData = {
+  framesize: [number, number]
+  animations: Record<string, AgentAnimation>
+}
+
+const MAP_URL = '/spinacz/map.png'
+const AGENT_URL = '/spinacz/agent.json'
+const SHEET_W = 3348
+const SHEET_H = 3162
+
+const MOOD_ANIMS: Record<SpinaczMood, string[]> = {
+  idle: ['RestPose', 'IdleEyeBrowRaise', 'IdleFingerTap', 'Idle1_1', 'IdleSideToSide', 'IdleHeadScratch'],
+  talk: ['Explain', 'Wave', 'GestureRight', 'GetAttention'],
+  think: ['Thinking', 'Searching', 'Processing'],
+  send: ['SendMail', 'Writing', 'Processing'],
+  done: ['Congratulate', 'Wave'],
+  mad: ['GetAttention', 'Alert', 'GestureUp'],
+}
+
+let agentCache: AgentData | null = null
+let agentPromise: Promise<AgentData> | null = null
+
+function loadAgent(): Promise<AgentData> {
+  if (agentCache) return Promise.resolve(agentCache)
+  if (!agentPromise) {
+    agentPromise = fetch(AGENT_URL)
+      .then((r) => {
+        if (!r.ok) throw new Error(`Nie udało się wczytać ${AGENT_URL}`)
+        return r.json() as Promise<AgentData>
+      })
+      .then((data) => {
+        agentCache = data
+        return data
+      })
+  }
+  return agentPromise
+}
+
+function pickAnim(mood: SpinaczMood, agent: AgentData): string {
+  const pool = MOOD_ANIMS[mood].filter((name) => agent.animations[name])
+  if (pool.length === 0) return 'RestPose'
+  if (mood === 'idle' && Math.random() < 0.45 && agent.animations.RestPose) return 'RestPose'
+  return pool[Math.floor(Math.random() * pool.length)] ?? 'RestPose'
+}
+
+function nextFrameIndex(frame: AgentFrame, index: number, total: number): number | 'end' {
+  if (frame.branching?.branches?.length) {
+    const roll = Math.random() * 100
+    let acc = 0
+    for (const b of frame.branching.branches) {
+      acc += b.weight
+      if (roll <= acc) return b.frameIndex
+    }
+  }
+  const next = index + 1
+  return next >= total ? 'end' : next
+}
+
+export default function SpinaczAvatar({
+  mood = 'idle',
+  scale,
+  size,
+  className = '',
+}: SpinaczAvatarProps) {
+  const [agent, setAgent] = useState<AgentData | null>(agentCache)
+  const [pos, setPos] = useState<[number, number]>([0, 0])
+  const animNameRef = useRef('RestPose')
+  const frameRef = useRef(0)
+  const timerRef = useRef<number | null>(null)
+  const moodRef = useRef(mood)
+
+  const frameW = agent?.framesize[0] ?? 124
+  const frameH = agent?.framesize[1] ?? 93
+  const resolvedScale = scale ?? (typeof size === 'number' ? Math.max(0.7, size / frameW) : 1.2)
+  const displayW = Math.round(frameW * resolvedScale)
+  const displayH = Math.round(frameH * resolvedScale)
+
+  useEffect(() => {
+    let alive = true
+    loadAgent()
+      .then((data) => {
+        if (alive) setAgent(data)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  useEffect(() => {
+    moodRef.current = mood
+  }, [mood])
+
+  useEffect(() => {
+    if (!agent) return
+
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+    const clearTimer = () => {
+      if (timerRef.current != null) {
+        window.clearTimeout(timerRef.current)
+        timerRef.current = null
+      }
+    }
+
+    const showFrame = (animName: string, index: number) => {
+      const img = agent.animations[animName]?.frames[index]?.images?.[0]
+      if (img) setPos(img)
+    }
+
+    const play = (name: string) => {
+      clearTimer()
+      animNameRef.current = name
+      frameRef.current = 0
+      showFrame(name, 0)
+      if (reducedMotion) return
+
+      const step = () => {
+        const animName = animNameRef.current
+        const anim = agent.animations[animName]
+        if (!anim?.frames?.length) return
+        const index = frameRef.current
+        const frame = anim.frames[index]
+        if (!frame) return
+        showFrame(animName, index)
+
+        timerRef.current = window.setTimeout(() => {
+          const next = nextFrameIndex(frame, index, anim.frames.length)
+          if (next === 'end') {
+            if (moodRef.current === 'idle') {
+              play(pickAnim('idle', agent))
+            } else if (agent.animations.RestPose) {
+              animNameRef.current = 'RestPose'
+              frameRef.current = 0
+              showFrame('RestPose', 0)
+            }
+            return
+          }
+          frameRef.current = next
+          step()
+        }, Math.max(30, frame.duration || 100))
+      }
+
+      step()
+    }
+
+    play(pickAnim(mood, agent))
+
+    let idleKick: number | null = null
+    if (mood === 'idle' && !reducedMotion) {
+      idleKick = window.setInterval(() => {
+        if (moodRef.current === 'idle') play(pickAnim('idle', agent))
+      }, 7000)
+    }
+
+    return () => {
+      clearTimer()
+      if (idleKick != null) window.clearInterval(idleKick)
+    }
+  }, [agent, mood])
 
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 80 80"
-      className={`${sway} ${className}`.trim()}
+    <div
+      className={`spinacz-sprite ${className}`.trim()}
+      style={{
+        width: displayW,
+        height: displayH,
+        backgroundImage: `url(${MAP_URL})`,
+        backgroundRepeat: 'no-repeat',
+        backgroundPosition: `-${Math.round(pos[0] * resolvedScale)}px -${Math.round(pos[1] * resolvedScale)}px`,
+        backgroundSize: `${Math.round(SHEET_W * resolvedScale)}px ${Math.round(SHEET_H * resolvedScale)}px`,
+      }}
       aria-hidden
-    >
-      <defs>
-        <linearGradient id="spinacz-metal" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#d8dce2" />
-          <stop offset="45%" stopColor="#9aa3ad" />
-          <stop offset="100%" stopColor="#6b7380" />
-        </linearGradient>
-        <filter id="spinacz-soft" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="1" stdDeviation="1.2" floodOpacity="0.35" />
-        </filter>
-      </defs>
-
-      {/* ciało — wygięty spinacz */}
-      <g filter="url(#spinacz-soft)" fill="none" stroke="url(#spinacz-metal)" strokeLinecap="round">
-        <path
-          d="M38 12
-             C 22 12, 18 28, 28 36
-             C 36 42, 48 40, 52 32
-             C 56 24, 48 18, 40 22
-             C 30 27, 28 40, 34 48
-             C 40 56, 48 62, 48 70
-             C 48 76, 40 78, 36 74"
-          strokeWidth="7"
-        />
-        <path
-          d="M38 12
-             C 22 12, 18 28, 28 36
-             C 36 42, 48 40, 52 32
-             C 56 24, 48 18, 40 22
-             C 30 27, 28 40, 34 48
-             C 40 56, 48 62, 48 70
-             C 48 76, 40 78, 36 74"
-          stroke="#eef1f4"
-          strokeWidth="2.2"
-          opacity="0.55"
-        />
-      </g>
-
-      {/* brwi */}
-      <g transform={`translate(0 ${browLift})`} stroke="#1a1d22" strokeWidth="2.4" strokeLinecap="round">
-        <path d={mood === 'mad' ? 'M28 28 L36 26' : 'M28 27 L36 27'} />
-        <path d={mood === 'mad' ? 'M42 26 L50 28' : 'M42 27 L50 27'} />
-      </g>
-
-      {/* oczy */}
-      <g transform={`scale(1 ${eyeScaleY})`} style={{ transformOrigin: '39px 34px' }}>
-        <ellipse cx="32.5" cy="34" rx="5.2" ry="5.8" fill="#f7f8fa" stroke="#1a1d22" strokeWidth="1.2" />
-        <ellipse cx="45.5" cy="34" rx="5.2" ry="5.8" fill="#f7f8fa" stroke="#1a1d22" strokeWidth="1.2" />
-        <circle cx="33.2" cy="34.4" r="2.1" fill="#15181c" className={mood === 'idle' ? 'spinacz-blink' : ''} />
-        <circle cx="46.2" cy="34.4" r="2.1" fill="#15181c" className={mood === 'idle' ? 'spinacz-blink' : ''} />
-        <circle cx="31.6" cy="32.8" r="0.7" fill="#fff" opacity="0.9" />
-        <circle cx="44.6" cy="32.8" r="0.7" fill="#fff" opacity="0.9" />
-      </g>
-    </svg>
+    />
   )
 }
