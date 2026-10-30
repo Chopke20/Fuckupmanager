@@ -25,7 +25,6 @@ export interface ResolvedStageOrderLine {
 
 export type StagePlanApplyIssue =
   | { kind: 'unmapped'; line: StageBomLine }
-  | { kind: 'unit_mismatch'; line: StageBomLine; equipment: Equipment }
   | { kind: 'duplicate_equipment'; equipmentId: string; catalogKeys: string[] }
   | { kind: 'attach_target_missing'; line: StageBomLine; attachToRoleKey: string }
   | { kind: 'map_without_equipment'; line: StageBomLine }
@@ -106,10 +105,7 @@ export function resolveStagePlanOrderLines(params: {
       issues.push({ kind: 'map_without_equipment', line })
       continue
     }
-    const unit = (equipment.unit || 'szt.').trim()
-    if (unit !== line.unit) {
-      issues.push({ kind: 'unit_mismatch', line, equipment })
-    }
+    // Ilość/jednostka z BOM planu (m²/mb) — jednostka w katalogu sprzętu (często „szt.”) nie blokuje.
     mapped.push({ catalogKey: line.catalogKey, line, equipment })
   }
 
@@ -197,7 +193,6 @@ export function stagePlanApplyBlockingIssues(
     if (issue.kind === 'attach_target_missing') return true
     if (issue.kind === 'map_without_equipment') return true
     if (issue.kind === 'duplicate_equipment') return true
-    if (issue.kind === 'unit_mismatch') return true
     return false
   })
 }

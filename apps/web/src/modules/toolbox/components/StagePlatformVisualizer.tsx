@@ -121,8 +121,6 @@ export default function StagePlatformVisualizer({
               if (issue.kind === 'unmapped') return `• brak mapowania: ${issue.line.catalogKey}`
               if (issue.kind === 'duplicate_equipment')
                 return `• ten sam sprzęt dla: ${issue.catalogKeys.join(', ')}`
-              if (issue.kind === 'unit_mismatch')
-                return `• jednostki: ${issue.line.catalogKey}`
               return `• mapowanie bez sprzętu: ${issue.line.catalogKey}`
             })
             .join('\n')

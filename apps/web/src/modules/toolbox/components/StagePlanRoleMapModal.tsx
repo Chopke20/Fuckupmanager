@@ -453,11 +453,9 @@ export default function StagePlanRoleMapModal({
                       ? `Brak decyzji: ${issue.line.catalogKey}`
                       : issue.kind === 'duplicate_equipment'
                         ? `Ten sam sprzęt: ${issue.catalogKeys.join(', ')}`
-                        : issue.kind === 'unit_mismatch'
-                          ? `Jednostka: ${issue.line.catalogKey}`
-                          : `Mapowanie bez sprzętu: ${
-                              'line' in issue ? issue.line.catalogKey : ''
-                            }`}
+                        : `Mapowanie bez sprzętu: ${
+                            'line' in issue ? issue.line.catalogKey : ''
+                          }`}
                   </li>
                 ))}
               </ul>
