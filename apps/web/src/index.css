@@ -210,3 +210,74 @@
     animation: none;
   }
 }
+
+/* Pan Spinacz — lekkie animacje SVG (własny character, bez assetów MS) */
+@keyframes spinacz-sway {
+  0%,
+  100% {
+    transform: rotate(-2deg);
+  }
+  50% {
+    transform: rotate(2deg);
+  }
+}
+
+@keyframes spinacz-sway-fast {
+  0%,
+  100% {
+    transform: rotate(-4deg) translateY(0);
+  }
+  50% {
+    transform: rotate(4deg) translateY(-2px);
+  }
+}
+
+@keyframes spinacz-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes spinacz-blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  96% {
+    transform: scaleY(0.1);
+  }
+}
+
+.spinacz-sway {
+  animation: spinacz-sway 3.2s ease-in-out infinite;
+  transform-origin: 50% 80%;
+}
+
+.spinacz-sway-fast {
+  animation: spinacz-sway-fast 0.55s ease-in-out infinite;
+  transform-origin: 50% 80%;
+}
+
+.spinacz-bob {
+  animation: spinacz-bob 1.4s ease-in-out infinite;
+}
+
+.spinacz-blink {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: spinacz-blink 4.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinacz-sway,
+  .spinacz-sway-fast,
+  .spinacz-bob,
+  .spinacz-blink {
+    animation: none;
+  }
+}

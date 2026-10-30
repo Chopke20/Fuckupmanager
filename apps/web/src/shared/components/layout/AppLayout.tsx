@@ -1,4 +1,5 @@
 import { ReactNode } from 'react'
+import SpinaczWidget from '../../../modules/spinacz/SpinaczWidget'
 import Sidebar from './Sidebar'
 import TopBar from './TopBar'
 
@@ -16,6 +17,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
           {children}
         </main>
       </div>
+      {/* Tylko w chronionym layoutcie — strony publiczne / login bez Spinacza */}
+      <SpinaczWidget />
     </div>
   )
 }

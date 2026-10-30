@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { pushApiFailure } from '../../modules/spinacz/diagnostics'
 
 /** Limit czasu żądań (np. SMTP na serwerze): bez tego UI zostaje na „Wysyłanie…”. */
 const API_REQUEST_TIMEOUT_MS = 120_000
@@ -16,6 +17,27 @@ const axiosInstance = axios.create({
 axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
+    try {
+      const cfg = error?.config
+      const url = typeof cfg?.url === 'string' ? cfg.url : ''
+      // Nie rejestruj własnych faili feedbacku (unikamy pętli snarku przy SMTP fail).
+      if (!url.includes('/feedback/')) {
+        const headers = error?.response?.headers ?? {}
+        const requestId =
+          (typeof headers['x-request-id'] === 'string' && headers['x-request-id']) ||
+          (typeof error?.response?.data?.requestId === 'string' && error.response.data.requestId) ||
+          null
+        pushApiFailure({
+          method: String(cfg?.method ?? 'GET').toUpperCase(),
+          url: url || '(unknown)',
+          status: typeof error?.response?.status === 'number' ? error.response.status : null,
+          requestId,
+          message: String(error?.response?.data?.message || error?.message || 'API error'),
+        })
+      }
+    } catch {
+      /* ignore */
+    }
     console.error('API Error:', error.response?.data || error.message)
     return Promise.reject(error)
   }

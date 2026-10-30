@@ -9,6 +9,8 @@ interface MailPayload {
   subject: string
   html: string
   text: string
+  /** Opcjonalny Reply-To (np. zgłaszający bug). */
+  replyTo?: string
 }
 
 interface SmtpConfig {
@@ -192,10 +194,16 @@ function dotStuffSmtpBody(text: string): string {
 function buildMessage(fromHeader: string, payload: MailPayload): string {
   const boundary = `----lama-${Date.now().toString(36)}`
   const subject = mimeEncodeUtf8(payload.subject)
-  return [
+  const headers = [
     `From: ${fromHeader}`,
     `To: ${payload.to}`,
     `Subject: ${subject}`,
+  ]
+  const replyTo = payload.replyTo?.trim()
+  if (replyTo && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyTo)) {
+    headers.push(`Reply-To: ${replyTo}`)
+  }
+  headers.push(
     'MIME-Version: 1.0',
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
     '',
@@ -213,7 +221,8 @@ function buildMessage(fromHeader: string, payload: MailPayload): string {
     '',
     `--${boundary}--`,
     '',
-  ].join('\r\n')
+  )
+  return headers.join('\r\n')
 }
 
 function createPlainSocket(config: SmtpConfig): Promise<net.Socket> {
