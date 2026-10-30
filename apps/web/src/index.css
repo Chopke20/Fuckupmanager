@@ -269,8 +269,8 @@
   border-radius: 9999px;
   border: 1px solid hsl(0 0% 24%);
   background: transparent;
-  padding: 0.28rem 0.55rem;
-  font-size: 11px;
+  padding: 0.35rem 0.7rem;
+  font-size: 12px;
   line-height: 1.2;
   color: hsl(0 0% 62%);
   transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
@@ -299,8 +299,8 @@
 
 .spinacz-segment-btn {
   background: hsl(0 0% 9%);
-  padding: 0.35rem 0.2rem;
-  font-size: 11px;
+  padding: 0.42rem 0.25rem;
+  font-size: 12px;
   line-height: 1.15;
   color: hsl(0 0% 58%);
   transition: background 0.12s ease, color 0.12s ease;
@@ -317,14 +317,14 @@
 
 .spinacz-textarea {
   width: 100%;
-  min-height: 4.5rem;
+  min-height: 5.5rem;
   resize: vertical;
   border-radius: 9px;
   border: 1px solid hsl(0 0% 22%);
   background: hsl(0 0% 5%);
-  padding: 0.55rem 0.65rem;
-  font-size: 13px;
-  line-height: 1.35;
+  padding: 0.65rem 0.75rem;
+  font-size: 14px;
+  line-height: 1.4;
   color: hsl(0 0% 94%);
   outline: none;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
@@ -343,8 +343,8 @@
   border-radius: 8px;
   background: #f5e7a8;
   border: 1px solid #c9b87a;
-  padding: 0.4rem 0.85rem;
-  font-size: 12px;
+  padding: 0.48rem 1rem;
+  font-size: 13px;
   font-weight: 600;
   color: #1a1a1a;
   transition: filter 0.12s ease;
@@ -355,7 +355,7 @@
 }
 
 .spinacz-ghost {
-  font-size: 11px;
+  font-size: 12px;
   color: hsl(0 0% 48%);
   transition: color 0.12s ease;
 }

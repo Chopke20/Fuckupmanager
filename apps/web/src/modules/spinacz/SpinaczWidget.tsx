@@ -304,20 +304,20 @@ export default function SpinaczWidget() {
         className={`spinacz-hit fixed ${bottomClass} right-4 z-50`}
         aria-label="Otwórz Pana Spinacza — zgłoś problem"
       >
-        <SpinaczAvatar mood="idle" scale={1.15} />
+        <SpinaczAvatar mood="idle" scale={1.55} />
       </button>
     )
   }
 
   return (
     <div
-      className={`fixed ${bottomClass} right-4 z-50 flex flex-col items-end gap-1.5 w-[min(20rem,calc(100vw-1.5rem))]`}
+      className={`fixed ${bottomClass} right-4 z-50 flex flex-col items-end gap-2 w-[min(24rem,calc(100vw-1.5rem))]`}
     >
       {isFormOpen && bubble ? (
-        <div className="spinacz-balloon relative w-full px-3.5 py-2.5 pr-8">
-          <p className="text-[13px] leading-snug text-[#1a1a1a]">{bubble}</p>
+        <div className="spinacz-balloon relative w-full px-4 py-3 pr-9">
+          <p className="text-[14px] leading-snug text-[#1a1a1a]">{bubble}</p>
           {ticketId && panel === 'success' ? (
-            <p className="mt-1.5 font-mono text-[11px] text-[#3d5a1f]">{ticketId}</p>
+            <p className="mt-1.5 font-mono text-[12px] text-[#3d5a1f]">{ticketId}</p>
           ) : null}
           <button
             type="button"
@@ -335,7 +335,7 @@ export default function SpinaczWidget() {
         {isFormOpen ? (
           <div className="spinacz-panel min-w-0 flex-1 overflow-hidden">
             {panel === 'open' && (
-              <form onSubmit={onSubmit} className="p-2.5 space-y-2.5">
+              <form onSubmit={onSubmit} className="p-3 space-y-3">
                 <div className="flex flex-wrap gap-1" role="group" aria-label="Typ problemu">
                   {(Object.keys(BUG_TYPE_LABELS) as BugReportType[]).map((key) => (
                     <button
@@ -372,7 +372,7 @@ export default function SpinaczWidget() {
                       void send()
                     }
                   }}
-                  rows={3}
+                  rows={4}
                   placeholder={NEUTRAL_PLACEHOLDER}
                   className="spinacz-textarea"
                 />
@@ -389,11 +389,11 @@ export default function SpinaczWidget() {
             )}
 
             {panel === 'sending' && (
-              <div className="px-3 py-3 text-xs text-zinc-400">Pakuję maila…</div>
+              <div className="px-3 py-3 text-sm text-zinc-400">Pakuję maila…</div>
             )}
 
             {(panel === 'success' || panel === 'error') && (
-              <div className="flex items-center justify-end gap-2 px-2.5 py-2.5">
+              <div className="flex items-center justify-end gap-2 px-3 py-3">
                 {panel === 'error' ? (
                   <button type="button" onClick={() => void send()} className="spinacz-send">
                     Ponów
@@ -414,7 +414,7 @@ export default function SpinaczWidget() {
           className={`spinacz-hit shrink-0 ${panel === 'idle' ? 'cursor-pointer' : 'cursor-default pointer-events-none'}`}
           aria-label={panel === 'idle' ? 'Otwórz Pana Spinacza — zgłoś problem' : 'Pan Spinacz'}
         >
-          <SpinaczAvatar mood={mood} scale={1.25} />
+          <SpinaczAvatar mood={mood} scale={1.7} />
         </button>
       </div>
     </div>
