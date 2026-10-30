@@ -45,6 +45,41 @@ function sanitizeConsole(raw: unknown) {
   })
 }
 
+function parseBugBody(body: Record<string, unknown>) {
+  const message = asString(body.message, MAX_MESSAGE)
+  const type = asString(body.type, 32)
+  const urgency = asString(body.urgency, 32)
+
+  if (message.length < MIN_MESSAGE) {
+    throw new ValidationError({ message: `Opis musi mieć co najmniej ${MIN_MESSAGE} znaków.` })
+  }
+  if (!ALLOWED_TYPES.has(type)) {
+    throw new ValidationError({ type: 'Nieprawidłowy typ zgłoszenia.' })
+  }
+  if (!ALLOWED_URGENCY.has(urgency)) {
+    throw new ValidationError({ urgency: 'Nieprawidłowa pilność.' })
+  }
+
+  const viewportRaw = body.viewport && typeof body.viewport === 'object' ? (body.viewport as Record<string, unknown>) : {}
+  return {
+    message,
+    type,
+    urgency,
+    uiVersion: asString(body.uiVersion, 64) || 'main-unknown',
+    pageTitle: asString(body.pageTitle, 160) || 'Lama',
+    pathname: asString(body.pathname, 240) || '/',
+    moduleLabel: asString(body.moduleLabel, 80) || 'Ekran',
+    minutesOnPage: asFiniteInt(body.minutesOnPage, 0),
+    viewport: {
+      width: asFiniteInt(viewportRaw.width, 0),
+      height: asFiniteInt(viewportRaw.height, 0),
+    },
+    apiFailures: sanitizeFailures(body.apiFailures),
+    consoleErrors: sanitizeConsole(body.consoleErrors),
+    spinaczAside: asString(body.spinaczAside, 240) || 'Przyjąłem bez oporu.',
+  }
+}
+
 export async function postBugReport(req: Request, res: Response, next: NextFunction) {
   try {
     assertSmtpMailConfigured()
@@ -58,47 +93,67 @@ export async function postBugReport(req: Request, res: Response, next: NextFunct
     }
 
     const body = (req.body ?? {}) as Record<string, unknown>
-    const message = asString(body.message, MAX_MESSAGE)
-    const type = asString(body.type, 32)
-    const urgency = asString(body.urgency, 32)
-
-    if (message.length < MIN_MESSAGE) {
-      throw new ValidationError({ message: `Opis musi mieć co najmniej ${MIN_MESSAGE} znaków.` })
-    }
-    if (!ALLOWED_TYPES.has(type)) {
-      throw new ValidationError({ type: 'Nieprawidłowy typ zgłoszenia.' })
-    }
-    if (!ALLOWED_URGENCY.has(urgency)) {
-      throw new ValidationError({ urgency: 'Nieprawidłowa pilność.' })
-    }
-
-    const viewportRaw = body.viewport && typeof body.viewport === 'object' ? (body.viewport as Record<string, unknown>) : {}
+    const parsed = parseBugBody(body)
     const ticketId = buildBugReportTicketId()
     const userName = (user.fullName && user.fullName.trim()) || user.email
 
     await sendBugReportMail({
       ticketId,
-      type,
-      urgency,
+      type: parsed.type,
+      urgency: parsed.urgency,
       companyCode,
-      uiVersion: asString(body.uiVersion, 64) || 'main-unknown',
+      uiVersion: parsed.uiVersion,
       userName,
       userEmail: user.email,
       userRole: user.role || 'UNKNOWN',
-      pageTitle: asString(body.pageTitle, 160) || 'Lama',
-      pathname: asString(body.pathname, 240) || '/',
-      moduleLabel: asString(body.moduleLabel, 80) || 'Ekran',
-      message,
+      pageTitle: parsed.pageTitle,
+      pathname: parsed.pathname,
+      moduleLabel: parsed.moduleLabel,
+      message: parsed.message,
       timestampIso: new Date().toISOString(),
-      minutesOnPage: asFiniteInt(body.minutesOnPage, 0),
-      viewport: {
-        width: asFiniteInt(viewportRaw.width, 0),
-        height: asFiniteInt(viewportRaw.height, 0),
-      },
+      minutesOnPage: parsed.minutesOnPage,
+      viewport: parsed.viewport,
       userAgent: asString(body.userAgent, 320) || asString(req.headers['user-agent'], 320),
-      apiFailures: sanitizeFailures(body.apiFailures),
-      consoleErrors: sanitizeConsole(body.consoleErrors),
-      spinaczAside: asString(body.spinaczAside, 240) || 'Przyjąłem bez oporu.',
+      apiFailures: parsed.apiFailures,
+      consoleErrors: parsed.consoleErrors,
+      spinaczAside: parsed.spinaczAside,
+    })
+
+    res.status(201).json({ ok: true as const, ticketId })
+  } catch (error) {
+    next(error)
+  }
+}
+
+/** Publiczny tool (np. /tools/ekran-led) — bez sesji, rate limit po IP. */
+export async function postPublicBugReport(req: Request, res: Response, next: NextFunction) {
+  try {
+    assertSmtpMailConfigured()
+
+    const body = (req.body ?? {}) as Record<string, unknown>
+    const parsed = parseBugBody(body)
+    const ticketId = buildBugReportTicketId()
+
+    await sendBugReportMail({
+      ticketId,
+      type: parsed.type,
+      urgency: parsed.urgency,
+      companyCode: 'public',
+      uiVersion: parsed.uiVersion,
+      userName: 'Gość (narzędzie publiczne)',
+      userEmail: '',
+      userRole: 'PUBLIC',
+      pageTitle: parsed.pageTitle,
+      pathname: parsed.pathname,
+      moduleLabel: parsed.moduleLabel,
+      message: parsed.message,
+      timestampIso: new Date().toISOString(),
+      minutesOnPage: parsed.minutesOnPage,
+      viewport: parsed.viewport,
+      userAgent: asString(body.userAgent, 320) || asString(req.headers['user-agent'], 320),
+      apiFailures: parsed.apiFailures,
+      consoleErrors: parsed.consoleErrors,
+      spinaczAside: parsed.spinaczAside,
     })
 
     res.status(201).json({ ok: true as const, ticketId })

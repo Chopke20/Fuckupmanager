@@ -300,7 +300,9 @@ export function moduleLabelFromPath(pathname: string): string {
   if (pathname.startsWith('/resources')) return 'Zasoby'
   if (pathname.startsWith('/finance')) return 'Finanse'
   if (pathname.startsWith('/toolbox/planer')) return 'Planer'
-  if (pathname.startsWith('/toolbox/ekran-led')) return 'Kalkulator LED'
+  if (pathname.startsWith('/toolbox/ekran-led') || pathname.startsWith('/tools/ekran-led')) {
+    return 'Kalkulator LED'
+  }
   if (pathname.startsWith('/toolbox/podesty')) return 'Podesty'
   if (pathname.startsWith('/toolbox/technik')) return 'Technik / gotówka'
   if (pathname.startsWith('/toolbox')) return 'Toolbox'

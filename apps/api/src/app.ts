@@ -22,6 +22,7 @@ import ledScreenProjectsRouter from './modules/led-screen-projects/led-screen-pr
 import plannerBoardsRouter from './modules/planner-boards/planner-boards.router'
 import stagePlanRoleMapsRouter from './modules/stage-plan-role-maps/stage-plan-role-maps.router'
 import feedbackRouter from './modules/feedback/feedback.router'
+import feedbackPublicRouter from './modules/feedback/feedback.public.router'
 import { bindCompanyContext, requireAuth, requireModuleAccess, requirePermission } from './shared/middleware/auth.middleware'
 
 const PRODUCTION_FRONTEND_ORIGINS = ['https://fuckupmanager.lamastage.pl'] as const
@@ -73,6 +74,7 @@ export function createApp() {
   app.use('/api/auth', authRouter)
   app.use('/api/public/proposals', publicProposalRouter)
   app.use('/api/public/shared-offer', sharedOfferPublicRouter)
+  app.use('/api/public/feedback', feedbackPublicRouter)
   app.use('/api', requireAuth, bindCompanyContext)
   app.use('/api/clients', requireModuleAccess('clients'), clientsRouter)
   app.use('/api/equipment', requireModuleAccess('equipment'), equipmentRouter)

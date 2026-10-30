@@ -29,6 +29,7 @@ import ResetPasswordPage from '../modules/auth/pages/ResetPasswordPage'
 import AcceptInvitePage from '../modules/auth/pages/AcceptInvitePage'
 import { RequireAuth, RequirePermission } from '../modules/auth/RequireAuth'
 import AdminUsersPage from '../modules/admin/pages/AdminUsersPage'
+import SpinaczWidget from '../modules/spinacz/SpinaczWidget'
 
 function ProtectedLayout({ children }: { children: ReactNode }) {
   return (
@@ -53,6 +54,7 @@ export const appRouter = createBrowserRouter([
         <div className="mx-auto max-w-6xl p-4 sm:p-6">
           <LedScreenCalculatorPage publicMode />
         </div>
+        <SpinaczWidget allowGuest />
       </div>
     ),
   },

@@ -1,7 +1,7 @@
 import { FormEvent, PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
-import { submitBugReport } from './api'
+import { submitBugReport, submitPublicBugReport } from './api'
 import {
   ensureConsoleErrorCapture,
   getRecentApiFailures,
@@ -135,12 +135,19 @@ function clampPos(pos: WidgetPos, width: number, height: number): WidgetPos {
   }
 }
 
-export default function SpinaczWidget() {
+interface SpinaczWidgetProps {
+  /** Pokazuj też bez logowania (publiczne narzędzia). */
+  allowGuest?: boolean
+}
+
+export default function SpinaczWidget({ allowGuest = false }: SpinaczWidgetProps) {
   const { user, isAdmin, isAuthenticated } = useAuth()
   const location = useLocation()
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const pageMountedAt = useRef(Date.now())
+  const isGuest = allowGuest && (!isAuthenticated || !user)
+  const snarkAdmin = !isGuest && isAdmin
   const dragRef = useRef<{
     pointerId: number
     startX: number
@@ -237,7 +244,7 @@ export default function SpinaczWidget() {
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
-  if (!isAuthenticated || !user) return null
+  if (!allowGuest && (!isAuthenticated || !user)) return null
 
   const mood: SpinaczMood =
     panel === 'sending'
@@ -260,22 +267,22 @@ export default function SpinaczWidget() {
     const draft = readDraft()
     const dayCount = readDayCount()
     let line = pickSpinaczLine(openContextForCount(dayCount), {
-      isAdmin,
+      isAdmin: snarkAdmin,
       vars: { count: String(dayCount + 1), module: moduleLabel, hour: String(new Date().getHours()) },
     })
 
     if (Math.random() < 0.25) {
       if (hasRecentApiFailures()) {
-        line = pickSpinaczLine('diag_errors', { isAdmin })
+        line = pickSpinaczLine('diag_errors', { isAdmin: snarkAdmin })
       } else if (Math.random() < 0.4) {
-        line = pickSpinaczLine('diag_clean', { isAdmin })
+        line = pickSpinaczLine('diag_clean', { isAdmin: snarkAdmin })
       } else if (timeBonusContext()) {
         line = pickSpinaczLine('time', {
-          isAdmin,
+          isAdmin: snarkAdmin,
           vars: { hour: `${new Date().getHours()}:00` },
         })
       } else if (Math.random() < 0.5) {
-        line = pickSpinaczLine('module', { isAdmin, vars: { module: moduleLabel } })
+        line = pickSpinaczLine('module', { isAdmin: snarkAdmin, vars: { module: moduleLabel } })
       }
     }
 
@@ -283,7 +290,7 @@ export default function SpinaczWidget() {
       setMessage(draft.message)
       setType(draft.type)
       setUrgency(draft.urgency)
-      setBubble(pickSpinaczLine('draft_restored', { isAdmin }))
+      setBubble(pickSpinaczLine('draft_restored', { isAdmin: snarkAdmin }))
     } else {
       setMessage('')
       setType('broken')
@@ -297,7 +304,7 @@ export default function SpinaczWidget() {
   }
 
   const collapse = () => {
-    setBubble(pickSpinaczLine('collapse', { isAdmin }))
+    setBubble(pickSpinaczLine('collapse', { isAdmin: snarkAdmin }))
     setPanel('idle')
     setCollapsed(true)
     try {
@@ -308,18 +315,18 @@ export default function SpinaczWidget() {
   }
 
   const cancel = () => {
-    setBubble(pickSpinaczLine('cancel', { isAdmin }))
+    setBubble(pickSpinaczLine('cancel', { isAdmin: snarkAdmin }))
     setPanel('idle')
   }
 
   const onTypeChange = (next: BugReportType) => {
     setType(next)
-    setBubble(pickSpinaczLine(typeContext(next), { isAdmin }))
+    setBubble(pickSpinaczLine(typeContext(next), { isAdmin: snarkAdmin }))
   }
 
   const onUrgencyChange = (next: BugUrgency) => {
     setUrgency(next)
-    setBubble(pickSpinaczLine(urgencyContext(next), { isAdmin }))
+    setBubble(pickSpinaczLine(urgencyContext(next), { isAdmin: snarkAdmin }))
   }
 
   const onMessageChange = (value: string) => {
@@ -328,7 +335,7 @@ export default function SpinaczWidget() {
       typedOnce.current = true
       if (typingTimer.current) window.clearTimeout(typingTimer.current)
       typingTimer.current = window.setTimeout(() => {
-        setBubble(pickSpinaczLine('typing', { isAdmin }))
+        setBubble(pickSpinaczLine('typing', { isAdmin: snarkAdmin }))
       }, 5000)
     }
   }
@@ -336,52 +343,54 @@ export default function SpinaczWidget() {
   const send = async () => {
     const trimmed = message.trim()
     if (trimmed.length < MIN_BUG_MESSAGE_LENGTH) {
-      setBubble(pickSpinaczLine('too_short', { isAdmin }))
+      setBubble(pickSpinaczLine('too_short', { isAdmin: snarkAdmin }))
       return
     }
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
       setPanel('error')
-      setBubble(pickSpinaczLine('error_offline', { isAdmin }))
+      setBubble(pickSpinaczLine('error_offline', { isAdmin: snarkAdmin }))
       return
     }
 
     const apiFailures = getRecentApiFailures()
-    const spinaczAside = pickSpinaczLine('mail_aside', { isAdmin })
+    const spinaczAside = pickSpinaczLine('mail_aside', { isAdmin: snarkAdmin })
 
     setPanel('sending')
-    setBubble(pickSpinaczLine('sending', { isAdmin }))
+    setBubble(pickSpinaczLine('sending', { isAdmin: snarkAdmin }))
+
+    const payload = {
+      message: trimmed,
+      type,
+      urgency,
+      pageTitle: typeof document !== 'undefined' ? document.title : moduleLabel,
+      pathname: location.pathname,
+      moduleLabel,
+      uiVersion: typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'main-unknown',
+      viewport: {
+        width: window.innerWidth,
+        height: window.innerHeight,
+      },
+      minutesOnPage: minutesOnPage(pageMountedAt.current),
+      userAgent: navigator.userAgent,
+      apiFailures,
+      consoleErrors: getRecentConsoleErrors(),
+      spinaczAside,
+    }
 
     try {
-      const res = await submitBugReport({
-        message: trimmed,
-        type,
-        urgency,
-        pageTitle: typeof document !== 'undefined' ? document.title : moduleLabel,
-        pathname: location.pathname,
-        moduleLabel,
-        uiVersion: typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'main-unknown',
-        viewport: {
-          width: window.innerWidth,
-          height: window.innerHeight,
-        },
-        minutesOnPage: minutesOnPage(pageMountedAt.current),
-        userAgent: navigator.userAgent,
-        apiFailures,
-        consoleErrors: getRecentConsoleErrors(),
-        spinaczAside,
-      })
+      const res = await (isGuest ? submitPublicBugReport(payload) : submitBugReport(payload))
       bumpDayCount()
       clearDraft()
       setTicketId(res.ticketId)
       setPanel('success')
-      setBubble(pickSpinaczLine('success', { isAdmin, vars: { ticketId: res.ticketId } }))
+      setBubble(pickSpinaczLine('success', { isAdmin: snarkAdmin, vars: { ticketId: res.ticketId } }))
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status
       setPanel('error')
       if (status === 429) {
-        setBubble(pickSpinaczLine('error_limit', { isAdmin, vars: { count: '5' } }))
+        setBubble(pickSpinaczLine('error_limit', { isAdmin: snarkAdmin, vars: { count: '5' } }))
       } else {
-        setBubble(pickSpinaczLine('error_smtp', { isAdmin }))
+        setBubble(pickSpinaczLine('error_smtp', { isAdmin: snarkAdmin }))
       }
     }
   }
@@ -480,7 +489,7 @@ export default function SpinaczWidget() {
         type="button"
         title={
           panel === 'idle'
-            ? `${pickSpinaczLine('tooltip', { isAdmin })} (przeciągnij, żeby przesunąć)`
+            ? `${pickSpinaczLine('tooltip', { isAdmin: snarkAdmin })} (przeciągnij, żeby przesunąć)`
             : 'Przeciągnij Pana Spinacza'
         }
         onClick={panel === 'idle' ? openPanel : undefined}

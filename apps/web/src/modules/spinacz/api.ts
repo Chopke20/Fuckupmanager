@@ -26,3 +26,8 @@ export interface BugReportResponse {
 export function submitBugReport(payload: BugReportPayload): Promise<BugReportResponse> {
   return api.post<BugReportResponse>('/feedback/bug-report', payload)
 }
+
+/** Publiczny tool bez sesji (np. /tools/ekran-led). */
+export function submitPublicBugReport(payload: BugReportPayload): Promise<BugReportResponse> {
+  return api.post<BugReportResponse>('/public/feedback/bug-report', payload)
+}

@@ -160,7 +160,7 @@ export async function sendBugReportMail(input: BugReportMailInput): Promise<{ to
     subject,
     text,
     html,
-    replyTo: input.userEmail,
+    replyTo: input.userEmail || undefined,
   })
 
   return { to }
