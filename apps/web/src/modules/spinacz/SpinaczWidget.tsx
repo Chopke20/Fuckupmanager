@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { FormEvent, PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { submitBugReport } from './api'
@@ -27,9 +27,13 @@ import {
 const DRAFT_KEY = 'lama-spinacz-draft-v1'
 const COLLAPSED_KEY = 'lama-spinacz-collapsed-v1'
 const DAY_COUNT_KEY = 'lama-spinacz-day-count-v1'
+const POS_KEY = 'lama-spinacz-pos-v1'
 const NEUTRAL_PLACEHOLDER = 'Co nie gra na tym ekranie?'
+const DRAG_THRESHOLD_PX = 5
+const AVATAR_SCALE = 1.2
 
 type PanelState = 'idle' | 'open' | 'sending' | 'success' | 'error'
+type WidgetPos = { left: number; top: number }
 
 function todayKey(): string {
   const d = new Date()
@@ -98,11 +102,53 @@ function clearDraft() {
   }
 }
 
+function readPos(): WidgetPos | null {
+  try {
+    const raw = window.localStorage.getItem(POS_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { left?: number; top?: number }
+    if (typeof parsed.left !== 'number' || typeof parsed.top !== 'number') return null
+    if (!Number.isFinite(parsed.left) || !Number.isFinite(parsed.top)) return null
+    return { left: parsed.left, top: parsed.top }
+  } catch {
+    return null
+  }
+}
+
+function writePos(pos: WidgetPos) {
+  try {
+    window.localStorage.setItem(POS_KEY, JSON.stringify(pos))
+  } catch {
+    /* ignore */
+  }
+}
+
+function clampPos(pos: WidgetPos, width: number, height: number): WidgetPos {
+  const margin = 8
+  const maxLeft = Math.max(margin, window.innerWidth - width - margin)
+  const maxTop = Math.max(margin, window.innerHeight - height - margin)
+  return {
+    left: Math.min(maxLeft, Math.max(margin, pos.left)),
+    top: Math.min(maxTop, Math.max(margin, pos.top)),
+  }
+}
+
 export default function SpinaczWidget() {
   const { user, isAdmin, isAuthenticated } = useAuth()
   const location = useLocation()
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const rootRef = useRef<HTMLDivElement | null>(null)
   const pageMountedAt = useRef(Date.now())
+  const dragRef = useRef<{
+    pointerId: number
+    startX: number
+    startY: number
+    origLeft: number
+    origTop: number
+    moved: boolean
+  } | null>(null)
+  const posRef = useRef<WidgetPos | null>(readPos())
+  const suppressClickRef = useRef(false)
 
   const [collapsed, setCollapsed] = useState(() => {
     try {
@@ -117,12 +163,20 @@ export default function SpinaczWidget() {
   const [type, setType] = useState<BugReportType>('broken')
   const [urgency, setUrgency] = useState<BugUrgency>('ok')
   const [ticketId, setTicketId] = useState<string | null>(null)
+  const [pos, setPos] = useState<WidgetPos | null>(() => posRef.current)
+  const [dragging, setDragging] = useState(false)
   const typingTimer = useRef<number | null>(null)
   const typedOnce = useRef(false)
+
+  const updatePos = (next: WidgetPos | null) => {
+    posRef.current = next
+    setPos(next)
+  }
 
   const moduleLabel = useMemo(() => moduleLabelFromPath(location.pathname), [location.pathname])
   const raiseForPlanner = location.pathname.startsWith('/toolbox/planer')
   const isFormOpen = panel === 'open' || panel === 'sending' || panel === 'success' || panel === 'error'
+  const showCollapsedOnly = collapsed && panel === 'idle'
 
   useEffect(() => {
     ensureConsoleErrorCapture()
@@ -143,6 +197,19 @@ export default function SpinaczWidget() {
     writeDraft(message, type, urgency)
   }, [message, type, urgency, panel])
 
+  useEffect(() => {
+    const onResize = () => {
+      const prev = posRef.current
+      if (!prev || !rootRef.current) return
+      const rect = rootRef.current.getBoundingClientRect()
+      const next = clampPos(prev, rect.width, rect.height)
+      writePos(next)
+      updatePos(next)
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
   if (!isAuthenticated || !user) return null
 
   const mood: SpinaczMood =
@@ -159,6 +226,10 @@ export default function SpinaczWidget() {
             : 'idle'
 
   const openPanel = () => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false
+      return
+    }
     const draft = readDraft()
     const dayCount = readDayCount()
     let line = pickSpinaczLine(openContextForCount(dayCount), {
@@ -293,28 +364,98 @@ export default function SpinaczWidget() {
     void send()
   }
 
-  const bottomClass = raiseForPlanner ? 'bottom-28' : 'bottom-4'
-
-  if (collapsed && panel === 'idle') {
-    return (
-      <button
-        type="button"
-        title={pickSpinaczLine('tooltip', { isAdmin })}
-        onClick={openPanel}
-        className={`spinacz-hit fixed ${bottomClass} right-4 z-50`}
-        aria-label="Otwórz Pana Spinacza — zgłoś problem"
-      >
-        <SpinaczAvatar mood="idle" scale={1.55} />
-      </button>
-    )
+  const ensurePosFromDom = (): WidgetPos => {
+    if (posRef.current) return posRef.current
+    const el = rootRef.current
+    if (!el) {
+      return {
+        left: Math.max(8, window.innerWidth - 400),
+        top: Math.max(8, window.innerHeight - 280),
+      }
+    }
+    const rect = el.getBoundingClientRect()
+    return { left: rect.left, top: rect.top }
   }
+
+  const onDragPointerDown = (e: ReactPointerEvent<HTMLElement>) => {
+    if (e.button !== 0) return
+    const target = e.target as HTMLElement
+    if (target.closest('button[aria-label="Zamknij"], a, input, textarea, select')) return
+
+    const current = ensurePosFromDom()
+    // Jeśli jeszcze nie było custom pos — zapisz start z DOM, żeby nie skakało przy pierwszym ruchu
+    if (!posRef.current) updatePos(current)
+
+    dragRef.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      origLeft: current.left,
+      origTop: current.top,
+      moved: false,
+    }
+    setDragging(true)
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+
+  const onDragPointerMove = (e: ReactPointerEvent<HTMLElement>) => {
+    const drag = dragRef.current
+    if (!drag || drag.pointerId !== e.pointerId) return
+
+    const dx = e.clientX - drag.startX
+    const dy = e.clientY - drag.startY
+    if (!drag.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return
+    drag.moved = true
+
+    const el = rootRef.current
+    const width = el?.offsetWidth ?? 320
+    const height = el?.offsetHeight ?? 200
+    const next = clampPos(
+      { left: drag.origLeft + dx, top: drag.origTop + dy },
+      width,
+      height,
+    )
+    updatePos(next)
+  }
+
+  const onDragPointerUp = (e: ReactPointerEvent<HTMLElement>) => {
+    const drag = dragRef.current
+    if (!drag || drag.pointerId !== e.pointerId) return
+
+    if (drag.moved) {
+      suppressClickRef.current = true
+      if (posRef.current) writePos(posRef.current)
+    }
+    dragRef.current = null
+    setDragging(false)
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const bottomPad = raiseForPlanner ? 112 : 16
+  const positionStyle = pos
+    ? { left: pos.left, top: pos.top, right: 'auto' as const, bottom: 'auto' as const }
+    : { right: 16, bottom: bottomPad, left: 'auto' as const, top: 'auto' as const }
 
   return (
     <div
-      className={`fixed ${bottomClass} right-4 z-50 flex flex-col items-end gap-2 w-[min(24rem,calc(100vw-1.5rem))]`}
+      ref={rootRef}
+      className={`spinacz-root fixed z-50 flex flex-col items-end gap-2 ${
+        showCollapsedOnly ? '' : 'w-[min(24rem,calc(100vw-1.5rem))]'
+      } ${dragging ? 'spinacz-dragging' : ''}`}
+      style={positionStyle}
     >
       {isFormOpen && bubble ? (
-        <div className="spinacz-balloon relative w-full px-4 py-3 pr-9">
+        <div
+          className="spinacz-balloon spinacz-drag-handle relative w-full px-4 py-3 pr-9"
+          onPointerDown={onDragPointerDown}
+          onPointerMove={onDragPointerMove}
+          onPointerUp={onDragPointerUp}
+          onPointerCancel={onDragPointerUp}
+        >
           <p className="text-[14px] leading-snug text-[#1a1a1a]">{bubble}</p>
           {ticketId && panel === 'success' ? (
             <p className="mt-1.5 font-mono text-[12px] text-[#3d5a1f]">{ticketId}</p>
@@ -409,12 +550,22 @@ export default function SpinaczWidget() {
 
         <button
           type="button"
-          title={panel === 'idle' ? 'Zgłoś problem Panu Spinaczowi' : 'Pan Spinacz'}
+          title={
+            panel === 'idle'
+              ? `${pickSpinaczLine('tooltip', { isAdmin })} (przeciągnij, żeby przesunąć)`
+              : 'Przeciągnij Pana Spinacza'
+          }
           onClick={panel === 'idle' ? openPanel : undefined}
-          className={`spinacz-hit shrink-0 ${panel === 'idle' ? 'cursor-pointer' : 'cursor-default pointer-events-none'}`}
-          aria-label={panel === 'idle' ? 'Otwórz Pana Spinacza — zgłoś problem' : 'Pan Spinacz'}
+          onPointerDown={onDragPointerDown}
+          onPointerMove={onDragPointerMove}
+          onPointerUp={onDragPointerUp}
+          onPointerCancel={onDragPointerUp}
+          className={`spinacz-hit spinacz-drag-handle shrink-0 ${
+            panel === 'idle' ? 'cursor-grab' : 'cursor-grab'
+          }`}
+          aria-label={panel === 'idle' ? 'Otwórz Pana Spinacza — zgłoś problem' : 'Przesuń Pana Spinacza'}
         >
-          <SpinaczAvatar mood={mood} scale={1.7} />
+          <SpinaczAvatar mood={mood} scale={AVATAR_SCALE} />
         </button>
       </div>
     </div>
