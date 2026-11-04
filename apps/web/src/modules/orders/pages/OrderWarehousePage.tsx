@@ -419,19 +419,9 @@ export default function OrderWarehousePage() {
             placeholder="Notatki na dokumencie PDF (opcjonalnie)"
           />
 
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs text-muted-foreground">
-              Pozycje ze zlecenia + dopisane ręcznie. Zaznacz „Nie pakować”, „Rental” lub dopisz notatkę.
-            </p>
-            <button
-              type="button"
-              onClick={addCustomItem}
-              className="px-2.5 py-1 text-xs border border-border rounded hover:bg-surface-2 inline-flex items-center gap-1.5"
-            >
-              <Plus size={14} />
-              Dopisz pozycję
-            </button>
-          </div>
+          <p className="text-xs text-muted-foreground">
+            Pozycje ze zlecenia + dopisane ręcznie. Zaznacz „Nie pakować”, „Rental” lub dopisz notatkę.
+          </p>
 
           <div className="overflow-x-auto border border-border rounded">
             <table className="w-full text-sm">
@@ -604,6 +594,17 @@ export default function OrderWarehousePage() {
                 )}
               </tbody>
             </table>
+          </div>
+
+          <div className="flex justify-start">
+            <button
+              type="button"
+              onClick={addCustomItem}
+              className="px-2.5 py-1 text-xs border border-border rounded hover:bg-surface-2 inline-flex items-center gap-1.5"
+            >
+              <Plus size={14} />
+              Dopisz pozycję
+            </button>
           </div>
         </div>
       </div>
