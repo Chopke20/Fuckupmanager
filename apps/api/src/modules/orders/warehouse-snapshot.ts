@@ -155,5 +155,6 @@ export function buildWarehouseSnapshotFromOrder(
     itemSkipPack: parsedDraft.skipPack,
     itemRental: parsedDraft.rental,
     itemNotes: parsedDraft.itemNotes,
+    customItems: parsedDraft.customItems ?? [],
   })
 }

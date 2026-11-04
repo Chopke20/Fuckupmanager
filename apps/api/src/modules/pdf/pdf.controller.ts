@@ -936,6 +936,13 @@ export class PdfController {
       let skipPack: Record<string, boolean> = {}
       let rentalMarks: Record<string, boolean> = {}
       let itemNotes: Record<string, string> = {}
+      let customItems: Array<{
+        id: string
+        name: string
+        quantity: number
+        unit?: string
+        sortOrder?: number
+      }> = []
       const draftObj =
         draftPayload && typeof draftPayload === 'object' && !Array.isArray(draftPayload)
           ? (draftPayload as Record<string, unknown>)
@@ -951,6 +958,21 @@ export class PdfController {
         }
         if (draftObj.itemNotes && typeof draftObj.itemNotes === 'object' && !Array.isArray(draftObj.itemNotes)) {
           itemNotes = draftObj.itemNotes as Record<string, string>
+        }
+        if (Array.isArray(draftObj.customItems)) {
+          customItems = draftObj.customItems
+            .filter((row): row is Record<string, unknown> => !!row && typeof row === 'object' && !Array.isArray(row))
+            .map((row, idx) => {
+              const id = typeof row.id === 'string' && row.id.trim() ? row.id.trim() : `custom-${idx}`
+              const name = typeof row.name === 'string' ? row.name.trim() : ''
+              const qtyRaw = Number(row.quantity)
+              const quantity = Number.isFinite(qtyRaw) && qtyRaw >= 1 ? Math.round(qtyRaw) : 1
+              const unit = typeof row.unit === 'string' && row.unit.trim() ? row.unit.trim() : 'szt.'
+              const sortRaw = Number(row.sortOrder)
+              const sortOrder = Number.isFinite(sortRaw) ? Math.round(sortRaw) : 10_000 + idx
+              return { id, name, quantity, unit, sortOrder }
+            })
+            .filter((row) => row.name.length > 0)
         }
       }
 
@@ -1045,21 +1067,35 @@ export class PdfController {
               phone: order.client.phone,
             }
           : null,
-        equipmentItems: order.equipmentItems.map((e) => {
-          const rentalFromDraft = Object.prototype.hasOwnProperty.call(rentalMarks, e.id)
-            ? !!rentalMarks[e.id]
-            : !!e.isRental
-          const noteRaw = itemNotes[e.id]
-          return {
-            name: e.name,
-            quantity: e.quantity,
-            unit: e.equipment?.unit ?? 'szt.',
-            sortOrder: e.sortOrder,
-            skipPack: !!skipPack[e.id],
-            isRental: rentalFromDraft,
-            note: typeof noteRaw === 'string' && noteRaw.trim() ? noteRaw.trim() : null,
-          }
-        }),
+        equipmentItems: [
+          ...order.equipmentItems.map((e) => {
+            const rentalFromDraft = Object.prototype.hasOwnProperty.call(rentalMarks, e.id)
+              ? !!rentalMarks[e.id]
+              : !!e.isRental
+            const noteRaw = itemNotes[e.id]
+            return {
+              name: e.name,
+              quantity: e.quantity,
+              unit: e.equipment?.unit ?? 'szt.',
+              sortOrder: e.sortOrder,
+              skipPack: !!skipPack[e.id],
+              isRental: rentalFromDraft,
+              note: typeof noteRaw === 'string' && noteRaw.trim() ? noteRaw.trim() : null,
+            }
+          }),
+          ...customItems.map((c, idx) => {
+            const noteRaw = itemNotes[c.id]
+            return {
+              name: c.name,
+              quantity: c.quantity,
+              unit: c.unit ?? 'szt.',
+              sortOrder: c.sortOrder ?? 10_000 + idx,
+              skipPack: !!skipPack[c.id],
+              isRental: !!rentalMarks[c.id],
+              note: typeof noteRaw === 'string' && noteRaw.trim() ? noteRaw.trim() : null,
+            }
+          }),
+        ],
         projectContactKey: order.projectContactKey,
         projectContact,
         accentColorHex: branding.accentColorHex,

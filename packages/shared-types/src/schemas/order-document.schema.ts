@@ -78,6 +78,15 @@ export const OfferDocumentDraftSchema = z.object({
   clientOfferDescription: z.string().max(12000).optional(),
 });
 
+/** Pozycja dopisana ręcznie na liście załadunku (nie pochodzi ze sprzętu zlecenia) */
+export const WarehouseCustomItemSchema = z.object({
+  id: z.string().min(1).max(80),
+  name: z.string().min(1).max(200),
+  quantity: z.number().int().positive().max(99999).default(1),
+  unit: z.string().max(40).default('szt.'),
+  sortOrder: z.number().int().default(0),
+});
+
 export const WarehouseDocumentDraftSchema = z.object({
   title: z.string().min(1),
   notes: z.string().optional(),
@@ -89,6 +98,8 @@ export const WarehouseDocumentDraftSchema = z.object({
   rental: z.record(z.boolean()).optional(),
   /** id pozycji → notatka na liście załadunku */
   itemNotes: z.record(z.string().max(500)).optional(),
+  /** Pozycje dopisane z ręki (tylko dokument magazynu) */
+  customItems: z.array(WarehouseCustomItemSchema).max(200).optional(),
 });
 
 export const WarehouseSnapshotSchema = z.object({
@@ -109,6 +120,7 @@ export const WarehouseSnapshotSchema = z.object({
   itemSkipPack: z.record(z.boolean()).optional(),
   itemRental: z.record(z.boolean()).optional(),
   itemNotes: z.record(z.string()).optional(),
+  customItems: z.array(WarehouseCustomItemSchema).optional(),
 });
 
 export const PROPOSAL_SKINS = ['MINIMAL', 'DYNAMIC'] as const;
