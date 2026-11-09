@@ -1,0 +1,15 @@
+---
+description: Gdy użytkownik prosi o raport Spinacza / listę bugów z maila
+alwaysApply: false
+---
+
+# Spinacz inbox
+
+Zgłoszenia Pana Spinacza lecą mailem na `rafalszydlowski7@gmail.com` (temat `[Lama Bug]`).
+
+Gdy user prosi o **raport**, **co do zrobienia**, **bugi Spinacza** albo omawianie ticketów `LAMA-…`:
+
+1. Przeczytaj i zastosuj skill `spinacz-raport` (`.cursor/skills/spinacz-raport/SKILL.md`).
+2. Pobierz wątki Gmail MCP: `search_threads` query `subject:[Lama Bug]`.
+3. Statusy trzymaj w personal store: `spinacz/inbox-status.json`.
+4. Najpierw raport + priorytety, potem dopiero kod — chyba że user wskaże konkretny ticket do naprawy od razu.
