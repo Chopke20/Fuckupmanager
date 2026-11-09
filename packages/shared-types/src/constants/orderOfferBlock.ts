@@ -1,5 +1,5 @@
 /** Maksymalna długość tytułu bloku oferty (PDF + formularz). */
-export const ORDER_OFFER_BLOCK_TITLE_MAX_LENGTH = 80;
+export const ORDER_OFFER_BLOCK_TITLE_MAX_LENGTH = 160;
 
 export function clampOrderOfferBlockTitle(value: unknown): string {
   if (value == null) return '';

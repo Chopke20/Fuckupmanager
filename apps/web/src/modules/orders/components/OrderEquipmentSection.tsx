@@ -81,6 +81,7 @@ export default function OrderEquipmentSection({
   const equipmentList = partnerMode ? [] : (paginatedEquipment?.data || [])
   const [equipmentAvailability, setEquipmentAvailability] = useState<Map<string, EquipmentAvailabilityItem>>(new Map())
   const [isCheckingAvailability, setIsCheckingAvailability] = useState(false)
+  const availabilityLoadedRef = useRef(false)
   const [conflictBannerDismissed, setConflictBannerDismissed] = useState(false)
   const [availabilityModalItem, setAvailabilityModalItem] = useState<{ item: Partial<OrderEquipmentItem>; index: number } | null>(null)
   const [saveToCatalog, setSaveToCatalog] = useState<{
@@ -154,8 +155,10 @@ export default function OrderEquipmentSection({
   const checkAvailability = useCallback(async (equipmentIds: string[], quantityByEq: Map<string, number>) => {
     if (!equipmentIds.length || !orderDateFrom || !orderDateTo) return
 
+    // Spinner tylko przy pierwszym sprawdzeniu — odświeżenia w tle bez reflowu UI.
+    const showBusy = !availabilityLoadedRef.current
     try {
-      setIsCheckingAvailability(true)
+      if (showBusy) setIsCheckingAvailability(true)
       const requests = Array.from(quantityByEq.entries()).map(([equipmentId, quantity]) => ({
         equipmentId,
         quantity,
@@ -173,15 +176,16 @@ export default function OrderEquipmentSection({
       response.data.forEach((item) => {
         availabilityMap.set(item.equipmentId, item)
       })
+      availabilityLoadedRef.current = true
       setEquipmentAvailability(availabilityMap)
     } catch (error) {
       console.error('Błąd sprawdzania dostępności:', error)
     } finally {
-      setIsCheckingAvailability(false)
+      if (showBusy) setIsCheckingAvailability(false)
     }
   }, [orderDateFrom, orderDateTo, excludeOrderId])
 
-  // Sprawdź dostępność przy zmianie dat lub pozycji sprzętu (debounce 500 ms)
+  // Sprawdź dostępność przy zmianie dat lub pozycji sprzętu (debounce 800 ms)
   const quantityByEquipment = useMemo(() => {
     const map = new Map<string, number>()
     for (const item of items) {
@@ -196,16 +200,18 @@ export default function OrderEquipmentSection({
   const availabilityKey = equipmentIds.join(',') + '|' + JSON.stringify(Array.from(quantityByEquipment.entries())) + '|' + (orderDateFrom ?? '') + '|' + (orderDateTo ?? '')
   useEffect(() => {
     if (partnerMode) {
+      availabilityLoadedRef.current = false
       setEquipmentAvailability(new Map())
       return
     }
     if (equipmentIds.length === 0) {
+      availabilityLoadedRef.current = false
       setEquipmentAvailability(new Map())
       return
     }
     const t = setTimeout(() => {
       checkAvailability(equipmentIds, quantityByEquipment)
-    }, 500)
+    }, 800)
     return () => clearTimeout(t)
   }, [availabilityKey, orderDateFrom, orderDateTo, checkAvailability, quantityByEquipment, partnerMode])
 
@@ -332,14 +338,32 @@ export default function OrderEquipmentSection({
         </datalist>
       )}
       {!hideSectionTitle && (
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-center gap-2">
           <h3 className="text-base font-semibold">Wykaz sprzętu</h3>
-          {!partnerMode && isCheckingAvailability && <span className="text-sm text-blue-500">Sprawdzanie dostępności…</span>}
+          {!partnerMode ? (
+            <span
+              className={`inline-flex h-4 w-4 shrink-0 items-center justify-center transition-opacity ${
+                isCheckingAvailability ? 'opacity-100' : 'opacity-0'
+              }`}
+              aria-hidden={!isCheckingAvailability}
+              title={isCheckingAvailability ? 'Sprawdzanie dostępności…' : undefined}
+            >
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
+            </span>
+          ) : null}
         </div>
       )}
-      {hideSectionTitle && !partnerMode && isCheckingAvailability && (
-        <span className="text-sm text-blue-500">Sprawdzanie dostępności…</span>
-      )}
+      {hideSectionTitle && !partnerMode ? (
+        <span
+          className={`mb-1 inline-flex h-4 w-4 items-center justify-center transition-opacity ${
+            isCheckingAvailability ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          }`}
+          aria-hidden={!isCheckingAvailability}
+          title={isCheckingAvailability ? 'Sprawdzanie dostępności…' : undefined}
+        >
+          <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
+        </span>
+      ) : null}
 
       {/* Tabela jak harmonogram – spójny wygląd, nazwa ma miejsce */}
       <div className="border border-border rounded overflow-hidden">
