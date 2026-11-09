@@ -345,11 +345,14 @@ function buildTransportParts(
 
 function blockSummary(net: number, vat: number, ctx: PositionsMoneyContext, blockTitle: string): string {
   const gross = net + vat
-  const title = blockTitle.trim() || 'Blok'
+  const title = escapeHtml(blockTitle.trim() || 'Blok')
   return `
     <div class="fin-block fin-block--offer-block">
       <div class="fin-row">
-        <span class="fin-label">Wartość netto - ${escapeHtml(title)}</span>
+        <span class="fin-label">
+          <span class="fin-label__kind">Wartość netto</span>
+          <span class="fin-label__title">${title}</span>
+        </span>
         <span class="fin-val">${ctx.fmt(net)}</span>
       </div>
       <div class="fin-row">
@@ -357,7 +360,10 @@ function blockSummary(net: number, vat: number, ctx: PositionsMoneyContext, bloc
         <span class="fin-val">${ctx.fmt(vat)}</span>
       </div>
       <div class="fin-row fin-row--brutto">
-        <span class="fin-label">Wartość brutto - ${escapeHtml(title)}</span>
+        <span class="fin-label">
+          <span class="fin-label__kind">Wartość brutto</span>
+          <span class="fin-label__title">${title}</span>
+        </span>
         <span class="fin-val">${ctx.fmt(gross)}</span>
       </div>
     </div>`

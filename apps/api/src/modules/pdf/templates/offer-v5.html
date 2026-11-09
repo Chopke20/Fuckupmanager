@@ -403,6 +403,26 @@ body {
   min-width: 0;
 }
 
+.fin-block--offer-block .fin-label {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.fin-label__kind {
+  font-size: 9pt;
+  font-weight: 700;
+  color: #111;
+  line-height: 1.25;
+}
+
+.fin-label__title {
+  font-size: 7.5pt;
+  font-weight: 400;
+  color: #555;
+  line-height: 1.3;
+}
+
 .fin-val {
   font-size: 8pt;
   font-weight: 600;
@@ -425,6 +445,10 @@ body {
   color: #111;
 }
 
+.fin-block--offer-block .fin-row {
+  align-items: flex-start;
+}
+
 .fin-row--brutto {
   background: var(--accent);
   padding: 9px 11px;
@@ -433,9 +457,21 @@ body {
 }
 
 .fin-row--brutto .fin-label {
+  font-weight: 400;
+  font-size: 8pt;
+  color: #555;
+}
+
+.fin-row--brutto .fin-label__kind {
   font-weight: 700;
   font-size: 10pt;
   color: #111;
+}
+
+.fin-row--brutto .fin-label__title {
+  font-weight: 400;
+  font-size: 7.5pt;
+  color: #333;
 }
 
 .fin-row--brutto .fin-val {

@@ -353,17 +353,6 @@ export default function OrderEquipmentSection({
           ) : null}
         </div>
       )}
-      {hideSectionTitle && !partnerMode ? (
-        <span
-          className={`mb-1 inline-flex h-4 w-4 items-center justify-center transition-opacity ${
-            isCheckingAvailability ? 'opacity-100' : 'opacity-0 pointer-events-none'
-          }`}
-          aria-hidden={!isCheckingAvailability}
-          title={isCheckingAvailability ? 'Sprawdzanie dostępności…' : undefined}
-        >
-          <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
-        </span>
-      ) : null}
 
       {/* Tabela jak harmonogram – spójny wygląd, nazwa ma miejsce */}
       <div className="border border-border rounded overflow-hidden">
