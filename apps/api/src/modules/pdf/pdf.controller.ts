@@ -222,6 +222,7 @@ export class PdfController {
   private pickProjectContact(
     appSettings: unknown,
     preferredContactId?: string | null,
+    userPreferredContactId?: string | null,
   ): { name?: string | null; phone?: string | null; email?: string | null } | null {
     const s = appSettings as { projectContactsJson?: string | null; defaultProjectContactId?: string | null } | null
     const raw = s?.projectContactsJson
@@ -233,17 +234,25 @@ export class PdfController {
     } catch {
       return null
     }
-    const preferredId = preferredContactId ? String(preferredContactId) : null
-    const defaultId = s?.defaultProjectContactId ?? null
+    const draftId = preferredContactId ? String(preferredContactId) : null
+    const userId = userPreferredContactId ? String(userPreferredContactId) : null
+    const companyDefaultId = s?.defaultProjectContactId ?? null
     const pick =
-      (preferredId ? list.find((c) => String(c.id ?? '') === preferredId) : null) ??
-      (defaultId ? list.find((c) => String(c.id ?? '') === defaultId) : null) ??
+      (draftId ? list.find((c) => String(c.id ?? '') === draftId) : null) ??
+      (userId ? list.find((c) => String(c.id ?? '') === userId) : null) ??
+      (companyDefaultId ? list.find((c) => String(c.id ?? '') === companyDefaultId) : null) ??
       (list[0] ?? null)
     if (!pick) return null
     const name = typeof pick.name === 'string' ? pick.name : null
     const phone = typeof pick.phone === 'string' ? pick.phone : null
     const email = typeof pick.email === 'string' ? pick.email : null
     return { name, phone, email }
+  }
+
+  private resolveUserPreferredProjectContactId(res: Response): string | null {
+    const user = res.locals.user as { preferredProjectContactId?: string | null } | undefined
+    const v = user?.preferredProjectContactId
+    return typeof v === 'string' && v.trim() ? v.trim() : null
   }
 
   private normalizeHexColor(value: unknown): string | null {
@@ -330,7 +339,11 @@ export class PdfController {
         (draftPayload && typeof draftPayload === 'object' && 'projectContactId' in (draftPayload as any))
           ? String((draftPayload as any).projectContactId ?? '').trim() || null
           : null
-      let projectContact = this.pickProjectContact(appSettings, preferredContactId)
+      let projectContact = this.pickProjectContact(
+        appSettings,
+        preferredContactId,
+        this.resolveUserPreferredProjectContactId(res),
+      )
       let offerIssuerDetailsVariant: 'DEFAULT' | 'ADDRESS_NIP' = 'DEFAULT'
       ;({ draftPayload, branding, projectContact, offerIssuerDetailsVariant } = this.applyToinenMusicModeIfEnabled(
         appSettings,
@@ -390,7 +403,11 @@ export class PdfController {
         draftPayload && typeof draftPayload === 'object' && 'projectContactId' in (draftPayload as any)
           ? String((draftPayload as any).projectContactId ?? '').trim() || null
           : null
-      let projectContact = this.pickProjectContact(appSettings, preferredContactId)
+      let projectContact = this.pickProjectContact(
+        appSettings,
+        preferredContactId,
+        this.resolveUserPreferredProjectContactId(res),
+      )
       const branding = { accentColorHex: null as string | null, logoUrl: null as string | null }
       ;({ draftPayload, projectContact } = this.applyToinenMusicModeIfEnabled(
         appSettings,
@@ -458,7 +475,11 @@ export class PdfController {
         (draftPayload && typeof draftPayload === 'object' && 'projectContactId' in (draftPayload as any))
           ? String((draftPayload as any).projectContactId ?? '').trim() || null
           : null
-      let projectContact = this.pickProjectContact(appSettings, preferredContactId)
+      let projectContact = this.pickProjectContact(
+        appSettings,
+        preferredContactId,
+        this.resolveUserPreferredProjectContactId(res),
+      )
       let offerIssuerDetailsVariant: 'DEFAULT' | 'ADDRESS_NIP' = 'DEFAULT'
       ;({ draftPayload, branding, projectContact, offerIssuerDetailsVariant } = this.applyToinenMusicModeIfEnabled(
         appSettings,
@@ -1044,7 +1065,11 @@ export class PdfController {
       const issuer = await resolveDefaultIssuerForDraft(prisma)
       const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
       const branding = await this.resolvePdfBranding(appSettings)
-      const projectContact = this.pickProjectContact(appSettings, null)
+      const projectContact = this.pickProjectContact(
+        appSettings,
+        null,
+        this.resolveUserPreferredProjectContactId(res),
+      )
       const html = buildWarehousePdfHtml({
         documentNumberDisplay,
         issuedAt: generatedAt,

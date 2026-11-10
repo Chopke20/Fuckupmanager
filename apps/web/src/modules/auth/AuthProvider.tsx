@@ -1,6 +1,6 @@
 import { Permission, resolvePermissionsForRole, UserPublic } from '@lama-stage/shared-types'
 import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react'
-import { apiLogin, apiLogout, apiMe } from './auth.api'
+import { apiLogin, apiLogout, apiMe, apiUpdateMyPreferences } from './auth.api'
 import { applyCompanyTheme, resetCompanyTheme } from '../../lib/companyTheme'
 
 interface AuthContextValue {
@@ -15,6 +15,7 @@ interface AuthContextValue {
   login: (companyCode: string, email: string, password: string) => Promise<void>
   logout: () => Promise<void>
   refreshMe: () => Promise<void>
+  setPreferredProjectContactId: (contactId: string | null) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
@@ -67,6 +68,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     resetCompanyTheme()
   }
 
+  const setPreferredProjectContactId = async (contactId: string | null) => {
+    const next = await apiUpdateMyPreferences(contactId)
+    setUser(next)
+  }
+
   const value = useMemo<AuthContextValue>(() => ({
     permissions: user?.permissions ?? (user?.role ? resolvePermissionsForRole(user.role) : []),
     user,
@@ -86,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login,
     logout,
     refreshMe,
+    setPreferredProjectContactId,
   }), [user, isLoading, selectedCompanyCode])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

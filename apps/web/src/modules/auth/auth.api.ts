@@ -43,6 +43,21 @@ export async function apiMe(): Promise<UserPublic> {
   return res.data
 }
 
+export async function apiUpdateMyPreferences(preferredProjectContactId: string | null): Promise<UserPublic> {
+  const res = await api.patch<Envelope<UserPublic>>('/auth/me/preferences', { preferredProjectContactId })
+  return res.data
+}
+
+export type ProjectContactsResponse = {
+  projectContacts: Array<{ id: string; name: string; phone?: string | null; email?: string | null }>
+  defaultProjectContactId: string | null
+}
+
+export async function apiListProjectContacts(): Promise<ProjectContactsResponse> {
+  const res = await api.get<Envelope<ProjectContactsResponse>>('/auth/project-contacts')
+  return res.data
+}
+
 export async function apiForgotPassword(companyCode: string, email: string): Promise<void> {
   await api.post<Envelope<{ success: boolean }>>('/auth/forgot-password', { companyCode, email })
 }

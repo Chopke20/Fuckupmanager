@@ -5,6 +5,7 @@ import {
   ForgotPasswordRequestSchema,
   LoginRequestSchema,
   ResetPasswordRequestSchema,
+  UpdateMyPreferencesSchema,
 } from '@lama-stage/shared-types'
 import { AppError } from '../../shared/errors/AppError'
 import { createDatabaseBackup } from './backup.service'
@@ -123,6 +124,39 @@ export async function me(req: Request, res: Response, next: NextFunction) {
     }
     const data = await authService.me(user.id)
     res.json({ data })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export async function updateMyPreferences(req: Request, res: Response, next: NextFunction) {
+  try {
+    const user = res.locals.user as { id: string } | undefined
+    if (!user?.id) {
+      throw new AppError('Brak sesji.', 401, 'UNAUTHORIZED')
+    }
+    const parsed = UpdateMyPreferencesSchema.safeParse(req.body)
+    if (!parsed.success) {
+      throw new AppError('Nieprawidłowe preferencje.', 400, 'VALIDATION_ERROR', parsed.error.flatten())
+    }
+    const data = await authService.updateMyPreferences(user.id, parsed.data.preferredProjectContactId)
+    res.json({ data })
+  } catch (error) {
+    next(error)
+  }
+}
+
+/** Lista opiekunów PDF — dostępna dla każdego zalogowanego (nie wymaga admin). */
+export async function listProjectContacts(req: Request, res: Response, next: NextFunction) {
+  try {
+    const settings = await getCurrentCompanyAppSettings()
+    const contacts = Array.isArray(settings.projectContacts) ? settings.projectContacts : []
+    res.json({
+      data: {
+        projectContacts: contacts,
+        defaultProjectContactId: settings.defaultProjectContactId ?? null,
+      },
+    })
   } catch (error) {
     next(error)
   }

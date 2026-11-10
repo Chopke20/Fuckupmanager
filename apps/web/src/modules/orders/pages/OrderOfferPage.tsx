@@ -11,7 +11,7 @@ import { groupOrderEquipmentByCategory } from '../utils/groupOrderEquipmentByCat
 import { OFFER_EXCEL_EXPORT_VISIBLE } from '../utils/offerExcelExport';
 import { apiListIssuerProfiles } from '../../admin/api/issuer-profiles.api';
 import { useAuth } from '../../auth/AuthProvider';
-import { apiGetAppSettings } from '../../auth/auth.api';
+import { apiGetAppSettings, apiListProjectContacts } from '../../auth/auth.api';
 import { sharedOfferAdminApi, type SharedOfferStatusResponse } from '../api/sharedOffer.api';
 
 function parseFilenameFromContentDisposition(header: string | undefined, fallback: string) {
@@ -112,9 +112,10 @@ export default function OrderOfferPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { hasPermission } = useAuth();
+  const { hasPermission, user, setPreferredProjectContactId } = useAuth();
   const canManageIssuerProfiles = hasPermission('admin.users.write');
   const { data: order, isLoading, isError } = useOrder(id || '');
+  const [savingPreferredContact, setSavingPreferredContact] = useState(false);
 
   const [draft, setDraft] = useState<OfferDraft | null>(null);
   const [exports, setExports] = useState<OrderDocumentExportMeta[]>([]);
@@ -142,10 +143,16 @@ export default function OrderOfferPage() {
   const appSettingsQuery = useQuery({
     queryKey: ['app-settings'],
     queryFn: () => apiGetAppSettings(),
+    enabled: canManageIssuerProfiles,
+  });
+
+  const projectContactsQuery = useQuery({
+    queryKey: ['project-contacts'],
+    queryFn: () => apiListProjectContacts(),
   });
 
   const projectContacts = useMemo(() => {
-    const raw = (appSettingsQuery.data as any)?.projectContacts as any[] | null | undefined;
+    const raw = projectContactsQuery.data?.projectContacts ?? [];
     if (!Array.isArray(raw)) return [];
     return raw
       .map((c) => ({
@@ -155,7 +162,19 @@ export default function OrderOfferPage() {
         email: typeof c?.email === 'string' ? c.email : '',
       }))
       .filter((c) => c.id && c.name);
-  }, [appSettingsQuery.data]);
+  }, [projectContactsQuery.data]);
+
+  const myPreferredContactId = user?.preferredProjectContactId ?? null;
+  const myPreferredContact = useMemo(
+    () => projectContacts.find((c) => c.id === myPreferredContactId) ?? null,
+    [projectContacts, myPreferredContactId]
+  );
+  const suggestedContactForMe = useMemo(() => {
+    if (myPreferredContactId) return null;
+    const fullName = (user?.fullName || '').trim().toLowerCase();
+    if (!fullName) return null;
+    return projectContacts.find((c) => c.name.trim().toLowerCase() === fullName) ?? null;
+  }, [myPreferredContactId, projectContacts, user?.fullName]);
 
   const enableToinenMusicMode = useMemo(() => {
     const raw = (appSettingsQuery.data as any)?.enableToinenMusicMode;
@@ -1069,25 +1088,92 @@ export default function OrderOfferPage() {
             <div className="text-sm">
               <div className="mb-1">Opiekun projektu</div>
               {projectContacts.length > 0 ? (
-                <select
-                  value={draft.projectContactId ?? ''}
-                  onChange={(e) =>
-                    setDraft((prev) =>
-                      prev ? { ...prev, projectContactId: e.target.value || null } : prev
-                    )
-                  }
-                  className="mt-1 w-full px-2 py-1 text-sm bg-background border border-border rounded"
-                  title="Wybór opiekuna projektu dla tego dokumentu"
-                >
-                  <option value="">Domyślny (z Admina)</option>
-                  {projectContacts.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                      {c.phone ? ` • ${c.phone}` : ''}
-                      {c.email ? ` • ${c.email}` : ''}
+                <div className="space-y-1">
+                  <select
+                    value={draft.projectContactId ?? ''}
+                    onChange={(e) =>
+                      setDraft((prev) =>
+                        prev ? { ...prev, projectContactId: e.target.value || null } : prev
+                      )
+                    }
+                    className="mt-1 w-full px-2 py-1 text-sm bg-background border border-border rounded"
+                    title="Wybór opiekuna projektu dla tego dokumentu"
+                  >
+                    <option value="">
+                      {myPreferredContact
+                        ? `Mój domyślny (${myPreferredContact.name})`
+                        : 'Mój domyślny (ustaw poniżej)'}
                     </option>
-                  ))}
-                </select>
+                    {projectContacts.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                        {c.phone ? ` • ${c.phone}` : ''}
+                        {c.email ? ` • ${c.email}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {(() => {
+                    const effectiveId = draft.projectContactId || myPreferredContactId
+                    const canRemember =
+                      Boolean(draft.projectContactId) && draft.projectContactId !== myPreferredContactId
+                    return (
+                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                        {canRemember ? (
+                          <button
+                            type="button"
+                            disabled={savingPreferredContact}
+                            className="underline hover:text-foreground disabled:opacity-50"
+                            onClick={async () => {
+                              if (!draft.projectContactId) return
+                              setSavingPreferredContact(true)
+                              try {
+                                await setPreferredProjectContactId(draft.projectContactId)
+                                setInfo('Zapisano Twojego domyślnego opiekuna projektu.')
+                              } catch {
+                                setError('Nie udało się zapisać domyślnego opiekuna.')
+                              } finally {
+                                setSavingPreferredContact(false)
+                              }
+                            }}
+                          >
+                            {savingPreferredContact ? 'Zapisywanie…' : 'Zapamiętaj jako mój domyślny'}
+                          </button>
+                        ) : suggestedContactForMe ? (
+                          <button
+                            type="button"
+                            disabled={savingPreferredContact}
+                            className="underline hover:text-foreground disabled:opacity-50"
+                            onClick={async () => {
+                              setSavingPreferredContact(true)
+                              try {
+                                await setPreferredProjectContactId(suggestedContactForMe.id)
+                                setDraft((prev) =>
+                                  prev && !prev.projectContactId
+                                    ? { ...prev, projectContactId: suggestedContactForMe.id }
+                                    : prev
+                                )
+                                setInfo(`Ustawiono domyślnego opiekuna: ${suggestedContactForMe.name}.`)
+                              } catch {
+                                setError('Nie udało się zapisać domyślnego opiekuna.')
+                              } finally {
+                                setSavingPreferredContact(false)
+                              }
+                            }}
+                          >
+                            To Ty ({suggestedContactForMe.name}) — ustaw jako mój domyślny
+                          </button>
+                        ) : effectiveId ? (
+                          <span>
+                            Domyślny PDF:{' '}
+                            {projectContacts.find((c) => c.id === effectiveId)?.name ?? '—'}
+                          </span>
+                        ) : (
+                          <span>Wybierz opiekuna i zapamiętaj jako swój domyślny.</span>
+                        )}
+                      </div>
+                    )
+                  })()}
+                </div>
               ) : (
                 <div className="mt-1 w-full px-2 py-1 text-sm bg-surface border border-border rounded text-muted-foreground">
                   Brak opiekunów projektu w Admin → Dokumenty i komunikacja.

@@ -375,12 +375,13 @@ export default function AdminUsersPage() {
     const payload: any = {
       warehouseAddress: warehouseAddress || null,
       projectContacts: cleaned,
-      defaultProjectContactId: cleaned.length === 0 ? null : (defaultProjectContactId || cleaned[0]!.id).trim(),
-    }
-
-    if (cleaned.length > 0 && !cleaned.some((c) => c.id === payload.defaultProjectContactId)) {
-      setProjectContactsError('Domyślny opiekun musi być wybrany z listy.')
-      return
+      // Firmowy default zostaje tylko jako stary fallback; każdy user ma własny wybór.
+      defaultProjectContactId:
+        cleaned.length === 0
+          ? null
+          : cleaned.some((c) => c.id === defaultProjectContactId)
+            ? defaultProjectContactId
+            : cleaned[0]!.id,
     }
 
     appSettingsMutation.mutate(payload)
@@ -565,20 +566,12 @@ export default function AdminUsersPage() {
         <AdminCard>
           <AdminCardHeader
             title="Opiekunowie projektu (widoczni na PDF)"
-            description="Dane widoczne w stopce PDF jako „Opiekun projektu”."
+            description="Lista kontaktów do stopki PDF. Każdy użytkownik wybiera swojego domyślnego opiekuna na stronie oferty."
           />
           <AdminCardBody className="space-y-2">
             <div className="space-y-2">
               {projectContacts.map((c, idx) => (
-                <div key={c.id} className="grid md:grid-cols-[24px_1fr_1fr_1fr_80px] gap-2 items-start">
-                  <div className="pt-2 flex justify-center">
-                    <input
-                      type="radio"
-                      name="default-project-contact"
-                      checked={defaultProjectContactId === c.id}
-                      onChange={() => setDefaultProjectContactId(c.id)}
-                    />
-                  </div>
+                <div key={c.id} className="grid md:grid-cols-[1fr_1fr_1fr_80px] gap-2 items-start">
                   <input
                     value={c.name}
                     onChange={(e) =>
@@ -627,7 +620,6 @@ export default function AdminUsersPage() {
                 onClick={() => {
                   const id = `C${Date.now()}`
                   setProjectContacts((prev) => [...prev, { id, name: '', phone: null, email: null }])
-                  if (!defaultProjectContactId) setDefaultProjectContactId(id)
                 }}
               >
                 + Dodaj opiekuna

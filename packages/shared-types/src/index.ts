@@ -33,7 +33,12 @@ export {
   PublicCompanySchema,
   UserRoleSchema,
 } from './schemas/auth.schema';
-export { UserPublicSchema, InvitationSchema } from './schemas/user.schema';
+export {
+  UserPublicSchema,
+  InvitationSchema,
+  UpdateMyPreferencesSchema,
+} from './schemas/user.schema';
+export type { UpdateMyPreferences } from './schemas/user.schema';
 export { AppSettingsSchema, AppSettingsPublicSchema, UpdateAppSettingsSchema } from './schemas/app-settings.schema';
 export {
   PermissionSchema,

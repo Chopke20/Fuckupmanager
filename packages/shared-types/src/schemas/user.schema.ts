@@ -17,6 +17,8 @@ export const UserPublicSchema = z.object({
   fullName: z.string().nullable().optional(),
   role: z.string().min(2),
   permissions: z.array(PermissionSchema).optional(),
+  /** Domyślny opiekun projektu (PDF) — preferencja tego użytkownika. */
+  preferredProjectContactId: z.string().trim().min(1).max(64).nullable().optional(),
   isActive: z.boolean(),
   mustChangePassword: z.boolean(),
   emailVerifiedAt: z.string().datetime().nullable().optional(),
@@ -24,6 +26,12 @@ export const UserPublicSchema = z.object({
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
+
+export const UpdateMyPreferencesSchema = z.object({
+  preferredProjectContactId: z.string().trim().min(1).max(64).nullable(),
+});
+
+export type UpdateMyPreferences = z.infer<typeof UpdateMyPreferencesSchema>;
 
 export const InvitationSchema = z.object({
   id: z.string().uuid(),

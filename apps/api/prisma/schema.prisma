@@ -27,6 +27,8 @@ model User {
   emailVerifiedAt  DateTime?
   mustChangePassword Boolean @default(false)
   lastLoginAt      DateTime?
+  /// Default project contact for PDF footer (from AppSettings.projectContacts)
+  preferredProjectContactId String?
   createdById      String?
   createdBy        User?    @relation("UserCreatedUsers", fields: [createdById], references: [id])
   createdUsers     User[]   @relation("UserCreatedUsers")

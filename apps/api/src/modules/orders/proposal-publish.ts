@@ -52,7 +52,8 @@ function pickLogoUrlForSkin(
 
 function pickContact(
   settings: { projectContactsJson?: string | null; defaultProjectContactId?: string | null },
-  preferredId?: string | null
+  preferredId?: string | null,
+  userPreferredId?: string | null,
 ): { name: string | null; phone: string | null; email: string | null } {
   const raw = settings.projectContactsJson
   if (!raw?.trim()) return { name: null, phone: null, email: null }
@@ -63,8 +64,11 @@ function pickContact(
   } catch {
     return { name: null, phone: null, email: null }
   }
+  const draftId = preferredId ? String(preferredId) : null
+  const userId = userPreferredId ? String(userPreferredId) : null
   const pick =
-    (preferredId ? list.find((c) => String(c.id ?? '') === preferredId) : null) ??
+    (draftId ? list.find((c) => String(c.id ?? '') === draftId) : null) ??
+    (userId ? list.find((c) => String(c.id ?? '') === userId) : null) ??
     (settings.defaultProjectContactId
       ? list.find((c) => String(c.id ?? '') === settings.defaultProjectContactId)
       : null) ??

@@ -17,8 +17,10 @@ import {
   listUsers,
   login,
   logout,
+  listProjectContacts,
   me,
   resetPassword,
+  updateMyPreferences,
   updateRole,
   updateAdminAppSettings,
 } from './auth.controller'
@@ -39,6 +41,8 @@ router.post('/accept-invite', createRateLimit(10, ACCEPT_INVITE_WINDOW_MS), acce
 
 router.post('/logout', ...withAuth, logout)
 router.get('/me', ...withAuth, me)
+router.patch('/me/preferences', ...withAuth, updateMyPreferences)
+router.get('/project-contacts', ...withAuth, listProjectContacts)
 
 router.post('/invitations', ...withAuth, requirePermission('admin.users.write'), createInvitation)
 router.get('/invitations', ...withAuth, requirePermission('admin.users.read'), listInvitations)

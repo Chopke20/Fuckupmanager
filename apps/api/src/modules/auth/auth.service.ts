@@ -28,6 +28,7 @@ export type SafeUser = {
   role: string
   isActive: boolean
   mustChangePassword: boolean
+  preferredProjectContactId: string | null
   emailVerifiedAt: Date | null
   lastLoginAt: Date | null
   createdAt: Date
@@ -58,6 +59,7 @@ function toSafeUser(user: User): SafeUser {
     role: user.role,
     isActive: user.isActive,
     mustChangePassword: user.mustChangePassword,
+    preferredProjectContactId: user.preferredProjectContactId ?? null,
     emailVerifiedAt: user.emailVerifiedAt,
     lastLoginAt: user.lastLoginAt,
     createdAt: user.createdAt,
@@ -620,6 +622,41 @@ export class AuthService {
       where: { id: targetUserId },
       data: { role: roleKey },
     })
+  }
+
+  async updateMyPreferences(userId: string, preferredProjectContactId: string | null) {
+    const user = await prisma.user.findUnique({ where: { id: userId } })
+    if (!user || !user.isActive) {
+      throw new AppError('Nie znaleziono użytkownika.', 404, 'USER_NOT_FOUND')
+    }
+
+    const nextId = preferredProjectContactId?.trim() || null
+    if (nextId) {
+      const settings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
+      const raw = (settings as { projectContactsJson?: string | null } | null)?.projectContactsJson
+      let list: Array<{ id?: unknown }> = []
+      if (raw?.trim()) {
+        try {
+          const parsed = JSON.parse(raw)
+          if (Array.isArray(parsed)) list = parsed
+        } catch {
+          list = []
+        }
+      }
+      const ok = list.some((c) => String(c?.id ?? '') === nextId)
+      if (!ok) {
+        throw new AppError('Wybrany opiekun nie istnieje na liście firmy.', 400, 'INVALID_PROJECT_CONTACT')
+      }
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: { preferredProjectContactId: nextId },
+    })
+    const permissions = await resolvePermissionsForRoleFromDb(updated.role)
+    const companyCode = getCurrentCompanyCode()
+    const withCompany = toSafeUserWithCompany(updated, companyCode)
+    return { ...(await withDbBranding(companyCode, withCompany)), permissions }
   }
 }
 
