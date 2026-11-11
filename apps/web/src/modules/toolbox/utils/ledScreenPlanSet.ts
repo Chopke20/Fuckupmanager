@@ -26,8 +26,8 @@ export type LedScreenRoleConfigKey = (typeof LED_SCREEN_ROLE_CONFIG_KEYS)[number
 
 export const LED_SCREEN_CATALOG_KEY_LABELS: Record<string, string> = {
   'led-screen': 'Ekran LED',
-  'led-stabilization': 'Stabilizacja',
-  'led-processor': 'Procesor',
+  'led-stabilization': 'Stabilizacja (na m²)',
+  'led-processor': 'Procesor (domyślnie 1)',
   // alias starego klucza (gdy ktoś zdążył zmapować szafki)
   'led-cabinets': 'Ekran LED',
 }
@@ -228,6 +228,16 @@ export function ledScreenCabinetsTotal(project: LedScreenProjectPayload): number
   return project.screens.reduce((acc, screen) => acc + screen.columns * screen.rows, 0)
 }
 
+/** Powierzchnia wszystkich ekranów w m² (szer. × wys. szafek). */
+export function ledScreenAreaM2(project: LedScreenProjectPayload): number {
+  const area = project.screens.reduce((acc, screen) => {
+    const wM = (screen.columns * screen.cabinetWidthMm) / 1000
+    const hM = (screen.rows * screen.cabinetHeightMm) / 1000
+    return acc + wM * hM
+  }, 0)
+  return Math.round(area * 100) / 100
+}
+
 export function ledScreenEntrySummary(entry: LedScreenSetEntry): string {
   const cabinets = ledScreenCabinetsTotal(entry.project)
   const screens = entry.project.screens.length
@@ -266,6 +276,7 @@ export function ledScreenBomLines(project: LedScreenProjectPayload): Array<{
   unit: 'szt.'
 }> {
   const cabinets = ledScreenCabinetsTotal(project)
+  const areaM2 = ledScreenAreaM2(project)
   const screens = project.screens.length
   if (cabinets <= 0 && screens <= 0) return []
   const lines: Array<{
@@ -284,19 +295,24 @@ export function ledScreenBomLines(project: LedScreenProjectPayload): Array<{
       unit: 'szt.',
     })
   }
-  if (screens > 0) {
+  // Stabilizacja: 1 szt. na każdy m² powierzchni ekranów (zaokrąglone w górę).
+  const stabilizationQty = Math.max(1, Math.ceil(areaM2))
+  if (areaM2 > 0) {
     lines.push({
       key: 'led-stabilization',
       catalogKey: 'led-stabilization',
       name: 'Stabilizacja',
-      quantity: screens,
+      quantity: stabilizationQty,
       unit: 'szt.',
     })
+  }
+  // Procesor: domyślnie 1 — ilość poprawiasz ręcznie w wykazie.
+  if (screens > 0) {
     lines.push({
       key: 'led-processor',
       catalogKey: 'led-processor',
       name: 'Procesor',
-      quantity: screens,
+      quantity: 1,
       unit: 'szt.',
     })
   }

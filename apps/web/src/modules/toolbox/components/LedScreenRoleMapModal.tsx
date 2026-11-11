@@ -9,6 +9,7 @@ import {
 import {
   LED_SCREEN_CATALOG_KEY_LABELS,
   LED_SCREEN_ROLE_CONFIG_KEYS,
+  ledScreenAreaM2,
   ledScreenBomLines,
 } from '../utils/ledScreenPlanSet'
 import type { LedScreenProjectPayload } from '../calculators/ledScreen'
@@ -44,6 +45,7 @@ export default function LedScreenRoleMapModal({
   const [error, setError] = useState<string | null>(null)
 
   const bom = useMemo(() => ledScreenBomLines(project), [project])
+  const areaM2 = useMemo(() => ledScreenAreaM2(project), [project])
 
   const load = useCallback(async () => {
     const maps = await listStagePlanRoleMaps()
@@ -120,13 +122,19 @@ export default function LedScreenRoleMapModal({
           {LED_SCREEN_ROLE_CONFIG_KEYS.map((key) => {
             const row = drafts[key] ?? emptyDraft(key)
             const qty = bom.find((line) => line.catalogKey === key)?.quantity ?? 0
+            const qtyHint =
+              key === 'led-stabilization' && areaM2 > 0
+                ? `${areaM2} m² → ${qty} szt.`
+                : key === 'led-processor'
+                  ? `${qty} szt. (ręcznie w wykazie)`
+                  : `${qty} szt.`
             return (
               <div key={key} className="rounded border border-border p-3">
                 <div className="mb-2 flex items-center justify-between gap-2 text-sm">
                   <span className="font-medium">
                     {LED_SCREEN_CATALOG_KEY_LABELS[key] ?? key}
                   </span>
-                  <span className="tabular-nums text-muted-foreground">{qty} szt.</span>
+                  <span className="tabular-nums text-muted-foreground">{qtyHint}</span>
                 </div>
                 <div className="mb-2 flex flex-wrap gap-1.5">
                   <button
