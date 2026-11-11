@@ -68,6 +68,7 @@ export default function StagePlanCanvas({
   customDeckSize = { w: 0.5, h: 2 },
   sparseLabels = false,
   showOuterDimensions = false,
+  fillContainer = false,
 }: {
   editor: StagePlanEditor
   tool: StagePlanTool
@@ -76,6 +77,8 @@ export default function StagePlanCanvas({
   /** Pokaż etykietę tylko gdy wysokość ≠ domyślna (albo przy hover). */
   sparseLabels?: boolean
   showOuterDimensions?: boolean
+  /** SVG wypełnia rodzica — nie zmienia wysokości layoutu przy zmianie viewBox. */
+  fillContainer?: boolean
 }) {
   const { plan } = editor
   const palette = STAGE_PALETTES.dark
@@ -397,14 +400,24 @@ export default function StagePlanCanvas({
     <div
       tabIndex={0}
       onKeyDown={handleKeyDown}
-      className="rounded border border-border bg-background outline-none focus:border-primary/60"
+      className={
+        fillContainer
+          ? 'absolute inset-0 outline-none focus:border-primary/60'
+          : 'rounded border border-border bg-background outline-none focus:border-primary/60'
+      }
       aria-label="Rzut sceny — edytor podestów"
     >
       <svg
         ref={svgRef}
         viewBox={`0 0 ${viewport.widthPx} ${viewport.heightPx}`}
         width="100%"
-        style={{ display: 'block', height: 'auto', touchAction: 'none' }}
+        height={fillContainer ? '100%' : undefined}
+        preserveAspectRatio="xMidYMid meet"
+        style={{
+          display: 'block',
+          height: fillContainer ? '100%' : 'auto',
+          touchAction: 'none',
+        }}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}

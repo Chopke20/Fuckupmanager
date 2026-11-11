@@ -262,9 +262,9 @@ export default function StagePlatformVisualizer({
       : null
 
   return (
-    <div className="grid min-h-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1.6fr)_minmax(300px,1fr)] xl:items-stretch">
+    <div className="grid h-full min-h-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1.6fr)_minmax(300px,1fr)] xl:items-stretch">
       {/* LEWA */}
-      <section className="flex min-h-0 flex-col gap-2 rounded-lg border border-border/80 bg-background/50 p-3">
+      <section className="flex h-full min-h-0 flex-col gap-2 overflow-hidden rounded-lg border border-border/80 bg-background/50 p-3">
         <div className="flex flex-wrap items-center gap-1.5">
           <button
             type="button"
@@ -514,39 +514,46 @@ export default function StagePlatformVisualizer({
           </IconAction>
         </div>
 
-        {hasSelection ? (
-          <div className="rounded-md border border-primary/35 bg-primary/5 px-2.5 py-2">
-            <div className="mb-1 text-xs font-medium">
-              Zaznaczenie ({editor.selectedDeckIds.length})
-            </div>
-            <div className="mb-1 text-[10px] text-muted-foreground">Wysokość nóg</div>
-            <div className="inline-flex flex-wrap overflow-hidden rounded-md border border-border">
-              {STAGE_LEG_HEIGHTS_CM.map((height, index) => (
+        {/* Stała wysokość paska zaznaczenia — bez skakania layoutu */}
+        <div className="min-h-[4.75rem] shrink-0">
+          {hasSelection ? (
+            <div className="rounded-md border border-primary/35 bg-primary/5 px-2.5 py-2">
+              <div className="mb-1 text-xs font-medium">
+                Zaznaczenie ({editor.selectedDeckIds.length})
+              </div>
+              <div className="mb-1 text-[10px] text-muted-foreground">Wysokość nóg</div>
+              <div className="inline-flex max-w-full flex-wrap overflow-hidden rounded-md border border-border">
+                {STAGE_LEG_HEIGHTS_CM.map((height, index) => (
+                  <button
+                    key={`sel-h-${height}`}
+                    type="button"
+                    onClick={() => editor.setSelectedDeckHeight(height)}
+                    className={`${segmentBtn(selectedHeight === height)} ${
+                      index > 0 ? 'border-l border-border' : ''
+                    }`}
+                  >
+                    {height}
+                  </button>
+                ))}
                 <button
-                  key={`sel-h-${height}`}
                   type="button"
-                  onClick={() => editor.setSelectedDeckHeight(height)}
-                  className={`${segmentBtn(selectedHeight === height)} ${
-                    index > 0 ? 'border-l border-border' : ''
-                  }`}
+                  onClick={() => editor.setSelectedDeckHeight(null)}
+                  className={`${segmentBtn(false)} border-l border-border`}
+                  title="Jak domyślna planu"
                 >
-                  {height}
+                  domyślna
                 </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => editor.setSelectedDeckHeight(null)}
-                className={`${segmentBtn(false)} border-l border-border`}
-                title="Jak domyślna planu"
-              >
-                domyślna
-              </button>
+              </div>
+              <span className="ml-1 text-[11px] text-muted-foreground">cm</span>
             </div>
-            <span className="ml-1 text-[11px] text-muted-foreground">cm</span>
-          </div>
-        ) : null}
+          ) : (
+            <div className="rounded-md border border-dashed border-border/50 px-2.5 py-2 text-[11px] text-muted-foreground">
+              Zaznacz blat na rzucie, żeby ustawić wysokość nóg.
+            </div>
+          )}
+        </div>
 
-        <div className="min-h-[280px] flex-1 overflow-hidden rounded-md border border-border bg-background">
+        <div className="relative min-h-0 flex-1 overflow-hidden rounded-md border border-border bg-background">
           <StagePlanCanvas
             editor={editor}
             tool={tool}
@@ -554,6 +561,7 @@ export default function StagePlatformVisualizer({
             onToolDone={() => setTool('select')}
             sparseLabels
             showOuterDimensions
+            fillContainer
           />
         </div>
 
@@ -601,7 +609,7 @@ export default function StagePlatformVisualizer({
       </section>
 
       {/* PRAWA */}
-      <aside className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-surface">
+      <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-surface">
         <div className="shrink-0 border-b border-border px-3 py-2 text-xs tabular-nums text-foreground/90">
           <span className="font-medium">
             {plan.widthM}×{plan.depthM} m

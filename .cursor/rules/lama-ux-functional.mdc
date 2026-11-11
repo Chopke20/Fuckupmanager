@@ -1,0 +1,20 @@
+---
+description: Functional UX lessons for Lama creators and order flows
+alwaysApply: true
+---
+
+# Lama UX — wnioski funkcjonalne
+
+Przy nowych kreatorach, panelach zlecenia i logikach „plan → sprzęt” stosuj zasady z:
+
+`docs/ux-functional-lessons.md`
+
+Skrót (obowiązkowy):
+
+1. **Wynik = pozycje w zleceniu**, nie rysunek. Rozpiska / „co trafi do zlecenia” zawsze widoczne; CTA sticky z uczciwą etykietą.
+2. **Lewa = projektowanie (canvas)**, **prawa = opcje + overview + sticky apply**. Bez układu 3 paneli.
+3. Statusy skutkiem: ✓ w zleceniu / wliczone / tylko plan / brak mapowania — nie żargon „pominięte”.
+4. Forma kontrolki = znaczenie (segmented ≠ chip ≠ tool); nie polegaj samym zielonym.
+5. Zero `alert` / `confirm` / `prompt` — inline lub modal aplikacji.
+6. Dirty state + ostrzeżenie przy zamykaniu kreatora z niezapisanymi zmianami.
+7. Ostrzeżenia warunkowe; powtórzenia z podsumowania chować w „Założenia”.

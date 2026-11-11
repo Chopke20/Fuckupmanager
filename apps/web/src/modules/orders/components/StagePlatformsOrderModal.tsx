@@ -43,7 +43,7 @@ export default function StagePlatformsOrderModal({
       }}
     >
       <div
-        className="flex max-h-[94vh] w-full max-w-7xl flex-col overflow-hidden rounded-xl border border-border bg-surface"
+        className="flex h-[min(90vh,880px)] w-full max-w-7xl flex-col overflow-hidden rounded-xl border border-border bg-surface"
         role="dialog"
         aria-modal="true"
         aria-labelledby="stage-platforms-dialog-title"
@@ -74,20 +74,18 @@ export default function StagePlatformsOrderModal({
             Zamknij
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
-          <div className="min-h-[min(78vh,820px)]">
-            <StagePlatformVisualizer
-              key={`${orderId ?? 'new-order'}-${offerBlockId ?? 'order'}-${sceneId ?? 'scene'}`}
-              initialPlan={initialPlan}
-              onDirtyChange={setDirty}
-              onApply={(plan) => {
-                void Promise.resolve(onApply(plan)).then(() => {
-                  setDirty(false)
-                  onClose()
-                })
-              }}
-            />
-          </div>
+        <div className="min-h-0 flex-1 overflow-hidden p-3 sm:p-4">
+          <StagePlatformVisualizer
+            key={`${orderId ?? 'new-order'}-${offerBlockId ?? 'order'}-${sceneId ?? 'scene'}`}
+            initialPlan={initialPlan}
+            onDirtyChange={setDirty}
+            onApply={(plan) => {
+              void Promise.resolve(onApply(plan)).then(() => {
+                setDirty(false)
+                onClose()
+              })
+            }}
+          />
         </div>
       </div>
 
