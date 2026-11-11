@@ -82,11 +82,11 @@ function ScreenBox({
         {screen.label}
       </span>
       <span className="pointer-events-none absolute bottom-1.5 left-1.5 right-1.5 space-y-0.5 text-[10px] leading-tight text-white/90">
-        <span className="block tabular-nums">
+        <span className="block font-semibold tabular-nums">
           {calc.screenWidthM} × {calc.screenHeightM} m
         </span>
         <span className="block tabular-nums text-white/70">
-          {round2(screen.layoutXM)}, {round2(screen.layoutYM)} m
+          {calc.columns}×{calc.rows} · P{screen.pitchMm}
         </span>
       </span>
     </div>

@@ -339,12 +339,21 @@ export function deckKindLabel(deck: StageDeck): string {
   return `${formatMeters(deck.w)}×${formatMeters(deck.h)}`
 }
 
-/** Etykieta na rzucie: rozmiar + wysokość, gdy różni się od domyślnej planu. */
-export function deckPlanLabel(deck: StageDeck, planLegHeightCm: number): string {
-  const size = deckKindLabel(deck)
-  const h = deckHeightCm(deck, planLegHeightCm)
-  if (deck.heightCm == null && h === normalizeStageLegHeightCm(planLegHeightCm)) return size
-  return `${size} · ${h}`
+/** Czy podest ma inną wysokość niż domyślna planu (do etykiety / legendy). */
+export function deckHasCustomHeight(deck: StageDeck, planLegHeightCm: number): boolean {
+  if (deck.heightCm == null) return false
+  return deckHeightCm(deck, planLegHeightCm) !== normalizeStageLegHeightCm(planLegHeightCm)
+}
+
+/** Etykieta rozmiaru na rzucie (bez wysokości). */
+export function deckPlanLabel(deck: StageDeck, _planLegHeightCm?: number): string {
+  return deckKindLabel(deck)
+}
+
+/** Druga linia etykiety: wysokość w cm, tylko gdy różni się od domyślnej. */
+export function deckPlanHeightLabel(deck: StageDeck, planLegHeightCm: number): string | null {
+  if (!deckHasCustomHeight(deck, planLegHeightCm)) return null
+  return `${deckHeightCm(deck, planLegHeightCm)} cm`
 }
 
 function deckTouchesOutlineEdge(deck: StageRect, edge: StageEdge, tol = STAGE_TOL_M): boolean {

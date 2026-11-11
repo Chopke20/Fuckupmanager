@@ -13,6 +13,7 @@ import {
   STAGE_LEG_HEIGHTS_CM,
   STAGE_STEP_TREAD_M,
   deckHeightCm,
+  deckPlanHeightLabel,
   deckPlanLabel,
   edgeSelectionLabel,
   formatMeters,
@@ -337,12 +338,18 @@ export function renderStagePlanSvg(
       const y = toY(deck.y + deck.h)
       const deckH = deckHeightCm(deck, plan.legHeightCm)
       const fill = deckFillForHeight(deckH, palette.deckFill, palette.deckAltFill)
-      const fontSize = Math.max(7, Math.min(12, Math.min(w, h) * 0.22))
-      const text = escapeXml(deckPlanLabel(deck, plan.legHeightCm))
+      const sizeFont = Math.max(8, Math.min(13, Math.min(w, h) * 0.24))
+      const heightFont = Math.max(7, Math.min(11, sizeFont * 0.85))
+      const sizeText = escapeXml(deckPlanLabel(deck))
+      const heightText = deckPlanHeightLabel(deck, plan.legHeightCm)
+      const cx = fixed(x + w / 2)
+      const cy = y + h / 2
       const label =
         Math.min(w, h) < 16
           ? ''
-          : `<text x="${fixed(x + w / 2)}" y="${fixed(y + h / 2 + fontSize * 0.35)}" text-anchor="middle" font-size="${fontSize.toFixed(0)}" font-family="Arial, sans-serif" fill="${palette.textDim}">${text}</text>`
+          : heightText
+            ? `<text text-anchor="middle" font-family="Arial, sans-serif" fill="${palette.textDim}"><tspan x="${cx}" y="${fixed(cy - heightFont * 0.15)}" font-size="${sizeFont.toFixed(0)}" font-weight="600">${sizeText}</tspan><tspan x="${cx}" y="${fixed(cy + heightFont * 1.05)}" font-size="${heightFont.toFixed(0)}" opacity="0.85">${escapeXml(heightText)}</tspan></text>`
+            : `<text x="${cx}" y="${fixed(cy + sizeFont * 0.35)}" text-anchor="middle" font-size="${sizeFont.toFixed(0)}" font-family="Arial, sans-serif" fill="${palette.textDim}">${sizeText}</text>`
       return `<rect x="${fixed(x)}" y="${fixed(y)}" width="${fixed(w)}" height="${fixed(h)}" fill="${fill}" stroke="${palette.deckStroke}" stroke-width="1.1"/>${label}`
     })
     .join('')

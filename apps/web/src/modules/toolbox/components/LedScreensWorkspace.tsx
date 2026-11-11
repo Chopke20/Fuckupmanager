@@ -65,14 +65,16 @@ export default function LedScreensWorkspace({
   onChange,
   logoUrl,
   projectName,
-  compactHeader,
+  compactHeader: _compactHeader,
 }: {
   project: LedScreenProjectPayload
   onChange: (next: LedScreenProjectPayload) => void
   logoUrl?: string | null
   projectName?: string
+  /** Zachowane dla kompatybilności z modalem zlecenia. */
   compactHeader?: boolean
 }) {
+  void _compactHeader
   const active =
     project.screens.find((s) => s.id === project.activeScreenId) ?? project.screens[0] ?? null
 
@@ -316,125 +318,243 @@ export default function LedScreensWorkspace({
     return <p className="text-sm text-muted-foreground">Brak ekranów w projekcie.</p>
   }
 
-  return (
-    <div className="space-y-4">
-      {!compactHeader ? null : null}
+  const projectCabinets = project.screens.reduce((acc, s) => {
+    const r = calculateScreenFromSpec(s)
+    return acc + (r.ok ? r.cabinetsTotal : 0)
+  }, 0)
+  const projectArea = project.screens.reduce((acc, s) => {
+    const r = calculateScreenFromSpec(s)
+    return acc + (r.ok ? r.areaM2 : 0)
+  }, 0)
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex flex-wrap gap-1.5">
-          {project.screens.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => onChange({ ...project, activeScreenId: s.id })}
-              className={`rounded border px-2.5 py-1 text-xs ${
-                s.id === active.id
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-border text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={addScreen}
-          className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:border-primary/40"
-        >
-          <Plus size={12} /> Dodaj ekran
-        </button>
-        <button
-          type="button"
-          onClick={duplicateActive}
-          className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:border-primary/40"
-        >
-          <Copy size={12} /> Duplikuj
-        </button>
-        <button
-          type="button"
-          onClick={removeActive}
-          disabled={project.screens.length <= 1}
-          className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs text-red-400 hover:border-red-400/50 disabled:opacity-40"
-        >
-          <Trash2 size={12} /> Usuń
-        </button>
-        <div className="relative ml-auto">
+  return (
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(300px,1fr)]">
+      {/* LEWA — scena / projektowanie */}
+      <section className="space-y-3 rounded-lg border border-border bg-surface/40 p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="text-sm font-semibold tracking-tight">Scena</h3>
+          <div className="flex flex-wrap gap-1.5">
+            {project.screens.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => onChange({ ...project, activeScreenId: s.id })}
+                className={`rounded border px-2.5 py-1 text-xs ${
+                  s.id === active.id
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
           <button
             type="button"
-            onClick={() => setExportMenuOpen((open) => !open)}
-            disabled={exportBusy || !result.ok}
-            className="inline-flex items-center gap-1.5 rounded border-2 border-primary px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/10 disabled:opacity-50"
+            onClick={addScreen}
+            className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:border-primary/40"
           >
-            <Download size={14} />
-            {exportBusy ? 'Generuję…' : 'Pixel mapa PNG'}
+            <Plus size={12} /> Dodaj
           </button>
-          {exportMenuOpen ? (
-            <div className="absolute right-0 z-30 mt-1 w-64 overflow-hidden rounded-md border border-border bg-surface shadow-lg">
-              <button
-                type="button"
-                className="block w-full px-3 py-2 text-left text-xs hover:bg-surface-2"
-                onClick={() => void onExport('active')}
-              >
-                <span className="font-medium">Tylko aktywny</span>
-                <span className="mt-0.5 block text-[10px] text-muted-foreground">
-                  {active.label} — jeden PNG 1:1
-                </span>
-              </button>
-              <button
-                type="button"
-                className="block w-full px-3 py-2 text-left text-xs hover:bg-surface-2"
-                onClick={() => void onExport('all-separate')}
-              >
-                <span className="font-medium">Wszystkie osobno</span>
-                <span className="mt-0.5 block text-[10px] text-muted-foreground">
-                  {project.screens.length} plików PNG (po jednym na ekran)
-                </span>
-              </button>
-              <button
-                type="button"
-                className="block w-full px-3 py-2 text-left text-xs hover:bg-surface-2"
-                onClick={() => void onExport('combined-canvas')}
-              >
-                <span className="font-medium">Pełen canvas</span>
-                <span className="mt-0.5 block text-[10px] text-muted-foreground">
-                  Jeden PNG — wszystkie ekrany wg pozycji na scenie
-                </span>
-              </button>
-            </div>
-          ) : null}
+          <button
+            type="button"
+            onClick={duplicateActive}
+            className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:border-primary/40"
+          >
+            <Copy size={12} /> Duplikuj
+          </button>
+          <button
+            type="button"
+            onClick={removeActive}
+            disabled={project.screens.length <= 1}
+            className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs text-red-400 hover:border-red-400/50 disabled:opacity-40"
+          >
+            <Trash2 size={12} /> Usuń
+          </button>
+          <div className="relative ml-auto">
+            <button
+              type="button"
+              onClick={() => setExportMenuOpen((open) => !open)}
+              disabled={exportBusy || !result.ok}
+              className="inline-flex items-center gap-1.5 rounded border border-primary px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/10 disabled:opacity-50"
+            >
+              <Download size={14} />
+              {exportBusy ? 'Generuję…' : 'PNG'}
+            </button>
+            {exportMenuOpen ? (
+              <div className="absolute right-0 z-30 mt-1 w-64 overflow-hidden rounded-md border border-border bg-surface shadow-lg">
+                <button
+                  type="button"
+                  className="block w-full px-3 py-2 text-left text-xs hover:bg-surface-2"
+                  onClick={() => void onExport('active')}
+                >
+                  <span className="font-medium">Tylko aktywny</span>
+                  <span className="mt-0.5 block text-[10px] text-muted-foreground">
+                    {active.label} — jeden PNG 1:1
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="block w-full px-3 py-2 text-left text-xs hover:bg-surface-2"
+                  onClick={() => void onExport('all-separate')}
+                >
+                  <span className="font-medium">Wszystkie osobno</span>
+                  <span className="mt-0.5 block text-[10px] text-muted-foreground">
+                    {project.screens.length} plików PNG
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="block w-full px-3 py-2 text-left text-xs hover:bg-surface-2"
+                  onClick={() => void onExport('combined-canvas')}
+                >
+                  <span className="font-medium">Pełen canvas</span>
+                  <span className="mt-0.5 block text-[10px] text-muted-foreground">
+                    Jeden PNG wg pozycji na scenie
+                  </span>
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
-      </div>
-      {exportError ? (
-        <p className="rounded border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-xs text-red-400">
-          {exportError}
+
+        {exportError ? (
+          <p className="rounded border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-xs text-red-400">
+            {exportError}
+          </p>
+        ) : null}
+
+        <LedScreenCssPreview
+          screens={project.screens}
+          activeScreenId={active.id}
+          onSelectScreen={(id) => onChange({ ...project, activeScreenId: id })}
+          onMoveScreen={(id, layoutXM, layoutYM) => {
+            onChange({
+              ...project,
+              activeScreenId: id,
+              screens: project.screens.map((s) =>
+                s.id === id ? { ...s, layoutXM, layoutYM } : s
+              ),
+            })
+            if (id === active.id) {
+              setLayoutXRaw(String(layoutXM))
+              setLayoutYRaw(String(layoutYM))
+            }
+          }}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Przeciągaj ekrany na scenie · etykieta: rozmiar, pod spodem siatka kabinetów i pitch
         </p>
-      ) : null}
+      </section>
 
-      <LedScreenCssPreview
-        screens={project.screens}
-        activeScreenId={active.id}
-        onSelectScreen={(id) => onChange({ ...project, activeScreenId: id })}
-        onMoveScreen={(id, layoutXM, layoutYM) => {
-          onChange({
-            ...project,
-            activeScreenId: id,
-            screens: project.screens.map((s) =>
-              s.id === id ? { ...s, layoutXM, layoutYM } : s
-            ),
-          })
-          if (id === active.id) {
-            setLayoutXRaw(String(layoutXM))
-            setLayoutYRaw(String(layoutYM))
-          }
-        }}
-      />
+      {/* PRAWA — opcje + overview */}
+      <aside className="space-y-4 rounded-lg border border-border bg-surface p-4">
+        <div>
+          <h3 className="mb-2 text-sm font-semibold tracking-tight">Podsumowanie</h3>
+          {!result.ok ? (
+            <p className="text-sm text-red-400">{result.error}</p>
+          ) : (
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="rounded border border-border bg-background px-2 py-1.5">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Rozmiar</div>
+                  <div className="tabular-nums leading-snug">
+                    {result.screenWidthM} × {result.screenHeightM} m
+                  </div>
+                </div>
+                <div className="rounded border border-border bg-background px-2 py-1.5">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Kabinety</div>
+                  <div className="tabular-nums leading-snug">
+                    {result.columns}×{result.rows} · {result.cabinetsTotal} szt.
+                  </div>
+                </div>
+                <div className="rounded border border-border bg-background px-2 py-1.5">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Powierzchnia</div>
+                  <div className="tabular-nums leading-snug">{result.areaM2} m²</div>
+                </div>
+                <div className="rounded border border-border bg-background px-2 py-1.5">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Piksele</div>
+                  <div className="tabular-nums leading-snug">
+                    {formatPx(result.screenPxW)} × {formatPx(result.screenPxH)}
+                  </div>
+                </div>
+              </div>
+              <Row
+                label="Proporcja"
+                value={`${result.aspectLabel} (${result.actualRatio.toFixed(3)})`}
+                muted
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Projekt łącznie: {projectCabinets} kab. · {projectArea.toFixed(2)} m²
+              </p>
+            </div>
+          )}
+        </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
-        <form
-          onSubmit={preventSubmit}
-          className="space-y-4 rounded-lg border border-border bg-surface p-4 xl:col-span-2"
-        >
+        {result.ok ? (
+          <div className="space-y-2 rounded border border-border bg-background/40 p-3">
+            <h3 className="text-xs font-semibold">Rozjazd vs proporcja</h3>
+            <Row
+              label="Δ procent"
+              value={`${result.deviation.percent.toFixed(2)} %`}
+              emphasize={result.deviation.percent > 0.5}
+            />
+            <Row
+              label="Żeby trafić: wysokość"
+              value={
+                result.deviation.heightDeltaMm === 0
+                  ? 'OK'
+                  : `${result.deviation.heightDeltaMm > 0 ? '+' : ''}${formatMm(result.deviation.heightDeltaMm)}`
+              }
+            />
+            <Row
+              label="Żeby trafić: szerokość"
+              value={
+                result.deviation.widthDeltaMm === 0
+                  ? 'OK'
+                  : `${result.deviation.widthDeltaMm > 0 ? '+' : ''}${formatMm(result.deviation.widthDeltaMm)}`
+              }
+            />
+            {result.deviation.betterSameColumns ? (
+              <button
+                type="button"
+                onClick={() =>
+                  applyBetter(
+                    result.deviation.betterSameColumns!.columns,
+                    result.deviation.betterSameColumns!.rows
+                  )
+                }
+                className="mt-1 w-full rounded border border-border px-2.5 py-1.5 text-left text-xs hover:border-primary/40 hover:bg-primary/5"
+              >
+                Przy {result.deviation.betterSameColumns.columns} kolumnach bliżej:{' '}
+                <span className="font-medium text-primary">
+                  {result.deviation.betterSameColumns.columns}×{result.deviation.betterSameColumns.rows}
+                </span>
+              </button>
+            ) : null}
+            {result.deviation.betterSameRows ? (
+              <button
+                type="button"
+                onClick={() =>
+                  applyBetter(
+                    result.deviation.betterSameRows!.columns,
+                    result.deviation.betterSameRows!.rows
+                  )
+                }
+                className="w-full rounded border border-border px-2.5 py-1.5 text-left text-xs hover:border-primary/40 hover:bg-primary/5"
+              >
+                Przy {result.deviation.betterSameRows.rows} wierszach bliżej:{' '}
+                <span className="font-medium text-primary">
+                  {result.deviation.betterSameRows.columns}×{result.deviation.betterSameRows.rows}
+                </span>
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="border-t border-border pt-3">
+          <h3 className="mb-2 text-sm font-semibold tracking-tight">Opcje — {active.label}</h3>
+          <form onSubmit={preventSubmit} className="space-y-3">
           <div>
             <label className="mb-1 block text-xs font-medium" htmlFor="led-label">
               Nazwa ekranu
@@ -676,109 +796,9 @@ export default function LedScreensWorkspace({
               />
             </div>
           </div>
-        </form>
-
-        <div className="space-y-4 rounded-lg border border-border bg-surface p-4 xl:col-span-3">
-          {!result.ok ? (
-            <p className="text-sm text-red-400">{result.error}</p>
-          ) : (
-            <>
-              <div className="space-y-2">
-                <h2 className="text-sm font-semibold">Wynik — {active.label}</h2>
-                <Row
-                  label="Kabinety"
-                  value={`${result.columns} × ${result.rows} = ${result.cabinetsTotal} szt.`}
-                  emphasize
-                />
-                <Row label="Rozmiar" value={`${result.screenWidthM} × ${result.screenHeightM} m`} emphasize />
-                <Row label="Powierzchnia" value={`${result.areaM2} m²`} />
-                <Row
-                  label="Piksele"
-                  value={`${formatPx(result.screenPxW)} × ${formatPx(result.screenPxH)}`}
-                  emphasize
-                />
-                <Row label="Kabinet px" value={`${result.cabinetPxW} × ${result.cabinetPxH}`} muted />
-                <Row label="Proporcja" value={`${result.aspectLabel} (${result.actualRatio.toFixed(3)})`} />
-              </div>
-
-              <div className="space-y-2 rounded border border-border bg-background/40 p-3">
-                <h2 className="text-sm font-semibold">Rozjazd vs proporcja docelowa</h2>
-                <Row
-                  label="Δ procent"
-                  value={`${result.deviation.percent.toFixed(2)} %`}
-                  emphasize={result.deviation.percent > 0.5}
-                />
-                <Row
-                  label="Żeby trafić: wysokość"
-                  value={
-                    result.deviation.heightDeltaMm === 0
-                      ? 'OK'
-                      : `${result.deviation.heightDeltaMm > 0 ? '+' : ''}${formatMm(result.deviation.heightDeltaMm)}`
-                  }
-                />
-                <Row
-                  label="Żeby trafić: szerokość"
-                  value={
-                    result.deviation.widthDeltaMm === 0
-                      ? 'OK'
-                      : `${result.deviation.widthDeltaMm > 0 ? '+' : ''}${formatMm(result.deviation.widthDeltaMm)}`
-                  }
-                />
-                {result.deviation.betterSameColumns ? (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      applyBetter(
-                        result.deviation.betterSameColumns!.columns,
-                        result.deviation.betterSameColumns!.rows
-                      )
-                    }
-                    className="mt-1 w-full rounded border border-border px-2.5 py-1.5 text-left text-xs hover:border-primary/40 hover:bg-primary/5"
-                  >
-                    Przy {result.deviation.betterSameColumns.columns} kolumnach bliżej:{' '}
-                    <span className="font-medium text-primary">
-                      {result.deviation.betterSameColumns.columns}×{result.deviation.betterSameColumns.rows}
-                    </span>
-                  </button>
-                ) : null}
-                {result.deviation.betterSameRows ? (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      applyBetter(
-                        result.deviation.betterSameRows!.columns,
-                        result.deviation.betterSameRows!.rows
-                      )
-                    }
-                    className="w-full rounded border border-border px-2.5 py-1.5 text-left text-xs hover:border-primary/40 hover:bg-primary/5"
-                  >
-                    Przy {result.deviation.betterSameRows.rows} wierszach bliżej:{' '}
-                    <span className="font-medium text-primary">
-                      {result.deviation.betterSameRows.columns}×{result.deviation.betterSameRows.rows}
-                    </span>
-                  </button>
-                ) : null}
-              </div>
-
-              <p className="text-xs text-muted-foreground">
-                Suma projektu:{' '}
-                {project.screens.reduce((acc, s) => {
-                  const r = calculateScreenFromSpec(s)
-                  return acc + (r.ok ? r.cabinetsTotal : 0)
-                }, 0)}{' '}
-                kabinetów ·{' '}
-                {project.screens
-                  .reduce((acc, s) => {
-                    const r = calculateScreenFromSpec(s)
-                    return acc + (r.ok ? r.areaM2 : 0)
-                  }, 0)
-                  .toFixed(2)}{' '}
-                m²
-              </p>
-            </>
-          )}
+          </form>
         </div>
-      </div>
+      </aside>
     </div>
   )
 }

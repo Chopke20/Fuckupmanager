@@ -3,6 +3,7 @@ import {
   createStageDeck,
   createStageStair,
   deckHeightCm,
+  deckPlanHeightLabel,
   deckPlanLabel,
   isEdgeSelected,
   roundM,
@@ -428,9 +429,14 @@ export default function StagePlanCanvas({
           const selected = editor.selectedDeckIds.includes(deck.id)
           const width = deck.w * scale
           const height = deck.h * scale
-          const fontSize = Math.max(7, Math.min(12, Math.min(width, height) * 0.22))
+          const sizeFont = Math.max(8, Math.min(13, Math.min(width, height) * 0.24))
+          const heightFont = Math.max(7, Math.min(11, sizeFont * 0.85))
           const deckH = deckHeightCm(deck, plan.legHeightCm)
-          const label = deckPlanLabel(deck, plan.legHeightCm)
+          const sizeLabel = deckPlanLabel(deck)
+          const heightLabel = deckPlanHeightLabel(deck, plan.legHeightCm)
+          const cx = toX(deck.x) + width / 2
+          const cy = toY(deck.y + deck.h) + height / 2
+          const showLabel = Math.min(width, height) >= 16
           return (
             <g key={deck.id}>
               <rect
@@ -447,17 +453,28 @@ export default function StagePlanCanvas({
                 }}
                 pointerEvents={tool === 'select' ? 'auto' : 'none'}
               />
-              {Math.min(width, height) >= 16 ? (
-                <text
-                  x={toX(deck.x) + width / 2}
-                  y={toY(deck.y + deck.h) + height / 2 + fontSize * 0.35}
-                  textAnchor="middle"
-                  fontSize={fontSize}
-                  fill={palette.textDim}
-                  pointerEvents="none"
-                >
-                  {label}
-                </text>
+              {showLabel ? (
+                heightLabel ? (
+                  <text textAnchor="middle" fill={palette.textDim} pointerEvents="none">
+                    <tspan x={cx} y={cy - heightFont * 0.15} fontSize={sizeFont} fontWeight={600}>
+                      {sizeLabel}
+                    </tspan>
+                    <tspan x={cx} y={cy + heightFont * 1.05} fontSize={heightFont} opacity={0.85}>
+                      {heightLabel}
+                    </tspan>
+                  </text>
+                ) : (
+                  <text
+                    x={cx}
+                    y={cy + sizeFont * 0.35}
+                    textAnchor="middle"
+                    fontSize={sizeFont}
+                    fill={palette.textDim}
+                    pointerEvents="none"
+                  >
+                    {sizeLabel}
+                  </text>
+                )
               ) : null}
             </g>
           )
