@@ -1,0 +1,15 @@
+---
+description: Never use browser system dialogs (alert/confirm/prompt)
+alwaysApply: true
+---
+
+# No system dialogs
+
+Never use `window.alert`, `window.confirm`, `window.prompt`, or bare `alert`/`confirm`/`prompt` in this app.
+
+Prefer:
+- **Inline edit** in the list/table row (input in place, Enter/blur save, Escape cancel)
+- In-app modals/toasts that match the existing UI
+- Destructive actions: confirm UI in the same surface (inline confirm or app modal), not native confirm
+
+Renames, quick names, and simple text edits must happen **in the row/table**, not in a system prompt.
