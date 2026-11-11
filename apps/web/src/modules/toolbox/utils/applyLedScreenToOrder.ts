@@ -61,7 +61,11 @@ export function resolveLedScreenOrderLines(params: {
   const usedEquipment = new Map<string, string[]>()
 
   for (const line of ledScreenBomLines(params.project)) {
-    const lookupKeys = stagePlanRoleLookupKeys(line.catalogKey)
+    // led-screen respektuje też stare mapowanie led-cabinets
+    const lookupKeys =
+      line.catalogKey === 'led-screen'
+        ? ['led-screen', 'led-cabinets', ...stagePlanRoleLookupKeys(line.catalogKey)]
+        : stagePlanRoleLookupKeys(line.catalogKey)
     let map: StagePlanRoleMapEntry | undefined
     for (const key of lookupKeys) {
       map = byRole.get(key)

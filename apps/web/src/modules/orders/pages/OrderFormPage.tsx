@@ -910,7 +910,7 @@ export default function OrderFormPage() {
         roleMaps = await listStagePlanRoleMaps()
       } catch {
         window.alert(
-          'Nie udało się wczytać mapowania LED. Otwórz zębatkę w edytorze i zapisz przepis (szafki LED).'
+          'Nie udało się wczytać mapowania LED. Otwórz zębatkę i zapisz przepis (ekran / stabilizacja / procesor).'
         )
         return
       }

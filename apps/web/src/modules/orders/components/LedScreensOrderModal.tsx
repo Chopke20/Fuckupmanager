@@ -104,7 +104,7 @@ export default function LedScreensOrderModal({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              title="Mapowanie ról LED → sprzęt"
+              title="Mapowanie: ekran LED, stabilizacja, procesor"
               onClick={() => setRoleMapOpen(true)}
               className="rounded border border-border p-1.5 text-muted-foreground hover:text-foreground"
             >

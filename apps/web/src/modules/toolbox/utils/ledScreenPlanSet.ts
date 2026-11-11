@@ -16,11 +16,20 @@ export const LED_SCREEN_SET_VERSION = 1 as const
 export const LED_SCREEN_LINE_MARKER = '[plan LED]'
 export const LED_SCREEN_ID_PREFIX = '#'
 
-export const LED_SCREEN_ROLE_CONFIG_KEYS = ['led-cabinets'] as const
+/** Trzy role mapowania LED → sprzęt: ekran, stabilizacja, procesor. */
+export const LED_SCREEN_ROLE_CONFIG_KEYS = [
+  'led-screen',
+  'led-stabilization',
+  'led-processor',
+] as const
 export type LedScreenRoleConfigKey = (typeof LED_SCREEN_ROLE_CONFIG_KEYS)[number]
 
 export const LED_SCREEN_CATALOG_KEY_LABELS: Record<string, string> = {
-  'led-cabinets': 'Szafki LED',
+  'led-screen': 'Ekran LED',
+  'led-stabilization': 'Stabilizacja',
+  'led-processor': 'Procesor',
+  // alias starego klucza (gdy ktoś zdążył zmapować szafki)
+  'led-cabinets': 'Ekran LED',
 }
 
 export interface LedScreenSetEntry {
@@ -257,16 +266,41 @@ export function ledScreenBomLines(project: LedScreenProjectPayload): Array<{
   unit: 'szt.'
 }> {
   const cabinets = ledScreenCabinetsTotal(project)
-  if (cabinets <= 0) return []
-  return [
-    {
-      key: 'led-cabinets',
-      catalogKey: 'led-cabinets',
-      name: 'Szafki LED',
+  const screens = project.screens.length
+  if (cabinets <= 0 && screens <= 0) return []
+  const lines: Array<{
+    key: string
+    catalogKey: string
+    name: string
+    quantity: number
+    unit: 'szt.'
+  }> = []
+  if (cabinets > 0) {
+    lines.push({
+      key: 'led-screen',
+      catalogKey: 'led-screen',
+      name: 'Ekran LED',
       quantity: cabinets,
       unit: 'szt.',
-    },
-  ]
+    })
+  }
+  if (screens > 0) {
+    lines.push({
+      key: 'led-stabilization',
+      catalogKey: 'led-stabilization',
+      name: 'Stabilizacja',
+      quantity: screens,
+      unit: 'szt.',
+    })
+    lines.push({
+      key: 'led-processor',
+      catalogKey: 'led-processor',
+      name: 'Procesor',
+      quantity: screens,
+      unit: 'szt.',
+    })
+  }
+  return lines
 }
 
 export function summarizeLedScreens(screens: LedScreenSpec[]): string {
