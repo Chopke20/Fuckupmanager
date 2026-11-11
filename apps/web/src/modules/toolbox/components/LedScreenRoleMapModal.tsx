@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Search, X } from 'lucide-react'
-import type { Equipment, StagePlanRoleMap, UpsertStagePlanRoleMapDto } from '@lama-stage/shared-types'
+import axios from 'axios'
+import type { UpsertStagePlanRoleMapDto } from '@lama-stage/shared-types'
 import { useEquipment } from '../../equipment/hooks/useEquipment'
 import {
   bulkUpsertStagePlanRoleMaps,
@@ -11,6 +12,7 @@ import {
   LED_SCREEN_ROLE_CONFIG_KEYS,
   ledScreenAreaM2,
   ledScreenBomLines,
+  type LedScreenRoleConfigKey,
 } from '../utils/ledScreenPlanSet'
 import type { LedScreenProjectPayload } from '../calculators/ledScreen'
 
@@ -26,6 +28,17 @@ function emptyDraft(roleKey: string): DraftRow {
   return { roleKey, action: null, equipmentId: null }
 }
 
+function apiErrorMessage(e: unknown): string {
+  if (axios.isAxiosError(e)) {
+    const data = e.response?.data as
+      | { error?: string; message?: string; details?: { formErrors?: string[] } }
+      | undefined
+    const form = data?.details?.formErrors?.filter(Boolean).join(' ')
+    return data?.error || data?.message || form || e.message || 'Zapis mapowania nieudany.'
+  }
+  return e instanceof Error ? e.message : 'Zapis mapowania nieudany.'
+}
+
 export default function LedScreenRoleMapModal({
   open,
   project,
@@ -38,14 +51,25 @@ export default function LedScreenRoleMapModal({
   onSaved?: () => void
 }) {
   const { data: catalogPage } = useEquipment({ limit: 500 })
-  const catalog = catalogPage?.data ?? []
+  const catalog = useMemo(
+    () => (catalogPage?.data ?? []).filter((eq) => eq.category !== 'ZASOBY'),
+    [catalogPage?.data]
+  )
   const [drafts, setDrafts] = useState<Record<string, DraftRow>>({})
-  const [search, setSearch] = useState('')
+  const [searchByRole, setSearchByRole] = useState<Record<string, string>>({})
+  const [pickerRole, setPickerRole] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const bom = useMemo(() => ledScreenBomLines(project), [project])
   const areaM2 = useMemo(() => ledScreenAreaM2(project), [project])
+
+  const patchDraft = useCallback((roleKey: string, patch: Partial<DraftRow>) => {
+    setDrafts((prev) => {
+      const current = prev[roleKey] ?? emptyDraft(roleKey)
+      return { ...prev, [roleKey]: { ...current, ...patch, roleKey } }
+    })
+  }, [])
 
   const load = useCallback(async () => {
     const maps = await listStagePlanRoleMaps()
@@ -60,6 +84,8 @@ export default function LedScreenRoleMapModal({
       }
     }
     setDrafts(out)
+    setSearchByRole({})
+    setPickerRole(null)
   }, [])
 
   useEffect(() => {
@@ -68,22 +94,36 @@ export default function LedScreenRoleMapModal({
     void load().catch(() => setError('Nie udało się wczytać mapowań LED.'))
   }, [open, load])
 
-  const filteredCatalog = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return catalog.slice(0, 40)
-    return catalog
-      .filter(
-        (eq) =>
-          eq.name.toLowerCase().includes(q) ||
-          (eq.category ?? '').toLowerCase().includes(q)
-      )
-      .slice(0, 40)
-  }, [catalog, search])
-
   const handleSave = async () => {
     setSaving(true)
     setError(null)
     try {
+      const incomplete = LED_SCREEN_ROLE_CONFIG_KEYS.filter((key) => {
+        const row = drafts[key] ?? emptyDraft(key)
+        return row.action === 'map' && !row.equipmentId
+      })
+      if (incomplete.length > 0) {
+        setError(
+          `Wybierz sprzęt dla: ${incomplete
+            .map((k) => LED_SCREEN_CATALOG_KEY_LABELS[k] ?? k)
+            .join(', ')} (albo ustaw „Pomiń”).`
+        )
+        setPickerRole(incomplete[0] ?? null)
+        return
+      }
+      const undecided = LED_SCREEN_ROLE_CONFIG_KEYS.filter((key) => {
+        const row = drafts[key] ?? emptyDraft(key)
+        return row.action == null
+      })
+      if (undecided.length > 0) {
+        setError(
+          `Ustaw Mapuj/Pomiń dla: ${undecided
+            .map((k) => LED_SCREEN_CATALOG_KEY_LABELS[k] ?? k)
+            .join(', ')}.`
+        )
+        return
+      }
+
       const payload: UpsertStagePlanRoleMapDto[] = LED_SCREEN_ROLE_CONFIG_KEYS.map((key) => {
         const row = drafts[key] ?? emptyDraft(key)
         if (row.action === 'map' && row.equipmentId) {
@@ -95,7 +135,7 @@ export default function LedScreenRoleMapModal({
       onSaved?.()
       onClose()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Zapis mapowania nieudany.')
+      setError(apiErrorMessage(e))
     } finally {
       setSaving(false)
     }
@@ -118,8 +158,16 @@ export default function LedScreenRoleMapModal({
           </button>
         </div>
         <div className="space-y-3 overflow-y-auto p-4">
-          {error ? <p className="text-xs text-red-400">{error}</p> : null}
-          {LED_SCREEN_ROLE_CONFIG_KEYS.map((key) => {
+          <p className="text-[11px] text-muted-foreground">
+            Przypisz ekran, stabilizację i procesor do pozycji z katalogu. Zapis jest globalny dla
+            firmy.
+          </p>
+          {error ? (
+            <p className="rounded border border-red-500/30 bg-red-500/10 px-2 py-1.5 text-xs text-red-400">
+              {error}
+            </p>
+          ) : null}
+          {LED_SCREEN_ROLE_CONFIG_KEYS.map((key: LedScreenRoleConfigKey) => {
             const row = drafts[key] ?? emptyDraft(key)
             const qty = bom.find((line) => line.catalogKey === key)?.quantity ?? 0
             const qtyHint =
@@ -128,6 +176,13 @@ export default function LedScreenRoleMapModal({
                 : key === 'led-processor'
                   ? `${qty} szt. (ręcznie w wykazie)`
                   : `${qty} szt.`
+            const selected = catalog.find((eq) => eq.id === row.equipmentId)
+            const query = (searchByRole[key] ?? '').trim().toLowerCase()
+            const options = catalog
+              .filter((eq) => !query || eq.name.toLowerCase().includes(query) || (eq.category ?? '').toLowerCase().includes(query))
+              .slice(0, 20)
+            const showPicker = row.action === 'map' && (!selected || pickerRole === key)
+
             return (
               <div key={key} className="rounded border border-border p-3">
                 <div className="mb-2 flex items-center justify-between gap-2 text-sm">
@@ -144,12 +199,10 @@ export default function LedScreenRoleMapModal({
                         ? 'border-primary bg-primary/10 text-primary'
                         : 'border-border text-muted-foreground'
                     }`}
-                    onClick={() =>
-                      setDrafts((prev) => ({
-                        ...prev,
-                        [key]: { ...row, action: 'map' },
-                      }))
-                    }
+                    onClick={() => {
+                      patchDraft(key, { action: 'map' })
+                      if (!row.equipmentId) setPickerRole(key)
+                    }}
                   >
                     Mapuj na sprzęt
                   </button>
@@ -160,51 +213,73 @@ export default function LedScreenRoleMapModal({
                         ? 'border-primary bg-primary/10 text-primary'
                         : 'border-border text-muted-foreground'
                     }`}
-                    onClick={() =>
-                      setDrafts((prev) => ({
-                        ...prev,
-                        [key]: { ...row, action: 'skip', equipmentId: null },
-                      }))
-                    }
+                    onClick={() => {
+                      patchDraft(key, { action: 'skip', equipmentId: null })
+                      if (pickerRole === key) setPickerRole(null)
+                    }}
                   >
                     Pomiń
                   </button>
                 </div>
                 {row.action === 'map' ? (
-                  <div>
-                    <label className="mb-1 flex items-center gap-1 text-[11px] text-muted-foreground">
-                      <Search className="h-3 w-3" />
-                      Szukaj sprzętu
-                    </label>
-                    <input
-                      className="mb-2 w-full rounded border border-border bg-background px-2 py-1 text-xs"
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      placeholder="Nazwa / kategoria"
-                    />
-                    <ul className="max-h-40 space-y-1 overflow-y-auto">
-                      {filteredCatalog.map((eq: Equipment) => (
-                        <li key={eq.id}>
-                          <button
-                            type="button"
-                            className={`w-full rounded border px-2 py-1 text-left text-xs ${
-                              row.equipmentId === eq.id
-                                ? 'border-primary bg-primary/10'
-                                : 'border-border hover:bg-background'
-                            }`}
-                            onClick={() =>
-                              setDrafts((prev) => ({
-                                ...prev,
-                                [key]: { ...row, action: 'map', equipmentId: eq.id },
-                              }))
-                            }
-                          >
-                            {eq.name}
-                            <span className="ml-1 text-muted-foreground">· {eq.category}</span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
+                  <div className="space-y-1.5">
+                    {selected && !showPicker ? (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="rounded bg-background px-2 py-1 text-xs">
+                          {selected.name}
+                          <span className="text-muted-foreground"> · {selected.category}</span>
+                        </span>
+                        <button
+                          type="button"
+                          className="text-[11px] text-primary hover:underline"
+                          onClick={() => setPickerRole(key)}
+                        >
+                          Zmień
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="mb-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <Search className="h-3 w-3" />
+                          Szukaj sprzętu
+                        </label>
+                        <input
+                          className="mb-2 w-full rounded border border-border bg-background px-2 py-1 text-xs"
+                          value={searchByRole[key] ?? ''}
+                          onChange={(e) =>
+                            setSearchByRole((prev) => ({ ...prev, [key]: e.target.value }))
+                          }
+                          placeholder="Nazwa / kategoria"
+                          autoFocus={pickerRole === key}
+                        />
+                        <ul className="max-h-40 space-y-1 overflow-y-auto">
+                          {options.length === 0 ? (
+                            <li className="px-1 text-[11px] text-muted-foreground">Brak wyników</li>
+                          ) : (
+                            options.map((eq) => (
+                              <li key={`${key}-${eq.id}`}>
+                                <button
+                                  type="button"
+                                  className={`w-full rounded border px-2 py-1 text-left text-xs ${
+                                    row.equipmentId === eq.id
+                                      ? 'border-primary bg-primary/10'
+                                      : 'border-border hover:bg-background'
+                                  }`}
+                                  onClick={() => {
+                                    patchDraft(key, { action: 'map', equipmentId: eq.id })
+                                    setPickerRole(null)
+                                    setError(null)
+                                  }}
+                                >
+                                  {eq.name}
+                                  <span className="ml-1 text-muted-foreground">· {eq.category}</span>
+                                </button>
+                              </li>
+                            ))
+                          )}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 ) : null}
               </div>
