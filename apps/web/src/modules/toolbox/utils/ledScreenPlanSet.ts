@@ -25,11 +25,11 @@ export const LED_SCREEN_ROLE_CONFIG_KEYS = [
 export type LedScreenRoleConfigKey = (typeof LED_SCREEN_ROLE_CONFIG_KEYS)[number]
 
 export const LED_SCREEN_CATALOG_KEY_LABELS: Record<string, string> = {
-  'led-screen': 'Ekran LED',
+  'led-screen': 'Ekran LED (na m²)',
   'led-stabilization': 'Stabilizacja (na m²)',
   'led-processor': 'Procesor (domyślnie 1)',
   // alias starego klucza (gdy ktoś zdążył zmapować szafki)
-  'led-cabinets': 'Ekran LED',
+  'led-cabinets': 'Ekran LED (na m²)',
 }
 
 export interface LedScreenSetEntry {
@@ -275,10 +275,9 @@ export function ledScreenBomLines(project: LedScreenProjectPayload): Array<{
   quantity: number
   unit: 'szt.'
 }> {
-  const cabinets = ledScreenCabinetsTotal(project)
   const areaM2 = ledScreenAreaM2(project)
   const screens = project.screens.length
-  if (cabinets <= 0 && screens <= 0) return []
+  if (areaM2 <= 0 && screens <= 0) return []
   const lines: Array<{
     key: string
     catalogKey: string
@@ -286,23 +285,21 @@ export function ledScreenBomLines(project: LedScreenProjectPayload): Array<{
     quantity: number
     unit: 'szt.'
   }> = []
-  if (cabinets > 0) {
+  // Ekran LED i stabilizacja: 1 szt. na każdy m² (ceil).
+  const areaQty = Math.max(1, Math.ceil(areaM2))
+  if (areaM2 > 0) {
     lines.push({
       key: 'led-screen',
       catalogKey: 'led-screen',
       name: 'Ekran LED',
-      quantity: cabinets,
+      quantity: areaQty,
       unit: 'szt.',
     })
-  }
-  // Stabilizacja: 1 szt. na każdy m² powierzchni ekranów (zaokrąglone w górę).
-  const stabilizationQty = Math.max(1, Math.ceil(areaM2))
-  if (areaM2 > 0) {
     lines.push({
       key: 'led-stabilization',
       catalogKey: 'led-stabilization',
       name: 'Stabilizacja',
-      quantity: stabilizationQty,
+      quantity: areaQty,
       unit: 'szt.',
     })
   }

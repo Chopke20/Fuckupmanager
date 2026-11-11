@@ -123,7 +123,7 @@ export default function LedScreenRoleMapModal({
             const row = drafts[key] ?? emptyDraft(key)
             const qty = bom.find((line) => line.catalogKey === key)?.quantity ?? 0
             const qtyHint =
-              key === 'led-stabilization' && areaM2 > 0
+              (key === 'led-screen' || key === 'led-stabilization') && areaM2 > 0
                 ? `${areaM2} m² → ${qty} szt.`
                 : key === 'led-processor'
                   ? `${qty} szt. (ręcznie w wykazie)`
