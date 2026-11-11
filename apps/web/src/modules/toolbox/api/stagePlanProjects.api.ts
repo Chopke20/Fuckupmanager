@@ -23,6 +23,7 @@ export interface StagePlanProject {
   planJson: string
   orderId: string | null
   offerBlockId: string | null
+  sceneId: string | null
   createdAt: string
   updatedAt: string
   order: StagePlanProjectOrderRef | null
@@ -72,7 +73,12 @@ export async function deleteStagePlanProject(id: string): Promise<void> {
 
 export async function upsertStagePlanProjectForOrder(
   orderId: string,
-  params: { name: string; plan: StagePlan; offerBlockId?: string | null }
+  params: {
+    name: string
+    plan: StagePlan
+    offerBlockId?: string | null
+    sceneId?: string | null
+  }
 ): Promise<StagePlanProject> {
   const res = await axios.put<Envelope<StagePlanProject>>(
     `${API_BASE}/by-order/${orderId}`,
@@ -80,6 +86,7 @@ export async function upsertStagePlanProjectForOrder(
       name: params.name,
       planJson: serializeStagePlan(params.plan),
       offerBlockId: params.offerBlockId ?? null,
+      sceneId: params.sceneId ?? null,
     },
     { withCredentials: true }
   )

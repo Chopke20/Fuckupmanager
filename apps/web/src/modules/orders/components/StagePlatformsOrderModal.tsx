@@ -5,6 +5,7 @@ export default function StagePlatformsOrderModal({
   open,
   orderId,
   offerBlockId,
+  sceneId,
   orderLabel,
   initialPlan,
   onClose,
@@ -13,6 +14,7 @@ export default function StagePlatformsOrderModal({
   open: boolean
   orderId?: string | null
   offerBlockId?: string | null
+  sceneId?: string | null
   orderLabel?: string
   initialPlan?: StagePlan | null
   onClose: () => void
@@ -39,7 +41,7 @@ export default function StagePlatformsOrderModal({
               Scena z podestów
             </h2>
             {orderLabel ? (
-              <p className="mt-0.5 text-xs text-muted-foreground">Zlecenie: {orderLabel}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{orderLabel}</p>
             ) : null}
           </div>
           <button
@@ -52,7 +54,7 @@ export default function StagePlatformsOrderModal({
         </div>
         <div className="overflow-y-auto p-4">
           <StagePlatformVisualizer
-            key={`${orderId ?? 'new-order'}-${offerBlockId ?? 'order'}`}
+            key={`${orderId ?? 'new-order'}-${offerBlockId ?? 'order'}-${sceneId ?? 'scene'}`}
             initialPlan={initialPlan}
             applyLabel="Dodaj podesty i obicie do zlecenia"
             onApply={(plan) => {

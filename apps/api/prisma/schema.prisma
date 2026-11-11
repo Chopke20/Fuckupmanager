@@ -577,12 +577,14 @@ model StagePlanProject {
   order        Order?           @relation(fields: [orderId], references: [id], onDelete: SetNull)
   offerBlockId String?
   offerBlock   OrderOfferBlock? @relation(fields: [offerBlockId], references: [id], onDelete: SetNull)
+  /// Id sceny w zestawie planu bloku (wiele scen na blok).
+  sceneId      String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([updatedAt])
-  @@index([orderId, offerBlockId])
+  @@index([orderId, offerBlockId, sceneId])
   @@map("stage_plan_projects")
 }
 

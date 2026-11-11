@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Copy, Redo2, RotateCw, Trash2, Undo2 } from 'lucide-react'
 import {
   claddingMaterialLabel,
+  clampStageDeckSizeM,
   clampStairWidth,
+  deckHeightCm,
   edgeSideLabel,
   floorMaterialLabel,
   formatMeters,
@@ -12,6 +14,8 @@ import {
   STAGE_GRID_STEPS_M,
   STAGE_LEG_HEIGHTS_CM,
   STAGE_MAGNET_M,
+  STAGE_PLAN_MAX_CUSTOM_M,
+  STAGE_PLAN_MIN_CUSTOM_M,
   type StageCladdingMaterial,
   type StageEdgeSide,
   type StageFloorMaterial,
@@ -38,7 +42,9 @@ const TOOLS: Array<{ id: StagePlanTool; label: string; hint: string }> = [
   { id: 'select', label: 'Zaznacz', hint: 'Klikaj i przeciągaj podesty' },
   { id: 'deck-2x1', label: '+ 2×1', hint: 'Klik na rzucie stawia blat 2×1' },
   { id: 'deck-1x1', label: '+ 1×1', hint: 'Klik na rzucie stawia blat 1×1' },
-  { id: 'stairs', label: '+ Schody', hint: 'Klik w krawędź dostawia bieg schodów' },
+  { id: 'deck-0.5x2', label: '+ 0,5×2', hint: 'Klik na rzucie stawia blat 0,5×2 (schody DIY)' },
+  { id: 'deck-custom', label: '+ W×D', hint: 'Klik stawia blat o wpisanych wymiarach W×D' },
+  { id: 'stairs', label: '+ Schody', hint: 'Klik w krawędź dostawia gotowy bieg schodów' },
   { id: 'cladding', label: 'Obicie', hint: 'Klik w krawędź włącza lub wyłącza obicie' },
   { id: 'railings', label: 'Barierki', hint: 'Klik w krawędź włącza lub wyłącza barierkę' },
 ]
@@ -67,8 +73,22 @@ export default function StagePlatformVisualizer({
   const [rectWidth, setRectWidth] = useState('6')
   const [rectDepth, setRectDepth] = useState('4')
   const [rectAlongFront, setRectAlongFront] = useState(true)
+  const [customWidth, setCustomWidth] = useState('0,5')
+  const [customDepth, setCustomDepth] = useState('2')
   const { plan } = editor
   const skipInitialPlanChangeRef = useRef(true)
+  const customDeckSize = {
+    w: clampStageDeckSizeM(parseDim(customWidth) || 0.5),
+    h: clampStageDeckSizeM(parseDim(customDepth) || 2),
+  }
+  const selectedHeights = editor.selectedDeckIds
+    .map((id) => plan.decks.find((deck) => deck.id === id))
+    .filter((deck): deck is NonNullable<typeof deck> => Boolean(deck))
+    .map((deck) => deckHeightCm(deck, plan.legHeightCm))
+  const selectedHeight =
+    selectedHeights.length > 0 && selectedHeights.every((h) => h === selectedHeights[0])
+      ? selectedHeights[0]!
+      : null
   const { data: catalogPage } = useEquipment({ limit: 500 })
   const catalog = catalogPage?.data ?? []
   const [roleMaps, setRoleMaps] = useState<
@@ -272,9 +292,68 @@ export default function StagePlatformVisualizer({
               {formatMeters(step)} m
             </button>
           ))}
+          {tool === 'deck-custom' ? (
+            <span className="ml-1 flex items-end gap-1.5">
+              <label className="text-[10px] text-muted-foreground">
+                W
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  className="ml-1 w-12 rounded border border-border bg-background px-1.5 py-1 text-xs tabular-nums"
+                  value={customWidth}
+                  onChange={(event) => setCustomWidth(event.target.value)}
+                  title={`Szerokość ${STAGE_PLAN_MIN_CUSTOM_M}–${STAGE_PLAN_MAX_CUSTOM_M} m`}
+                />
+              </label>
+              <label className="text-[10px] text-muted-foreground">
+                D
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  className="ml-1 w-12 rounded border border-border bg-background px-1.5 py-1 text-xs tabular-nums"
+                  value={customDepth}
+                  onChange={(event) => setCustomDepth(event.target.value)}
+                  title={`Głębokość ${STAGE_PLAN_MIN_CUSTOM_M}–${STAGE_PLAN_MAX_CUSTOM_M} m`}
+                />
+              </label>
+              <span className="pb-1 text-[10px] text-muted-foreground">m</span>
+            </span>
+          ) : null}
         </div>
 
-        <StagePlanCanvas editor={editor} tool={tool} onToolDone={() => setTool('select')} />
+        {hasSelection ? (
+          <div className="flex flex-wrap items-center gap-1.5 rounded border border-border bg-surface px-2 py-1.5">
+            <span className="text-xs text-muted-foreground">
+              Wysokość zaznaczonych ({editor.selectedDeckIds.length})
+            </span>
+            {STAGE_LEG_HEIGHTS_CM.map((height) => (
+              <button
+                key={`sel-h-${height}`}
+                type="button"
+                onClick={() => editor.setSelectedDeckHeight(height)}
+                className={`${pillClass(selectedHeight === height)} tabular-nums`}
+              >
+                {height}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => editor.setSelectedDeckHeight(null)}
+              className={pillClass(false)}
+              title="Użyj domyślnej wysokości planu"
+            >
+              domyślna
+            </button>
+            <span className="text-xs text-muted-foreground">cm</span>
+          </div>
+        ) : null}
+
+        <StagePlanCanvas
+          editor={editor}
+          tool={tool}
+          customDeckSize={customDeckSize}
+          onToolDone={() => setTool('select')}
+        />
 
         <p className="text-xs text-muted-foreground">
           {activeTool?.hint}. Skróty: <span className="text-foreground">R</span> obrót,{' '}
@@ -299,13 +378,20 @@ export default function StagePlatformVisualizer({
           <Metric label="Powierzchnia" value={`${formatMeters(plan.areaM2)} m²`} />
           <Metric
             label="Podesty"
-            value={`${plan.counts.decksTotal} szt. (${plan.counts.decks2x1}× 2×1, ${plan.counts.decks1x1}× 1×1)`}
+            value={`${plan.counts.decksTotal} szt. (${[
+              plan.counts.decks2x1 ? `${plan.counts.decks2x1}× 2×1` : null,
+              plan.counts.decks1x1 ? `${plan.counts.decks1x1}× 1×1` : null,
+              plan.counts.decks05x2 ? `${plan.counts.decks05x2}× 0,5×2` : null,
+              plan.counts.decksCustom ? `${plan.counts.decksCustom}× W×D` : null,
+            ]
+              .filter(Boolean)
+              .join(', ') || 'brak'})`}
           />
           <Metric label="Nogi" value={`${plan.counts.legs} szt.`} />
         </div>
 
         <div>
-          <div className="mb-1 text-xs font-medium">Wysokość nóg</div>
+          <div className="mb-1 text-xs font-medium">Domyślna wysokość nóg</div>
           <div className="flex flex-wrap gap-1.5">
             {STAGE_LEG_HEIGHTS_CM.map((height) => (
               <button
@@ -319,6 +405,9 @@ export default function StagePlatformVisualizer({
             ))}
             <span className="self-center text-xs text-muted-foreground">cm</span>
           </div>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Dla pojedynczych podestów ustaw wysokość po zaznaczeniu — wtedy da się budować schody z blatów.
+          </p>
         </div>
 
         <div>

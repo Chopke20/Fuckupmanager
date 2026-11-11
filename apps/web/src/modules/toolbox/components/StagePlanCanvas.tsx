@@ -2,6 +2,8 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import {
   createStageDeck,
   createStageStair,
+  deckHeightCm,
+  deckPlanLabel,
   isEdgeSelected,
   roundM,
   snapToStep,
@@ -10,8 +12,10 @@ import {
   stagePlanViewport,
   stageRailingSegments,
   stageStairShape,
+  stairAttachedHeightCm,
   toggleEdgeInSelection,
   STAGE_DEFAULT_STAIR_WIDTH_M,
+  STAGE_LEG_HEIGHTS_CM,
   STAGE_MAGNET_M,
   STAGE_PALETTES,
   type StageEdge,
@@ -23,9 +27,23 @@ export type StagePlanTool =
   | 'select'
   | 'deck-2x1'
   | 'deck-1x1'
+  | 'deck-0.5x2'
+  | 'deck-custom'
   | 'stairs'
   | 'cladding'
   | 'railings'
+
+function deckFillForHeight(
+  heightCm: number,
+  base: string,
+  alt: string
+): string {
+  const idx = STAGE_LEG_HEIGHTS_CM.indexOf(
+    heightCm as (typeof STAGE_LEG_HEIGHTS_CM)[number]
+  )
+  if (idx < 0) return base
+  return idx % 2 === 0 ? base : alt
+}
 
 const CANVAS_WIDTH_PX = 760
 const DRAG_THRESHOLD_M = 0.03
@@ -45,10 +63,12 @@ export default function StagePlanCanvas({
   editor,
   tool,
   onToolDone,
+  customDeckSize = { w: 0.5, h: 2 },
 }: {
   editor: StagePlanEditor
   tool: StagePlanTool
   onToolDone?: () => void
+  customDeckSize?: { w: number; h: number }
 }) {
   const { plan } = editor
   const palette = STAGE_PALETTES.dark
@@ -65,7 +85,11 @@ export default function StagePlanCanvas({
   // uciekałby pod kursorem, gdy blat wychodzi poza dotychczasowy obszar.
   const viewport = dragging && frozenViewport.current ? frozenViewport.current : computedViewport
   const edgeToolActive = tool === 'cladding' || tool === 'railings' || tool === 'stairs'
-  const addingDeck = tool === 'deck-2x1' || tool === 'deck-1x1'
+  const addingDeck =
+    tool === 'deck-2x1' ||
+    tool === 'deck-1x1' ||
+    tool === 'deck-0.5x2' ||
+    tool === 'deck-custom'
 
   const pointToMeters = useCallback(
     (event: { clientX: number; clientY: number }) => {
@@ -91,8 +115,22 @@ export default function StagePlanCanvas({
   const handleBackgroundPointerDown = useCallback(
     (event: React.PointerEvent<SVGRectElement>) => {
       if (addingDeck) {
-        const kind = tool === 'deck-2x1' ? '2x1' : '1x1'
-        const width = kind === '2x1' ? 2 : 1
+        const kind =
+          tool === 'deck-2x1'
+            ? '2x1'
+            : tool === 'deck-1x1'
+              ? '1x1'
+              : tool === 'deck-0.5x2'
+                ? '0.5x2'
+                : 'custom'
+        const size =
+          kind === 'custom'
+            ? customDeckSize
+            : kind === '2x1'
+              ? { w: 2, h: 1 }
+              : kind === '0.5x2'
+                ? { w: 0.5, h: 2 }
+                : { w: 1, h: 1 }
         const point = pointToMeters(event)
         editor.commit((prev) => ({
           ...prev,
@@ -100,8 +138,10 @@ export default function StagePlanCanvas({
             ...prev.decks,
             createStageDeck(
               kind,
-              snapAlongEdge(point.x - width / 2),
-              snapAlongEdge(point.y - 0.5)
+              snapAlongEdge(point.x - size.w / 2),
+              snapAlongEdge(point.y - size.h / 2),
+              false,
+              kind === 'custom' ? customDeckSize : undefined
             ),
           ],
         }))
@@ -110,7 +150,7 @@ export default function StagePlanCanvas({
       editor.selectDecks([])
       editor.selectStair(null)
     },
-    [addingDeck, editor, pointToMeters, snapAlongEdge, tool]
+    [addingDeck, customDeckSize, editor, pointToMeters, snapAlongEdge, tool]
   )
 
   const handleDeckPointerDown = useCallback(
@@ -388,7 +428,9 @@ export default function StagePlanCanvas({
           const selected = editor.selectedDeckIds.includes(deck.id)
           const width = deck.w * scale
           const height = deck.h * scale
-          const fontSize = Math.max(8, Math.min(13, Math.min(width, height) * 0.26))
+          const fontSize = Math.max(7, Math.min(12, Math.min(width, height) * 0.22))
+          const deckH = deckHeightCm(deck, plan.legHeightCm)
+          const label = deckPlanLabel(deck, plan.legHeightCm)
           return (
             <g key={deck.id}>
               <rect
@@ -396,7 +438,7 @@ export default function StagePlanCanvas({
                 y={toY(deck.y + deck.h)}
                 width={width}
                 height={height}
-                fill={deck.kind === '2x1' ? palette.deckFill : palette.deckAltFill}
+                fill={deckFillForHeight(deckH, palette.deckFill, palette.deckAltFill)}
                 strokeWidth={selected ? 2 : 1.1}
                 onPointerDown={(event) => handleDeckPointerDown(event, deck.id)}
                 style={{
@@ -405,7 +447,7 @@ export default function StagePlanCanvas({
                 }}
                 pointerEvents={tool === 'select' ? 'auto' : 'none'}
               />
-              {Math.min(width, height) >= 18 ? (
+              {Math.min(width, height) >= 16 ? (
                 <text
                   x={toX(deck.x) + width / 2}
                   y={toY(deck.y + deck.h) + height / 2 + fontSize * 0.35}
@@ -414,7 +456,7 @@ export default function StagePlanCanvas({
                   fill={palette.textDim}
                   pointerEvents="none"
                 >
-                  {deck.kind === '2x1' ? '2×1' : '1×1'}
+                  {label}
                 </text>
               ) : null}
             </g>
@@ -464,7 +506,13 @@ export default function StagePlanCanvas({
         ))}
 
         {plan.stairs.map((stair) => {
-          const shape = stageStairShape(stair, plan.legHeightCm)
+          const stairH = stairAttachedHeightCm(
+            stair,
+            plan.decks,
+            plan.edges,
+            plan.legHeightCm
+          )
+          const shape = stageStairShape(stair, stairH)
           const selected = editor.selectedStairId === stair.id
           return (
             <g key={stair.id}>

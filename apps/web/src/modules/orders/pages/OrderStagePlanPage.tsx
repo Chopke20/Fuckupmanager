@@ -3,13 +3,18 @@ import { ArrowLeft, Download, Eye } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useOrder } from '../hooks/useOrders'
 import { formatOrderNumber } from '../utils/orderNumberFormat'
-import { formatMeters, parseStagePlanJson, renderStagePlanSvg } from '@lama-stage/shared-types'
+import {
+  formatMeters,
+  parseStagePlanSetJson,
+  renderStagePlanSvg,
+  type StagePlan,
+} from '@lama-stage/shared-types'
 import { downloadOrderStagePlanPdf, getOrderStagePlanPdfPreviewUrl } from '../api/order.api'
 
 interface StagePlanOption {
   id: string
   label: string
-  planJson: string
+  plan: StagePlan
   blockId: string | null
 }
 
@@ -24,22 +29,26 @@ export default function OrderStagePlanPage() {
   const planOptions = useMemo((): StagePlanOption[] => {
     if (!order) return []
     const options: StagePlanOption[] = []
+    const pushSet = (raw: string | null | undefined, blockId: string | null, labelPrefix: string) => {
+      const set = parseStagePlanSetJson(raw)
+      for (const scene of set.scenes) {
+        options.push({
+          id: `${blockId ?? 'order'}::${scene.id}`,
+          label:
+            set.scenes.length > 1
+              ? `${labelPrefix} · ${scene.name}`
+              : labelPrefix,
+          plan: scene.plan,
+          blockId,
+        })
+      }
+    }
     if (order.stagePlanJson) {
-      options.push({
-        id: 'order',
-        label: 'Plan zlecenia (główny wykaz)',
-        planJson: order.stagePlanJson,
-        blockId: null,
-      })
+      pushSet(order.stagePlanJson, null, 'Plan zlecenia (główny wykaz)')
     }
     for (const block of order.offerBlocks ?? []) {
       if (block.stagePlanJson) {
-        options.push({
-          id: block.id,
-          label: `Blok: ${block.title}`,
-          planJson: block.stagePlanJson,
-          blockId: block.id,
-        })
+        pushSet(block.stagePlanJson, block.id, `Blok: ${block.title}`)
       }
     }
     return options
@@ -56,10 +65,7 @@ export default function OrderStagePlanPage() {
   }, [planOptions, selectedPlanId])
 
   const selectedOption = planOptions.find((option) => option.id === selectedPlanId) ?? null
-  const plan = useMemo(
-    () => parseStagePlanJson(selectedOption?.planJson ?? null),
-    [selectedOption?.planJson]
-  )
+  const plan = selectedOption?.plan ?? null
   const svg = plan ? renderStagePlanSvg(plan, { theme: 'dark' }) : ''
   const previewUrl =
     id && selectedOption

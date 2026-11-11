@@ -55,7 +55,8 @@ export interface StagePlanEditor {
   selectDecks: (ids: string[]) => void
   selectStair: (id: string | null) => void
   patch: (partial: Partial<StagePlanInput>) => void
-  addDeck: (kind: StageDeckKind) => void
+  addDeck: (kind: StageDeckKind, customSize?: { w: number; h: number }) => void
+  setSelectedDeckHeight: (heightCm: number | null) => void
   rotateSelected: () => void
   deleteSelected: () => void
   duplicateSelected: () => void
@@ -134,18 +135,42 @@ export function useStagePlanEditor(initialPlan?: StagePlan | null): StagePlanEdi
 
   /** Nowy blat ląduje obok ostatniego, żeby nie trafił pod już istniejący. */
   const addDeck = useCallback(
-    (kind: StageDeckKind) => {
+    (kind: StageDeckKind, customSize?: { w: number; h: number }) => {
       commit((prev) => {
         if (prev.decks.length >= STAGE_MAX_DECKS) return prev
         const rightmost = prev.decks.reduce(
           (best, deck) => Math.max(best, deck.x + deck.w),
           0
         )
-        const deck = createStageDeck(kind, rightmost + 0.5, 0)
+        const deck = createStageDeck(kind, rightmost + 0.5, 0, false, customSize)
         return { ...prev, decks: [...prev.decks, deck] }
       })
     },
     [commit]
+  )
+
+  const setSelectedDeckHeight = useCallback(
+    (heightCm: number | null) => {
+      if (selectedDeckIds.length === 0) return
+      commit((prev) => ({
+        ...prev,
+        decks: prev.decks.map((deck) => {
+          if (!selectedDeckIds.includes(deck.id)) return deck
+          if (heightCm == null) {
+            return {
+              id: deck.id,
+              kind: deck.kind,
+              x: deck.x,
+              y: deck.y,
+              w: deck.w,
+              h: deck.h,
+            }
+          }
+          return { ...deck, heightCm }
+        }),
+      }))
+    },
+    [commit, selectedDeckIds]
   )
 
   const rotateSelected = useCallback(() => {
@@ -179,9 +204,16 @@ export function useStagePlanEditor(initialPlan?: StagePlan | null): StagePlanEdi
       }
       const shift = Math.max(...source.map((deck) => deck.w))
       const clones = source.map((deck) => {
-        const clone = createStageDeck(deck.kind, deck.x + shift, deck.y)
+        const clone = createStageDeck(
+          deck.kind,
+          deck.x + shift,
+          deck.y,
+          false,
+          { w: deck.w, h: deck.h },
+          deck.heightCm
+        )
         copies.push(clone.id)
-        return { ...clone, w: deck.w, h: deck.h }
+        return { ...clone, w: deck.w, h: deck.h, heightCm: deck.heightCm }
       })
       return { ...prev, decks: [...prev.decks, ...clones] }
     })
@@ -251,6 +283,7 @@ export function useStagePlanEditor(initialPlan?: StagePlan | null): StagePlanEdi
     selectStair,
     patch,
     addDeck,
+    setSelectedDeckHeight,
     rotateSelected,
     deleteSelected,
     duplicateSelected,

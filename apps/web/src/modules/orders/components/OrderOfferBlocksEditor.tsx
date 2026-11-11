@@ -1,8 +1,10 @@
 import { useCallback } from 'react'
-import { Plus, Trash2, ChevronUp, ChevronDown, LayoutGrid, Copy } from 'lucide-react'
+import { Plus, Trash2, ChevronUp, ChevronDown, LayoutGrid, Copy, Pencil } from 'lucide-react'
 import {
   ORDER_OFFER_BLOCK_TITLE_MAX_LENGTH,
   clampOrderOfferBlockTitle,
+  parseStagePlanSetJson,
+  stagePlanSceneSummary,
   type OrderEquipmentItem,
   type OrderOfferBlock,
   type OrderProductionItem,
@@ -31,7 +33,10 @@ type Props = {
   orderDateFrom?: string
   orderDateTo?: string
   orderSpanDays?: number
-  onOpenStagePlan?: (offerBlockId: string, blockTitle: string) => void
+  onOpenStagePlan?: (offerBlockId: string, blockTitle: string, sceneId?: string) => void
+  onAddStageScene?: (offerBlockId: string, blockTitle: string) => void
+  onRemoveStageScene?: (offerBlockId: string, sceneId: string) => void
+  onRenameStageScene?: (offerBlockId: string, sceneId: string, name: string) => void
   onOpenLedScreens?: (offerBlockId: string, blockTitle: string) => void
   readOnly?: boolean
   lockedItemIds?: ReadonlySet<string> | string[]
@@ -55,6 +60,9 @@ export default function OrderOfferBlocksEditor({
   orderDateTo,
   orderSpanDays = 1,
   onOpenStagePlan,
+  onAddStageScene,
+  onRemoveStageScene,
+  onRenameStageScene,
   onOpenLedScreens,
   readOnly = false,
   lockedItemIds,
@@ -242,29 +250,103 @@ export default function OrderOfferBlocksEditor({
                   )}
                 </div>
 
-                <h4 className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  <span>Wykaz sprzętu</span>
-                  <span className="flex flex-wrap items-center gap-1.5">
-                    {!readOnly && onOpenStagePlan ? (
-                      <button
-                        type="button"
-                        onClick={() => onOpenStagePlan(blockId, block.title?.trim() || `Blok ${index + 1}`)}
-                        className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] font-normal normal-case tracking-normal hover:bg-surface"
-                      >
-                        <LayoutGrid className="h-3.5 w-3.5" />
-                        Złóż scenę z podestów
-                      </button>
-                    ) : null}
-                    {!readOnly && onOpenLedScreens ? (
-                      <button
-                        type="button"
-                        onClick={() => onOpenLedScreens(blockId, block.title?.trim() || `Blok ${index + 1}`)}
-                        className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] font-normal normal-case tracking-normal hover:bg-surface"
-                      >
-                        Ekrany LED
-                      </button>
-                    ) : null}
-                  </span>
+                {(() => {
+                  const blockTitle = block.title?.trim() || `Blok ${index + 1}`
+                  const stageSet = parseStagePlanSetJson(
+                    typeof block.stagePlanJson === 'string' ? block.stagePlanJson : null
+                  )
+                  return (
+                    <div className="space-y-2">
+                      <h4 className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        <span>Sceny z podestów</span>
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          {!readOnly && onAddStageScene ? (
+                            <button
+                              type="button"
+                              onClick={() => onAddStageScene(blockId, blockTitle)}
+                              className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] font-normal normal-case tracking-normal hover:bg-surface"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                              Nowa scena
+                            </button>
+                          ) : null}
+                          {!readOnly && onOpenStagePlan && stageSet.scenes.length === 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => onOpenStagePlan(blockId, blockTitle)}
+                              className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] font-normal normal-case tracking-normal hover:bg-surface"
+                            >
+                              <LayoutGrid className="h-3.5 w-3.5" />
+                              Złóż scenę
+                            </button>
+                          ) : null}
+                          {!readOnly && onOpenLedScreens ? (
+                            <button
+                              type="button"
+                              onClick={() => onOpenLedScreens(blockId, blockTitle)}
+                              className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] font-normal normal-case tracking-normal hover:bg-surface"
+                            >
+                              Ekrany LED
+                            </button>
+                          ) : null}
+                        </span>
+                      </h4>
+                      {stageSet.scenes.length > 0 ? (
+                        <ul className="space-y-1">
+                          {stageSet.scenes.map((scene) => (
+                            <li
+                              key={scene.id}
+                              className="flex flex-wrap items-center gap-2 rounded border border-border bg-background/60 px-2 py-1.5 text-xs"
+                            >
+                              <button
+                                type="button"
+                                className="min-w-0 flex-1 truncate text-left font-medium hover:underline"
+                                onClick={() => onOpenStagePlan?.(blockId, blockTitle, scene.id)}
+                                title="Otwórz edytor sceny"
+                              >
+                                {stagePlanSceneSummary(scene)}
+                              </button>
+                              {!readOnly ? (
+                                <span className="flex shrink-0 items-center gap-1">
+                                  {onRenameStageScene ? (
+                                    <button
+                                      type="button"
+                                      title="Zmień nazwę"
+                                      className="rounded p-1 text-muted-foreground hover:bg-surface"
+                                      onClick={() => {
+                                        const next = window.prompt('Nazwa sceny', scene.name)
+                                        if (next != null) onRenameStageScene(blockId, scene.id, next)
+                                      }}
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </button>
+                                  ) : null}
+                                  {onRemoveStageScene ? (
+                                    <button
+                                      type="button"
+                                      title="Usuń scenę"
+                                      className="rounded p-1 text-red-500 hover:bg-red-500/10"
+                                      onClick={() => onRemoveStageScene(blockId, scene.id)}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                  ) : null}
+                                </span>
+                              ) : null}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-[11px] text-muted-foreground normal-case tracking-normal">
+                          Brak scen w tym bloku — możesz dodać kilka niezależnych układów.
+                        </p>
+                      )}
+                    </div>
+                  )
+                })()}
+
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Wykaz sprzętu
                 </h4>
 
                 <OrderEquipmentSection

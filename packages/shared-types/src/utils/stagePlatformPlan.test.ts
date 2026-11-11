@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   STAGE_PLAN_LINE_MARKER,
   buildStagePlan,
+  createCustomStageDeck,
   createStageDeck,
   createStageStair,
+  customDeckCatalogKey,
   edgeSelection,
   edgeSelectionLabel,
   emptyStagePlanInput,
@@ -85,7 +87,7 @@ describe('buildStagePlan — nogi i podesty', () => {
     const plan = planFor({ decks: RECT_6x4() })
     expect(plan.counts.decksTotal).toBe(12)
     expect(plan.counts.legs).toBe(48)
-    expect(bomLine(plan, 'legs')?.quantity).toBe(48)
+    expect(bomLine(plan, 'legs-60')?.quantity).toBe(48)
     expect(plan.notes.some((note) => note.includes('bez współdzielenia'))).toBe(true)
   })
 
@@ -158,7 +160,7 @@ describe('buildStagePlan — schody i barierki', () => {
     expect(plan.counts.stairs).toBe(3)
     // Scena 60 cm → stopnie 20 i 40 (2); poziom 60 to już podest.
     expect(plan.counts.stepsPerStair).toBe(2)
-    expect(bomLine(plan, 'stairs')?.quantity).toBe(3)
+    expect(bomLine(plan, 'stairs-60')?.quantity).toBe(3)
     expect(stageStairDepthM(60)).toBe(0.5)
     expect(stageStairSteps(40)).toBe(1)
     expect(stageStairSteps(80)).toBe(3)
@@ -306,10 +308,10 @@ describe('migracja planów v1', () => {
     bom: [],
   })
 
-  it('podnosi stary snapshot do v2 bez utraty treści', () => {
+  it('podnosi stary snapshot do aktualnej wersji bez utraty treści', () => {
     const plan = parseStagePlanJson(legacyJson)
     expect(plan).not.toBeNull()
-    expect(plan!.version).toBe(2)
+    expect(plan!.version).toBe(3)
     expect(plan!.counts.decksTotal).toBe(12)
     expect(plan!.claddingMaterial).toBe('hips')
     expect(plan!.claddingMb).toBe(14)
@@ -353,5 +355,50 @@ describe('pomocnicze', () => {
 
   it('znacznik linii zlecenia jest stały', () => {
     expect(STAGE_PLAN_LINE_MARKER).toBe('[plan sceny]')
+  })
+})
+
+describe('model v3 — podesty 0,5×2 / W×D / wysokości', () => {
+  it('liczy podesty 0,5×2 i custom w BOM', () => {
+    const plan = planFor({
+      decks: [
+        createStageDeck('0.5x2', 0, 0),
+        createCustomStageDeck(1.5, 0.5, 0.5, 0),
+        createCustomStageDeck(1.5, 0.5, 0.5, 0.5),
+      ],
+    })
+    expect(plan.counts.decks05x2).toBe(1)
+    expect(plan.counts.decksCustom).toBe(2)
+    expect(bomLine(plan, 'deck-0.5x2')?.quantity).toBe(1)
+    expect(bomLine(plan, customDeckCatalogKey(1.5, 0.5))?.quantity).toBe(2)
+  })
+
+  it('rozbija nogi na wysokości podestów', () => {
+    const plan = planFor({
+      legHeightCm: 60,
+      decks: [
+        { ...createStageDeck('2x1', 0, 0), heightCm: 20 },
+        { ...createStageDeck('2x1', 2, 0), heightCm: 40 },
+        createStageDeck('2x1', 4, 0),
+      ],
+    })
+    expect(bomLine(plan, 'legs-20')?.quantity).toBe(4)
+    expect(bomLine(plan, 'legs-40')?.quantity).toBe(4)
+    expect(bomLine(plan, 'legs-60')?.quantity).toBe(4)
+    expect(plan.notes.some((note) => note.includes('Uskok'))).toBe(true)
+  })
+
+  it('migruje zapis v2 do v3 przy odczycie', () => {
+    const v2 = serializeStagePlan(planFor({ decks: RECT_6x4() }))
+    const asV2 = JSON.stringify({ ...JSON.parse(v2), version: 2 })
+    const plan = parseStagePlanJson(asV2)
+    expect(plan?.version).toBe(3)
+    expect(plan?.counts.decksTotal).toBe(12)
+    expect(plan?.counts.decks05x2).toBe(0)
+  })
+
+  it('obraca podest 0,5×2', () => {
+    const deck = rotateStageDeck(createStageDeck('0.5x2', 0, 0))
+    expect([deck.w, deck.h]).toEqual([2, 0.5])
   })
 })

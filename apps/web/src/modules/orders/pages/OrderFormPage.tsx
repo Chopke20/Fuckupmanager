@@ -21,8 +21,13 @@ import {
   normalizeOrderLineDescriptionForSave,
   clampOrderOfferBlockTitle,
   validateOrderOfferBlocksForSave,
-  parseStagePlanJson,
-  serializeStagePlan,
+  parseStagePlanSetJson,
+  serializeStagePlanSet,
+  upsertStagePlanScene,
+  addStagePlanScene,
+  removeStagePlanScene,
+  renameStagePlanScene,
+  findStagePlanScene,
   type StagePlan,
 } from '@lama-stage/shared-types';
 import OrderOfferBlocksEditor from '../components/OrderOfferBlocksEditor';
@@ -37,7 +42,10 @@ import OrderRecurringSection from '../components/OrderRecurringSection';
 import ConfirmationModal from '../../../shared/components/ConfirmationModal';
 import StagePlatformsOrderModal from '../components/StagePlatformsOrderModal';
 import LedScreensOrderModal from '../components/LedScreensOrderModal';
-import { applyStagePlanToEquipmentItems } from '../../toolbox/utils/applyStagePlanToOrder'
+import {
+  applyStagePlanToEquipmentItems,
+  removeStagePlanSceneEquipmentItems,
+} from '../../toolbox/utils/applyStagePlanToOrder'
 import { listStagePlanRoleMaps } from '../../toolbox/api/stagePlanRoleMaps.api';
 import { upsertStagePlanProjectForOrder } from '../../toolbox/api/stagePlanProjects.api';
 import { useEquipment } from '../../equipment/hooks/useEquipment';
@@ -194,7 +202,12 @@ export default function OrderFormPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [dismissedHints, setDismissedHints] = useState<Set<string>>(new Set());
   const [unsavedModalOpen, setUnsavedModalOpen] = useState(false);
-  const [stageModal, setStageModal] = useState<{ offerBlockId: string | null; blockTitle?: string } | null>(null);
+  const [stageModal, setStageModal] = useState<{
+    offerBlockId: string | null
+    blockTitle?: string
+    sceneId: string
+    sceneName: string
+  } | null>(null);
   const [ledModal, setLedModal] = useState<{ offerBlockId: string | null; blockTitle?: string } | null>(null);
   const [pendingNav, setPendingNav] = useState<null | { kind: 'path'; to: string } | { kind: 'blocker' }>(null);
   const submitInFlightRef = useRef(false);
@@ -432,17 +445,38 @@ export default function OrderFormPage() {
     return daysBetween(from, to)
   }, [formData?.dateFrom, formData?.dateTo])
 
-  const savedStagePlan = parseStagePlanJson(
-    typeof formData?.stagePlanJson === 'string' ? formData.stagePlanJson : null
+  const readStagePlanSetJson = useCallback(
+    (offerBlockId: string | null) => {
+      if (offerBlockId) {
+        const block = (offerBlocksRaw as Partial<OrderOfferBlock>[]).find((item) => item.id === offerBlockId)
+        return parseStagePlanSetJson(typeof block?.stagePlanJson === 'string' ? block.stagePlanJson : null)
+      }
+      return parseStagePlanSetJson(
+        typeof formData?.stagePlanJson === 'string' ? formData.stagePlanJson : null
+      )
+    },
+    [offerBlocksRaw, formData?.stagePlanJson]
+  )
+
+  const writeStagePlanSetJson = useCallback(
+    (offerBlockId: string | null, serialized: string) => {
+      if (offerBlockId) {
+        const nextBlocks = (offerBlocksRaw as Partial<OrderOfferBlock>[]).map((block) =>
+          block.id === offerBlockId ? { ...block, stagePlanJson: serialized } : block
+        )
+        handleOfferBlocksChange(nextBlocks)
+      } else {
+        setValue('stagePlanJson', serialized, { shouldDirty: true })
+      }
+    },
+    [offerBlocksRaw, handleOfferBlocksChange, setValue]
   )
 
   const stageModalInitialPlan = useMemo(() => {
-    if (!stageModal?.offerBlockId) return savedStagePlan
-    const block = (offerBlocksRaw as Partial<OrderOfferBlock>[]).find(
-      (item) => item.id === stageModal.offerBlockId
-    )
-    return parseStagePlanJson(typeof block?.stagePlanJson === 'string' ? block.stagePlanJson : null)
-  }, [stageModal?.offerBlockId, offerBlocksRaw, savedStagePlan])
+    if (!stageModal) return null
+    const set = readStagePlanSetJson(stageModal.offerBlockId)
+    return findStagePlanScene(set, stageModal.sceneId)?.plan ?? null
+  }, [stageModal, readStagePlanSetJson])
 
   const stageOrderLabel = useMemo(() => {
     const name = (formData?.name || order?.name || '').trim()
@@ -457,8 +491,10 @@ export default function OrderFormPage() {
 
   const handleApplyStagePlan = useCallback(
     async (plan: StagePlan) => {
-      const offerBlockId = stageModal?.offerBlockId ?? null
-      const serialized = serializeStagePlan(plan)
+      if (!stageModal) return
+      const offerBlockId = stageModal.offerBlockId ?? null
+      const sceneId = stageModal.sceneId
+      const sceneName = stageModal.sceneName
       let roleMaps: Awaited<ReturnType<typeof listStagePlanRoleMaps>> = []
       try {
         roleMaps = await listStagePlanRoleMaps()
@@ -466,6 +502,8 @@ export default function OrderFormPage() {
         window.alert('Nie udało się wczytać mapowania ról kreatora. Otwórz zębatkę w edytorze i zapisz przepis.')
         return
       }
+      const currentSet = readStagePlanSetJson(offerBlockId)
+      const primarySceneId = currentSet.scenes[0]?.id ?? sceneId
       const result = applyStagePlanToEquipmentItems({
         existing: equipmentItems as Partial<OrderEquipmentItem>[],
         plan,
@@ -473,6 +511,9 @@ export default function OrderFormPage() {
         roleMaps,
         days: Math.max(1, orderDays),
         offerBlockId,
+        sceneId,
+        sceneName,
+        primarySceneId,
       })
       if (result.blockingIssues.length > 0) {
         window.alert(
@@ -491,32 +532,34 @@ export default function OrderFormPage() {
       }
       handleEquipmentChange(result.items)
 
-      if (offerBlockId) {
-        const nextBlocks = (offerBlocksRaw as Partial<OrderOfferBlock>[]).map((block) =>
-          block.id === offerBlockId ? { ...block, stagePlanJson: serialized } : block
-        )
-        handleOfferBlocksChange(nextBlocks)
-      } else {
-        setValue('stagePlanJson', serialized, { shouldDirty: true })
-      }
+      const nextSet = upsertStagePlanScene(currentSet, { sceneId, name: sceneName, plan })
+      writeStagePlanSetJson(offerBlockId, serializeStagePlanSet(nextSet))
 
       if (isEditing && id) {
         const orderName = (getValues('name') || order?.name || 'Zlecenie').trim()
-        const blockTitle = stageModal?.blockTitle?.trim()
-        const label = offerBlockId && blockTitle ? `${orderName} · ${blockTitle}` : orderName
+        const blockTitle = stageModal.blockTitle?.trim()
+        const labelParts = [orderName]
+        if (offerBlockId && blockTitle) labelParts.push(blockTitle)
+        labelParts.push(sceneName)
         try {
-          await upsertStagePlanProjectForOrder(id, { name: label, plan, offerBlockId })
+          await upsertStagePlanProjectForOrder(id, {
+            name: labelParts.join(' · '),
+            plan,
+            offerBlockId,
+            sceneId,
+          })
         } catch {
           // Plan jest w formularzu zlecenia; zapis projektu jest dodatkiem.
         }
       }
     },
     [
-      stageModal?.offerBlockId,
-      stageModal?.blockTitle,
+      stageModal,
       equipmentItems,
       equipmentCatalog,
       orderDays,
+      readStagePlanSetJson,
+      writeStagePlanSetJson,
       offerBlocksRaw,
       handleEquipmentChange,
       handleOfferBlocksChange,
@@ -528,9 +571,91 @@ export default function OrderFormPage() {
     ]
   )
 
-  const openStagePlanModal = useCallback((offerBlockId: string | null, blockTitle?: string) => {
-    setStageModal({ offerBlockId, blockTitle })
-  }, [])
+  const openStagePlanModal = useCallback(
+    (offerBlockId: string | null, blockTitle?: string, sceneId?: string) => {
+      let set = readStagePlanSetJson(offerBlockId)
+      let targetId = sceneId
+      if (!targetId) {
+        if (set.scenes.length === 0) {
+          const created = addStagePlanScene(set)
+          set = created.set
+          writeStagePlanSetJson(offerBlockId, serializeStagePlanSet(set))
+          targetId = created.scene.id
+        } else {
+          targetId = set.scenes[0]!.id
+        }
+      }
+      const scene = findStagePlanScene(set, targetId)
+      if (!scene) return
+      setStageModal({
+        offerBlockId,
+        blockTitle,
+        sceneId: scene.id,
+        sceneName: scene.name,
+      })
+    },
+    [readStagePlanSetJson, writeStagePlanSetJson]
+  )
+
+  const handleAddStageScene = useCallback(
+    (offerBlockId: string | null, blockTitle?: string) => {
+      const current = readStagePlanSetJson(offerBlockId)
+      const { set, scene } = addStagePlanScene(current)
+      writeStagePlanSetJson(offerBlockId, serializeStagePlanSet(set))
+      setStageModal({
+        offerBlockId,
+        blockTitle,
+        sceneId: scene.id,
+        sceneName: scene.name,
+      })
+    },
+    [readStagePlanSetJson, writeStagePlanSetJson]
+  )
+
+  const handleRemoveStageScene = useCallback(
+    (offerBlockId: string | null, sceneId: string) => {
+      const current = readStagePlanSetJson(offerBlockId)
+      if (!current.scenes.some((s) => s.id === sceneId)) return
+      if (
+        !window.confirm(
+          'Usunąć tę scenę z bloku? Pozycje sprzętu z planu tej sceny też znikną z wykazu.'
+        )
+      ) {
+        return
+      }
+      const primarySceneId = current.scenes[0]?.id ?? null
+      const nextSet = removeStagePlanScene(current, sceneId)
+      writeStagePlanSetJson(offerBlockId, serializeStagePlanSet(nextSet))
+      handleEquipmentChange(
+        removeStagePlanSceneEquipmentItems({
+          existing: equipmentItems as Partial<OrderEquipmentItem>[],
+          offerBlockId,
+          sceneId,
+          primarySceneId,
+        })
+      )
+      if (stageModal?.sceneId === sceneId) setStageModal(null)
+    },
+    [
+      readStagePlanSetJson,
+      writeStagePlanSetJson,
+      handleEquipmentChange,
+      equipmentItems,
+      stageModal?.sceneId,
+    ]
+  )
+
+  const handleRenameStageScene = useCallback(
+    (offerBlockId: string | null, sceneId: string, name: string) => {
+      const current = readStagePlanSetJson(offerBlockId)
+      const next = renameStagePlanScene(current, sceneId, name)
+      writeStagePlanSetJson(offerBlockId, serializeStagePlanSet(next))
+      if (stageModal?.sceneId === sceneId) {
+        setStageModal((prev) => (prev ? { ...prev, sceneName: name.trim() || prev.sceneName } : prev))
+      }
+    },
+    [readStagePlanSetJson, writeStagePlanSetJson, stageModal?.sceneId]
+  )
 
   const openLedScreensModal = useCallback((offerBlockId: string | null, blockTitle?: string) => {
     setLedModal({ offerBlockId, blockTitle })
@@ -1095,7 +1220,14 @@ export default function OrderFormPage() {
                     orderDateFrom={typeof formData.dateFrom === 'string' ? formData.dateFrom : undefined}
                     orderDateTo={typeof formData.dateTo === 'string' ? formData.dateTo : undefined}
                     orderSpanDays={orderDays}
-                    onOpenStagePlan={(blockId, blockTitle) => openStagePlanModal(blockId, blockTitle)}
+                    onOpenStagePlan={(blockId, blockTitle, sceneId) =>
+                      openStagePlanModal(blockId, blockTitle, sceneId)
+                    }
+                    onAddStageScene={(blockId, blockTitle) => handleAddStageScene(blockId, blockTitle)}
+                    onRemoveStageScene={(blockId, sceneId) => handleRemoveStageScene(blockId, sceneId)}
+                    onRenameStageScene={(blockId, sceneId, name) =>
+                      handleRenameStageScene(blockId, sceneId, name)
+                    }
                     onOpenLedScreens={(blockId, blockTitle) => openLedScreensModal(blockId, blockTitle)}
                   />
                 </section>
@@ -1111,11 +1243,11 @@ export default function OrderFormPage() {
                         <div className="flex flex-wrap items-center gap-1.5">
                           <button
                             type="button"
-                            onClick={() => openStagePlanModal(null)}
+                            onClick={() => handleAddStageScene(null)}
                             className="inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1.5 text-xs hover:bg-surface-2"
                           >
                             <LayoutGrid size={14} />
-                            Złóż scenę z podestów
+                            Nowa scena z podestów
                           </button>
                           <button
                             type="button"
@@ -1279,10 +1411,15 @@ export default function OrderFormPage() {
         open={stageModal !== null}
         orderId={isEditing ? id : null}
         offerBlockId={stageModal?.offerBlockId ?? null}
+        sceneId={stageModal?.sceneId ?? null}
         orderLabel={
-          stageModal?.offerBlockId && stageModal.blockTitle
-            ? `${stageOrderLabel ?? 'Zlecenie'} · ${stageModal.blockTitle}`
-            : stageOrderLabel
+          [
+            stageOrderLabel,
+            stageModal?.offerBlockId && stageModal.blockTitle ? stageModal.blockTitle : null,
+            stageModal?.sceneName ?? null,
+          ]
+            .filter(Boolean)
+            .join(' · ') || undefined
         }
         initialPlan={stageModalInitialPlan}
         onClose={() => setStageModal(null)}

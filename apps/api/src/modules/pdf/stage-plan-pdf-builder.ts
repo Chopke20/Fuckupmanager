@@ -38,6 +38,36 @@ function formatEventDateRange(
   return from || to
 }
 
+function renderSceneSection(sceneName: string | null, plan: StagePlan): string {
+  const svg = renderStagePlanSvg(plan, { widthPx: 640, theme: 'print' })
+  const bomRows = plan.bom
+    .map(
+      (line) =>
+        `<tr><td>${escapeHtml(line.name)}</td><td style="text-align:right">${escapeHtml(formatMeters(line.quantity))} ${escapeHtml(line.unit)}</td></tr>`
+    )
+    .join('')
+  const legendRows = stagePlanLegend(plan)
+    .map(
+      (item) =>
+        `<div class="legend-item"><span class="legend-label">${escapeHtml(item.label)}</span><span>${escapeHtml(item.value)}</span></div>`
+    )
+    .join('')
+  const notes = plan.notes.map((n) => `<li>${escapeHtml(n)}</li>`).join('')
+  const warnings = plan.warnings.map((w) => `<li>${escapeHtml(w)}</li>`).join('')
+  return `
+    <section class="scene">
+      ${sceneName ? `<h2>${escapeHtml(sceneName)}</h2>` : ''}
+      <div class="plan">${svg}</div>
+      <div class="legend">${legendRows}</div>
+      <table>
+        <thead><tr><th>Pozycja</th><th style="text-align:right">Ilość</th></tr></thead>
+        <tbody>${bomRows}</tbody>
+      </table>
+      ${warnings ? `<ul class="warnings">${warnings}</ul>` : ''}
+      <ul>${notes}</ul>
+    </section>`
+}
+
 export function buildStagePlanPdfHtml(params: {
   documentNumberDisplay: string
   orderName: string
@@ -47,33 +77,32 @@ export function buildStagePlanPdfHtml(params: {
   dateFrom?: Date | string | null
   dateTo?: Date | string | null
   issuedAt: string
-  plan: StagePlan
+  /** Pojedyncza scena (wsteczna zgodność). */
+  plan?: StagePlan
+  /** Wiele scen w bloku — gdy podane, ma pierwszeństwo przed `plan`. */
+  scenes?: Array<{ name: string; plan: StagePlan }>
 }): string {
-  // Wydruk używa jasnej palety — ta sama funkcja rysuje ciemny podgląd w
-  // aplikacji, więc motyw musi być podany jawnie.
-  const svg = renderStagePlanSvg(params.plan, { widthPx: 640, theme: 'print' })
-  const bomRows = params.plan.bom
-    .map(
-      (line) =>
-        `<tr><td>${escapeHtml(line.name)}</td><td style="text-align:right">${escapeHtml(formatMeters(line.quantity))} ${escapeHtml(line.unit)}</td></tr>`
-    )
-    .join('')
-  const legendRows = stagePlanLegend(params.plan)
-    .map(
-      (item) =>
-        `<div class="legend-item"><span class="legend-label">${escapeHtml(item.label)}</span><span>${escapeHtml(item.value)}</span></div>`
-    )
-    .join('')
-  const notes = params.plan.notes.map((n) => `<li>${escapeHtml(n)}</li>`).join('')
-  const warnings = params.plan.warnings
-    .map((w) => `<li>${escapeHtml(w)}</li>`)
-    .join('')
+  const scenes =
+    params.scenes && params.scenes.length > 0
+      ? params.scenes
+      : params.plan
+        ? [{ name: '', plan: params.plan }]
+        : []
+  if (scenes.length === 0) {
+    throw new Error('Brak planu sceny do PDF')
+  }
   const orderRef =
     params.orderNumber != null && params.orderYear != null
       ? `${params.orderNumber}/${params.orderYear}`
       : '—'
   const issued = fmtPlDate(params.issuedAt) ?? ''
   const eventDate = formatEventDateRange(params.dateFrom, params.dateTo)
+  const showSceneTitles = scenes.length > 1
+  const body = scenes
+    .map((scene) =>
+      renderSceneSection(showSceneTitles ? scene.name || 'Scena' : null, scene.plan)
+    )
+    .join('<div class="scene-break"></div>')
 
   return `<!DOCTYPE html>
 <html lang="pl">
@@ -84,6 +113,7 @@ export function buildStagePlanPdfHtml(params: {
   body { font-family: Arial, Helvetica, sans-serif; color:#111; font-size:10pt; margin:0; }
   .page { padding: 16mm 18mm; }
   h1 { font-size: 16pt; margin: 0 0 4px; }
+  h2 { font-size: 12pt; margin: 0 0 8px; }
   .meta { color:#666; font-size:9pt; margin-bottom: 6px; }
   .event-date { font-size: 12pt; font-weight: 700; color:#111; margin: 0 0 14px; }
   .event-date span { font-weight: 400; color:#444; }
@@ -96,11 +126,13 @@ export function buildStagePlanPdfHtml(params: {
   .legend-item { display: flex; gap: 6px; }
   .legend-label { color:#666; text-transform: uppercase; font-size: 7.5pt; letter-spacing: .06em; align-self: center; }
   .warnings { color:#a83232; }
+  .scene-break { page-break-before: always; margin-top: 18px; }
+  .scene + .scene-break + .scene { margin-top: 0; }
 </style>
 </head>
 <body>
   <div class="page">
-    <h1>Plan sceny</h1>
+    <h1>Plan sceny${scenes.length > 1 ? ` (${scenes.length})` : ''}</h1>
     <div class="meta">
       ${escapeHtml(params.documentNumberDisplay)}
       &nbsp;·&nbsp; ${escapeHtml(params.orderName)}
@@ -113,14 +145,7 @@ export function buildStagePlanPdfHtml(params: {
         ? `<div class="event-date">Data wydarzenia: <span>${escapeHtml(eventDate)}</span></div>`
         : ''
     }
-    <div class="plan">${svg}</div>
-    <div class="legend">${legendRows}</div>
-    <table>
-      <thead><tr><th>Pozycja</th><th style="text-align:right">Ilość</th></tr></thead>
-      <tbody>${bomRows}</tbody>
-    </table>
-    ${warnings ? `<ul class="warnings">${warnings}</ul>` : ''}
-    <ul>${notes}</ul>
+    ${body}
   </div>
 </body>
 </html>`

@@ -8,23 +8,28 @@ const planJsonSchema = z.string().min(2).refine(
   { message: 'Nieprawidłowy plan sceny (JSON).' }
 )
 
+const sceneIdSchema = z.string().trim().min(1).max(64).optional().nullable()
+
 const createProjectSchema = z.object({
   name: z.string().trim().min(1).max(200),
   planJson: planJsonSchema,
   orderId: z.string().uuid().optional().nullable(),
   offerBlockId: z.string().uuid().optional().nullable(),
+  sceneId: sceneIdSchema,
 })
 
 const updateProjectSchema = z.object({
   name: z.string().trim().min(1).max(200).optional(),
   planJson: planJsonSchema.optional(),
   orderId: z.string().uuid().nullable().optional(),
+  sceneId: sceneIdSchema,
 })
 
 const upsertForOrderSchema = z.object({
   name: z.string().trim().min(1).max(200),
   planJson: planJsonSchema,
   offerBlockId: z.string().uuid().optional().nullable(),
+  sceneId: sceneIdSchema,
 })
 
 function projectSelect() {
@@ -34,6 +39,7 @@ function projectSelect() {
     planJson: true,
     orderId: true,
     offerBlockId: true,
+    sceneId: true,
     createdAt: true,
     updatedAt: true,
     order: {
@@ -112,12 +118,16 @@ export async function createStagePlanProject(req: Request, res: Response, next: 
         }
       }
       const existing = await prisma.stagePlanProject.findFirst({
-        where: { orderId: parsed.orderId, offerBlockId: parsed.offerBlockId ?? null },
+        where: {
+          orderId: parsed.orderId,
+          offerBlockId: parsed.offerBlockId ?? null,
+          sceneId: parsed.sceneId ?? null,
+        },
         select: { id: true },
       })
       if (existing) {
         res.status(409).json({
-          error: 'Ten blok zlecenia ma już przypisany projekt sceny.',
+          error: 'Ta scena w bloku zlecenia ma już przypisany projekt.',
           requestId: res.locals.requestId,
         })
         return
@@ -130,6 +140,7 @@ export async function createStagePlanProject(req: Request, res: Response, next: 
         planJson: parsed.planJson,
         orderId: parsed.orderId ?? null,
         offerBlockId: parsed.offerBlockId ?? null,
+        sceneId: parsed.sceneId ?? null,
       },
       select: projectSelect(),
     })
@@ -226,15 +237,16 @@ export async function upsertStagePlanProjectForOrder(req: Request, res: Response
       }
     }
 
+    const sceneId = parsed.sceneId ?? null
     const existing = await prisma.stagePlanProject.findFirst({
-      where: { orderId, offerBlockId },
+      where: { orderId, offerBlockId, sceneId },
       select: { id: true },
     })
 
     const project = existing
       ? await prisma.stagePlanProject.update({
           where: { id: existing.id },
-          data: { name: parsed.name, planJson: parsed.planJson, offerBlockId },
+          data: { name: parsed.name, planJson: parsed.planJson, offerBlockId, sceneId },
           select: projectSelect(),
         })
       : await prisma.stagePlanProject.create({
@@ -243,6 +255,7 @@ export async function upsertStagePlanProjectForOrder(req: Request, res: Response
             planJson: parsed.planJson,
             orderId,
             offerBlockId,
+            sceneId,
           },
           select: projectSelect(),
         })

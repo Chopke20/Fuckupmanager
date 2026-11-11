@@ -4,7 +4,7 @@ import { prisma } from '../../prisma/client'
 import puppeteer from 'puppeteer'
 import { ZodError } from 'zod'
 import { AppError } from '../../shared/errors/AppError'
-import { OrderOfferSnapshotSchema, parseStagePlanJson, type OfferDocumentDraft, type OrderOfferSnapshot, type SharedOfferPartnerLine } from '@lama-stage/shared-types'
+import { OrderOfferSnapshotSchema, parseStagePlanJson, parseStagePlanSetJson, type OfferDocumentDraft, type OrderOfferSnapshot, type SharedOfferPartnerLine } from '@lama-stage/shared-types'
 import { buildOfferHtmlV5, type OrderLike } from './offer-v5-builder'
 import { buildOfferExcel, offerExcelFilename } from './offer-excel-builder'
 import { buildWarehousePdfHtml } from './warehouse-pdf-builder'
@@ -1203,10 +1203,12 @@ export class PdfController {
         orderName = `${order.name} — ${block.title}`
       }
 
-      const plan = parseStagePlanJson(planJson)
-      if (!plan) {
+      const planSet = parseStagePlanSetJson(planJson)
+      if (planSet.scenes.length === 0) {
         return res.status(400).json({ error: 'Brak zapisanego planu sceny — złóż scenę w zleceniu.' })
       }
+      const scenes = planSet.scenes.map((s) => ({ name: s.name, plan: s.plan }))
+      const plan = scenes[0]!.plan
 
       const orderYear = order.orderYear ?? new Date(order.createdAt).getFullYear()
       const orderNumber = order.orderNumber
@@ -1254,6 +1256,7 @@ export class PdfController {
                 dateTo: order.dateTo,
                 venue: order.venue,
                 plan,
+                scenes,
               }),
             },
           })
@@ -1271,7 +1274,7 @@ export class PdfController {
         dateFrom: order.dateFrom,
         dateTo: order.dateTo,
         issuedAt: generatedAt,
-        plan,
+        scenes,
       })
       const pdfBuffer = await this.renderPdf(html)
       const filename = `Plan-sceny-${documentNumberDisplay}.pdf`

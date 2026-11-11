@@ -1,11 +1,12 @@
 /**
- * Plan sceny z podestów — model v2.
+ * Plan sceny z podestów — model v3.
  *
  * W wersji 1 plan był wynikiem funkcji: z frontu i głębokości algorytm układał
  * prostokąt i z niego liczył materiały. W wersji 2 plan jest dokumentem, który
  * operator redaguje na rzucie: układ podestów jest źródłem, a obwód, pola,
  * barierki i schody są z niego wyliczane. Wymiary gabarytowe zostają wyłącznie
- * jako opis, nie jako podstawa wyceny.
+ * jako opis, nie jako podstawa wyceny. Wersja 3 dodaje podesty 0,5×2 / W×D
+ * oraz opcjonalną wysokość nóg na każdym podeście.
  */
 
 import {
@@ -37,7 +38,10 @@ export {
 export type { StageEdge, StageEdgeSide, StageLayoutIssues, StageRect }
 
 export const STAGE_PLAN_LINE_MARKER = '[plan sceny]'
-export const STAGE_PLAN_VERSION = 2
+/** v3: podesty 0.5×2 / custom + opcjonalna wysokość per podest. */
+export const STAGE_PLAN_VERSION = 3
+export const STAGE_PLAN_MIN_CUSTOM_M = 0.25
+export const STAGE_PLAN_MAX_CUSTOM_M = 4
 
 export const STAGE_LEG_HEIGHTS_CM = [20, 40, 60, 80, 100, 120, 140, 160, 180, 200] as const
 
@@ -62,7 +66,7 @@ export const STAGE_STEP_TREAD_M = 0.25
 /** Od tej wysokości schody i barierki mają sens. */
 export const STAGE_ACCESSORY_MIN_CM = 40
 
-export type StageDeckKind = '2x1' | '1x1'
+export type StageDeckKind = '2x1' | '1x1' | '0.5x2' | 'custom'
 export type StageCladdingMaterial = 'none' | 'skirt' | 'hips'
 export type StageFloorMaterial = 'none' | 'carpet' | 'hips'
 export type StageBomUnit = 'szt.' | 'mb' | 'm²'
@@ -70,6 +74,8 @@ export type StageBomUnit = 'szt.' | 'mb' | 'm²'
 export interface StageDeck extends StageRect {
   id: string
   kind: StageDeckKind
+  /** Wysokość nóg tego podestu (cm). Brak = `plan.legHeightCm`. */
+  heightCm?: number
 }
 
 /**
@@ -134,6 +140,8 @@ export function resolveStageBomCatalogKey(
 export const STAGE_PLAN_CATALOG_KEY_LABELS: Record<string, string> = {
   'deck-2x1': 'Podest 2×1 m',
   'deck-1x1': 'Podest 1×1 m',
+  'deck-0.5x2': 'Podest 0,5×2 m',
+  'deck-custom': 'Podest niestandardowy (W×D)',
   'deck-clamps': 'Klamry blatów',
   'dual-leg-clamps': 'Klamry nóg podwójne',
   'quad-leg-clamps': 'Klamry nóg poczwórne',
@@ -156,6 +164,8 @@ export const STAGE_PLAN_CATALOG_KEY_LABELS: Record<string, string> = {
 export const STAGE_PLAN_ROLE_CONFIG_KEYS = [
   'deck-2x1',
   'deck-1x1',
+  'deck-0.5x2',
+  'deck-custom',
   'legs',
   'deck-clamps',
   'dual-leg-clamps',
@@ -171,10 +181,11 @@ export const STAGE_PLAN_ROLE_CONFIG_KEYS = [
 
 export type StagePlanRoleConfigKey = (typeof STAGE_PLAN_ROLE_CONFIG_KEYS)[number]
 
-/** Rodzina roli dla konkretnego catalogKey (legs-40 → legs). */
+/** Rodzina roli dla konkretnego catalogKey (legs-40 → legs, deck-custom-1x0.5 → deck-custom). */
 export function stagePlanRoleFamily(catalogKey: string): string {
   if (catalogKey.startsWith('legs-')) return 'legs'
   if (catalogKey.startsWith('stairs-')) return 'stairs'
+  if (catalogKey.startsWith('deck-custom')) return 'deck-custom'
   return catalogKey
 }
 
@@ -198,7 +209,7 @@ export interface StagePlanInput {
 }
 
 export interface StagePlan extends StagePlanInput {
-  version: 2
+  version: 2 | 3
   /** Gabaryt — do nagłówka i podglądu, nie do liczenia materiałów. */
   widthM: number
   depthM: number
@@ -210,6 +221,8 @@ export interface StagePlan extends StagePlanInput {
   counts: {
     decks2x1: number
     decks1x1: number
+    decks05x2: number
+    decksCustom: number
     decksTotal: number
     legs: number
     deckClamps: number
@@ -236,21 +249,182 @@ function nextId(prefix: string): string {
     .slice(2, 6)}`
 }
 
+export function clampStageDeckSizeM(value: number): number {
+  if (!Number.isFinite(value)) return STAGE_PLAN_MIN_CUSTOM_M
+  return roundM(
+    Math.min(STAGE_PLAN_MAX_CUSTOM_M, Math.max(STAGE_PLAN_MIN_CUSTOM_M, value))
+  )
+}
+
+export function normalizeStageLegHeightCm(value: unknown, fallback = 60): number {
+  const n = Math.round(Number(value))
+  if (!Number.isFinite(n)) return fallback
+  if ((STAGE_LEG_HEIGHTS_CM as readonly number[]).includes(n)) return n
+  // Najbliższa standardowa wysokość.
+  let best: number = STAGE_LEG_HEIGHTS_CM[0]!
+  let bestDist = Math.abs(best - n)
+  for (const h of STAGE_LEG_HEIGHTS_CM) {
+    const d = Math.abs(h - n)
+    if (d < bestDist) {
+      best = h
+      bestDist = d
+    }
+  }
+  return best
+}
+
+/** Efektywna wysokość podestu — własne pole albo domyślna planu. */
+export function deckHeightCm(deck: StageDeck, planLegHeightCm: number): number {
+  if (deck.heightCm == null) return normalizeStageLegHeightCm(planLegHeightCm)
+  return normalizeStageLegHeightCm(deck.heightCm, planLegHeightCm)
+}
+
+function sizeForKind(kind: StageDeckKind, rotated: boolean): { w: number; h: number } {
+  if (kind === '1x1') return { w: 1, h: 1 }
+  if (kind === '2x1') return rotated ? { w: 1, h: 2 } : { w: 2, h: 1 }
+  if (kind === '0.5x2') return rotated ? { w: 2, h: 0.5 } : { w: 0.5, h: 2 }
+  return { w: 1, h: 1 }
+}
+
 export function createStageDeck(
   kind: StageDeckKind,
   x: number,
   y: number,
-  rotated = false
+  rotated = false,
+  customSize?: { w: number; h: number },
+  heightCm?: number
 ): StageDeck {
-  const long = kind === '2x1'
-  const w = long ? (rotated ? 1 : 2) : 1
-  const h = long ? (rotated ? 2 : 1) : 1
-  return { id: nextId('d'), kind, x: roundM(x), y: roundM(y), w, h }
+  const size =
+    kind === 'custom' && customSize
+      ? { w: clampStageDeckSizeM(customSize.w), h: clampStageDeckSizeM(customSize.h) }
+      : sizeForKind(kind === 'custom' ? '1x1' : kind, rotated)
+  const deck: StageDeck = {
+    id: nextId('d'),
+    kind: kind === 'custom' ? 'custom' : kind,
+    x: roundM(x),
+    y: roundM(y),
+    w: size.w,
+    h: size.h,
+  }
+  if (heightCm != null) deck.heightCm = normalizeStageLegHeightCm(heightCm)
+  return deck
+}
+
+export function createCustomStageDeck(
+  widthM: number,
+  depthM: number,
+  x: number,
+  y: number,
+  heightCm?: number
+): StageDeck {
+  return createStageDeck('custom', x, y, false, { w: widthM, h: depthM }, heightCm)
 }
 
 export function rotateStageDeck(deck: StageDeck): StageDeck {
-  if (deck.kind === '1x1') return deck
+  if (Math.abs(deck.w - deck.h) < STAGE_TOL_M) return deck
   return { ...deck, w: deck.h, h: deck.w }
+}
+
+/** Klucz katalogowy blatu custom (np. deck-custom-1.5x0.5). */
+export function customDeckCatalogKey(widthM: number, depthM: number): string {
+  const a = formatMeters(roundM(widthM)).replace(',', '.')
+  const b = formatMeters(roundM(depthM)).replace(',', '.')
+  return `deck-custom-${a}x${b}`
+}
+
+export function deckKindLabel(deck: StageDeck): string {
+  if (deck.kind === '2x1') return '2×1'
+  if (deck.kind === '1x1') return '1×1'
+  if (deck.kind === '0.5x2') return '0,5×2'
+  return `${formatMeters(deck.w)}×${formatMeters(deck.h)}`
+}
+
+/** Etykieta na rzucie: rozmiar + wysokość, gdy różni się od domyślnej planu. */
+export function deckPlanLabel(deck: StageDeck, planLegHeightCm: number): string {
+  const size = deckKindLabel(deck)
+  const h = deckHeightCm(deck, planLegHeightCm)
+  if (deck.heightCm == null && h === normalizeStageLegHeightCm(planLegHeightCm)) return size
+  return `${size} · ${h}`
+}
+
+function deckTouchesOutlineEdge(deck: StageRect, edge: StageEdge, tol = STAGE_TOL_M): boolean {
+  const horizontal = edge.side === 'front' || edge.side === 'back'
+  const edgeLo = horizontal ? Math.min(edge.x1, edge.x2) : Math.min(edge.y1, edge.y2)
+  const edgeHi = horizontal ? Math.max(edge.x1, edge.x2) : Math.max(edge.y1, edge.y2)
+  if (edge.side === 'front') {
+    if (Math.abs(deck.y - edge.y1) > tol) return false
+    return Math.min(deck.x + deck.w, edgeHi) - Math.max(deck.x, edgeLo) > tol
+  }
+  if (edge.side === 'back') {
+    if (Math.abs(deck.y + deck.h - edge.y1) > tol) return false
+    return Math.min(deck.x + deck.w, edgeHi) - Math.max(deck.x, edgeLo) > tol
+  }
+  if (edge.side === 'left') {
+    if (Math.abs(deck.x - edge.x1) > tol) return false
+    return Math.min(deck.y + deck.h, edgeHi) - Math.max(deck.y, edgeLo) > tol
+  }
+  if (Math.abs(deck.x + deck.w - edge.x1) > tol) return false
+  return Math.min(deck.y + deck.h, edgeHi) - Math.max(deck.y, edgeLo) > tol
+}
+
+/** Wysokość podestu przy krawędzi konturu (max sąsiadujących). */
+export function edgeFaceHeightCm(
+  edge: StageEdge,
+  decks: StageDeck[],
+  planLegHeightCm: number
+): number {
+  let maxH = 0
+  for (const deck of decks) {
+    if (!deckTouchesOutlineEdge(deck, edge)) continue
+    maxH = Math.max(maxH, deckHeightCm(deck, planLegHeightCm))
+  }
+  return maxH > 0 ? maxH : normalizeStageLegHeightCm(planLegHeightCm)
+}
+
+export function stairAttachedHeightCm(
+  stair: StageStair,
+  decks: StageDeck[],
+  edges: StageEdge[],
+  planLegHeightCm: number
+): number {
+  const cover = findEdgeCovering(edges, stair.side, stair.atM, stair.posM, stair.widthM)
+  if (!cover) return normalizeStageLegHeightCm(planLegHeightCm)
+  return edgeFaceHeightCm(cover, decks, planLegHeightCm)
+}
+
+function normalizeDeckKind(raw: unknown, w: number, h: number): StageDeckKind {
+  if (raw === '2x1' || raw === '1x1' || raw === '0.5x2' || raw === 'custom') return raw
+  const a = Math.min(w, h)
+  const b = Math.max(w, h)
+  if (Math.abs(a - 1) <= STAGE_TOL_M && Math.abs(b - 1) <= STAGE_TOL_M) return '1x1'
+  if (Math.abs(a - 1) <= STAGE_TOL_M && Math.abs(b - 2) <= STAGE_TOL_M) return '2x1'
+  if (Math.abs(a - 0.5) <= STAGE_TOL_M && Math.abs(b - 2) <= STAGE_TOL_M) return '0.5x2'
+  return 'custom'
+}
+
+export function normalizeStageDeck(
+  raw: unknown,
+  planLegHeightCm = 60
+): StageDeck | null {
+  if (!raw || typeof raw !== 'object') return null
+  const item = raw as Partial<StageDeck>
+  const wRaw = Number(item.w)
+  const hRaw = Number(item.h)
+  const w = Number.isFinite(wRaw) && wRaw > 0 ? roundM(wRaw) : 1
+  const h = Number.isFinite(hRaw) && hRaw > 0 ? roundM(hRaw) : 1
+  const kind = normalizeDeckKind(item.kind, w, h)
+  const deck: StageDeck = {
+    id: typeof item.id === 'string' && item.id ? item.id : nextId('d'),
+    kind,
+    x: roundM(Number(item.x) || 0),
+    y: roundM(Number(item.y) || 0),
+    w: kind === 'custom' ? clampStageDeckSizeM(w) : w,
+    h: kind === 'custom' ? clampStageDeckSizeM(h) : h,
+  }
+  if (item.heightCm != null) {
+    deck.heightCm = normalizeStageLegHeightCm(item.heightCm, planLegHeightCm)
+  }
+  return deck
 }
 
 export function createStageStair(
@@ -459,27 +633,50 @@ export function buildStagePlan(input: StagePlanInput): StagePlan {
 
   const cladding = prunedSelection(input.cladding, edges)
   const railings = prunedSelection(input.railings, edges)
-  const height = Math.round(input.legHeightCm)
+  const height = normalizeStageLegHeightCm(input.legHeightCm)
   const catalogCtx = {
     legHeightCm: height,
     claddingMaterial: input.claddingMaterial,
     floorMaterial: input.floorMaterial,
   }
-  const accessoriesAllowed = height >= STAGE_ACCESSORY_MIN_CM
+  const deckHeights = decks.map((deck) => deckHeightCm(deck, height))
+  const maxDeckHeight = deckHeights.length > 0 ? Math.max(...deckHeights) : height
+  const accessoriesAllowed = maxDeckHeight >= STAGE_ACCESSORY_MIN_CM
 
   const decks2x1 = decks.filter((deck) => deck.kind === '2x1').length
   const decks1x1 = decks.filter((deck) => deck.kind === '1x1').length
+  const decks05x2 = decks.filter((deck) => deck.kind === '0.5x2').length
+  const decksCustom = decks.filter((deck) => deck.kind === 'custom').length
   const decksTotal = decks.length
   const legs = decksTotal * 4
+  const legsByHeight = new Map<number, number>()
+  for (const deck of decks) {
+    const h = deckHeightCm(deck, height)
+    legsByHeight.set(h, (legsByHeight.get(h) ?? 0) + 4)
+  }
 
   const claddingEdges =
     input.claddingMaterial === 'none' ? [] : selectedEdges(cladding, edges)
   const claddingMb = round2(claddingEdges.reduce((acc, edge) => acc + edge.lengthM, 0))
-  const claddingM2 = round2((claddingMb * height) / 100)
+  // Przy mieszanych wysokościach obicie m² liczymy od wysokości podestu przy krawędzi (max sąsiadów).
+  const claddingM2 = round2(
+    claddingEdges.reduce((acc, edge) => {
+      const faceH = edgeFaceHeightCm(edge, decks, height)
+      return acc + (edge.lengthM * faceH) / 100
+    }, 0)
+  )
 
-  const railingEdges = accessoriesAllowed ? selectedEdges(railings, edges) : []
+  // Barierki tylko na krawędziach podestów ≥ 40 cm.
+  const railingCandidateEdges = selectedEdges(railings, edges).filter(
+    (edge) => edgeFaceHeightCm(edge, decks, height) >= STAGE_ACCESSORY_MIN_CM
+  )
+  const railingEdges = accessoriesAllowed ? railingCandidateEdges : []
   const railingGross = railingEdges.reduce((acc, edge) => acc + edge.lengthM, 0)
-  const stairs = accessoriesAllowed ? input.stairs : []
+  const stairs = accessoriesAllowed
+    ? input.stairs.filter(
+        (stair) => stairAttachedHeightCm(stair, decks, edges, height) >= STAGE_ACCESSORY_MIN_CM
+      )
+    : []
   const railingGaps = stairs.reduce((acc, stair) => {
     const onSelectedEdge = railingEdges.reduce(
       (best, edge) => Math.max(best, stairOverlapOnEdge(stair, edge)),
@@ -489,11 +686,36 @@ export function buildStagePlan(input: StagePlanInput): StagePlan {
   }, 0)
   const railingMb = round2(Math.max(0, railingGross - railingGaps))
 
-  const clampRows = height > 100 ? 2 : 1
-  const dualLegClamps = height >= 60 ? junctions.dual * clampRows : 0
-  const quadLegClamps = height >= 60 ? junctions.quad * clampRows : 0
-  const braces = height >= 168 ? junctions.dual + junctions.quad : 0
-  const stepsPerStair = stageStairSteps(height)
+  // Klamry/stężenia — progi osobno w każdej grupie wysokości.
+  let dualLegClamps = 0
+  let quadLegClamps = 0
+  let braces = 0
+  const decksByHeight = new Map<number, StageDeck[]>()
+  for (const deck of decks) {
+    const h = deckHeightCm(deck, height)
+    const list = decksByHeight.get(h) ?? []
+    list.push(deck)
+    decksByHeight.set(h, list)
+  }
+  for (const [groupHeight, group] of decksByHeight) {
+    const groupJunctions = computeStageJunctions(group)
+    const clampRows = groupHeight > 100 ? 2 : 1
+    if (groupHeight >= 60) {
+      dualLegClamps += groupJunctions.dual * clampRows
+      quadLegClamps += groupJunctions.quad * clampRows
+    }
+    if (groupHeight >= 168) {
+      braces += groupJunctions.dual + groupJunctions.quad
+    }
+  }
+  // Fallback: gdy jedna wysokość, użyj globalnych junctionów (dokładniejsze styki).
+  if (decksByHeight.size <= 1) {
+    const clampRows = maxDeckHeight > 100 ? 2 : 1
+    dualLegClamps = maxDeckHeight >= 60 ? junctions.dual * clampRows : 0
+    quadLegClamps = maxDeckHeight >= 60 ? junctions.quad * clampRows : 0
+    braces = maxDeckHeight >= 168 ? junctions.dual + junctions.quad : 0
+  }
+  const stepsPerStair = stageStairSteps(maxDeckHeight)
 
   const warnings: string[] = []
   if (decksTotal === 0) {
@@ -548,7 +770,7 @@ export function buildStagePlan(input: StagePlanInput): StagePlan {
   }
   if (stairs.length > 0) {
     notes.push(
-      `Schody: ${stairs.length} ${stairs.length === 1 ? 'bieg' : 'biegi'}, po ${stepsPerStair} ${stepsPerStair === 1 ? 'stopniu pośrednim' : 'stopniach pośrednich'} (bez poziomu sceny ${height} cm).`
+      `Schody: ${stairs.length} ${stairs.length === 1 ? 'bieg' : 'biegi'} (stopnie od wysokości podestu przy krawędzi).`
     )
   }
   if (railingMb > 0) {
@@ -556,9 +778,29 @@ export function buildStagePlan(input: StagePlanInput): StagePlan {
       `Barierki na ${edgeSelectionLabel(railings, edges)}: ${formatMeters(railingMb)} mb${railingGaps > 0 ? ` (po odjęciu ${formatMeters(round2(railingGaps))} mb przejść na schody)` : ''}.`
     )
   }
-  if (height >= 60) notes.push('Powyżej 60 cm wysokości: klamry nóg obowiązkowe (stężenie).')
-  if (height > 100) notes.push('Powyżej 100 cm: druga linia klamer nóg (ok. 1/3 i 2/3 wysokości).')
-  if (height >= 168) notes.push('Od 168 cm: dodatkowe stężenia poziome i ukośne.')
+  if (maxDeckHeight >= 60) notes.push('Powyżej 60 cm wysokości: klamry nóg obowiązkowe (stężenie).')
+  if (maxDeckHeight > 100) notes.push('Powyżej 100 cm: druga linia klamer nóg (ok. 1/3 i 2/3 wysokości).')
+  if (maxDeckHeight >= 168) notes.push('Od 168 cm: dodatkowe stężenia poziome i ukośne.')
+
+  // Uskoki między sąsiednimi podestami o różnych wysokościach — na razie tylko notatka.
+  const stepGaps = new Map<number, number>()
+  for (let i = 0; i < decks.length; i += 1) {
+    for (let j = i + 1; j < decks.length; j += 1) {
+      const a = decks[i]!
+      const b = decks[j]!
+      const ha = deckHeightCm(a, height)
+      const hb = deckHeightCm(b, height)
+      if (ha === hb) continue
+      const shared = computeSharedEdgeMeters([a, b])
+      if (shared <= STAGE_TOL_M) continue
+      const delta = Math.abs(ha - hb)
+      stepGaps.set(delta, round2((stepGaps.get(delta) ?? 0) + shared))
+    }
+  }
+  for (const [delta, mb] of [...stepGaps.entries()].sort((a, b) => a[0] - b[0])) {
+    notes.push(`Uskok ${delta} cm na ${formatMeters(mb)} mb (bez automatycznego obicia).`)
+  }
+
   notes.push(
     input.snapToGrid
       ? `Siatka włączona, krok ${formatMeters(input.gridStepM)} m.`
@@ -593,15 +835,51 @@ export function buildStagePlan(input: StagePlanInput): StagePlan {
   pushBom(
     bom,
     {
-      key: 'legs',
-      name: `Nogi do podestów ${height} cm`,
-      quantity: legs,
+      key: 'deck-0.5x2',
+      name: 'Podest sceniczny 0,5×2 m',
+      quantity: decks05x2,
       unit: 'szt.',
-      group: 'legs',
-      offer: false,
+      group: 'decks',
+      offer: true,
     },
     catalogCtx
   )
+  const customCounts = new Map<string, { w: number; h: number; qty: number }>()
+  for (const deck of decks) {
+    if (deck.kind !== 'custom') continue
+    const key = customDeckCatalogKey(deck.w, deck.h)
+    const prev = customCounts.get(key)
+    if (prev) prev.qty += 1
+    else customCounts.set(key, { w: deck.w, h: deck.h, qty: 1 })
+  }
+  for (const [key, item] of customCounts) {
+    pushBom(
+      bom,
+      {
+        key,
+        name: `Podest niestandardowy ${formatMeters(item.w)}×${formatMeters(item.h)} m`,
+        quantity: item.qty,
+        unit: 'szt.',
+        group: 'decks',
+        offer: true,
+      },
+      catalogCtx
+    )
+  }
+  for (const [legH, qty] of [...legsByHeight.entries()].sort((a, b) => a[0] - b[0])) {
+    pushBom(
+      bom,
+      {
+        key: `legs-${legH}`,
+        name: `Nogi do podestów ${legH} cm`,
+        quantity: qty,
+        unit: 'szt.',
+        group: 'legs',
+        offer: false,
+      },
+      catalogCtx
+    )
+  }
   pushBom(
     bom,
     {
@@ -706,18 +984,26 @@ export function buildStagePlan(input: StagePlanInput): StagePlan {
       catalogCtx
     )
   }
-  pushBom(
-    bom,
-    {
-      key: 'stairs',
-      name: `Schody na scenę (${height} cm, ${stepsPerStair} ${stepsPerStair === 1 ? 'stopień pośredni' : 'stopnie pośrednie'})`,
-      quantity: stairs.length,
-      unit: 'szt.',
-      group: 'accessories',
-      offer: true,
-    },
-    catalogCtx
-  )
+  const stairsByHeight = new Map<number, number>()
+  for (const stair of stairs) {
+    const h = stairAttachedHeightCm(stair, decks, edges, height)
+    stairsByHeight.set(h, (stairsByHeight.get(h) ?? 0) + 1)
+  }
+  for (const [stairH, qty] of [...stairsByHeight.entries()].sort((a, b) => a[0] - b[0])) {
+    const steps = stageStairSteps(stairH)
+    pushBom(
+      bom,
+      {
+        key: `stairs-${stairH}`,
+        name: `Schody na scenę (${stairH} cm, ${steps} ${steps === 1 ? 'stopień pośredni' : 'stopnie pośrednie'})`,
+        quantity: qty,
+        unit: 'szt.',
+        group: 'accessories',
+        offer: true,
+      },
+      catalogCtx
+    )
+  }
   pushBom(
     bom,
     {
@@ -732,7 +1018,7 @@ export function buildStagePlan(input: StagePlanInput): StagePlan {
   )
 
   return {
-    version: 2,
+    version: 3,
     decks,
     stairs,
     claddingMaterial: input.claddingMaterial,
@@ -752,6 +1038,8 @@ export function buildStagePlan(input: StagePlanInput): StagePlan {
     counts: {
       decks2x1,
       decks1x1,
+      decks05x2,
+      decksCustom,
       decksTotal,
       legs,
       deckClamps: perimeterClamps,
@@ -844,7 +1132,11 @@ export function migrateLegacyStagePlan(legacy: LegacyPlan): StagePlan {
 export function isStagePlan(value: unknown): value is StagePlan {
   if (!value || typeof value !== 'object') return false
   const plan = value as StagePlan
-  return plan.version === 2 && Array.isArray(plan.decks) && Array.isArray(plan.bom)
+  return (
+    (plan.version === 2 || plan.version === 3) &&
+    Array.isArray(plan.decks) &&
+    Array.isArray(plan.bom)
+  )
 }
 
 function isLegacyStagePlan(value: unknown): value is LegacyPlan {
@@ -863,14 +1155,18 @@ export function parseStagePlanJson(raw: string | null | undefined): StagePlan | 
     const parsed = JSON.parse(raw) as unknown
     if (isLegacyStagePlan(parsed)) return migrateLegacyStagePlan(parsed)
     if (!isStagePlan(parsed)) return null
+    const legHeightCm = normalizeStageLegHeightCm(parsed.legHeightCm ?? 60)
+    const decks = (Array.isArray(parsed.decks) ? parsed.decks : [])
+      .map((deck) => normalizeStageDeck(deck, legHeightCm))
+      .filter((deck): deck is StageDeck => deck != null)
     return buildStagePlan({
-      decks: parsed.decks,
+      decks,
       stairs: Array.isArray(parsed.stairs) ? parsed.stairs : [],
       claddingMaterial: parsed.claddingMaterial ?? 'none',
       cladding: parsed.cladding ?? edgeSelection(),
       floorMaterial: parsed.floorMaterial ?? 'none',
       railings: parsed.railings ?? edgeSelection(),
-      legHeightCm: parsed.legHeightCm ?? 60,
+      legHeightCm,
       snapToGrid: parsed.snapToGrid ?? true,
       gridStepM: parsed.gridStepM ?? STAGE_DEFAULT_GRID_STEP_M,
     })
@@ -881,8 +1177,8 @@ export function parseStagePlanJson(raw: string | null | undefined): StagePlan | 
 
 /** Do zapisu w zleceniu trafia tylko część redagowana — reszta jest pochodna. */
 export function serializeStagePlan(plan: StagePlan): string {
-  const input: StagePlanInput & { version: 2 } = {
-    version: 2,
+  const input: StagePlanInput & { version: 3 } = {
+    version: 3,
     decks: plan.decks,
     stairs: plan.stairs,
     claddingMaterial: plan.claddingMaterial,

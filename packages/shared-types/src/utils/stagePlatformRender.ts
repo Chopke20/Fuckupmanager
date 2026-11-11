@@ -10,15 +10,27 @@
 
 import { STAGE_TOL_M, subtractIntervals, type StageEdge } from './stagePlatformGeometry'
 import {
+  STAGE_LEG_HEIGHTS_CM,
   STAGE_STEP_TREAD_M,
+  deckHeightCm,
+  deckPlanLabel,
   edgeSelectionLabel,
   formatMeters,
   selectedEdges,
   stageStairDepthM,
   stageStairSteps,
+  stairAttachedHeightCm,
   type StagePlan,
   type StageStair,
 } from './stagePlatformPlan'
+
+function deckFillForHeight(heightCm: number, base: string, alt: string): string {
+  const idx = STAGE_LEG_HEIGHTS_CM.indexOf(
+    heightCm as (typeof STAGE_LEG_HEIGHTS_CM)[number]
+  )
+  if (idx < 0) return base
+  return idx % 2 === 0 ? base : alt
+}
 
 export type StagePlanTheme = 'dark' | 'print'
 
@@ -323,12 +335,14 @@ export function renderStagePlanSvg(
       const h = deck.h * viewport.scale
       const x = toX(deck.x)
       const y = toY(deck.y + deck.h)
-      const fill = deck.kind === '2x1' ? palette.deckFill : palette.deckAltFill
-      const fontSize = Math.max(8, Math.min(13, Math.min(w, h) * 0.26))
+      const deckH = deckHeightCm(deck, plan.legHeightCm)
+      const fill = deckFillForHeight(deckH, palette.deckFill, palette.deckAltFill)
+      const fontSize = Math.max(7, Math.min(12, Math.min(w, h) * 0.22))
+      const text = escapeXml(deckPlanLabel(deck, plan.legHeightCm))
       const label =
-        Math.min(w, h) < 18
+        Math.min(w, h) < 16
           ? ''
-          : `<text x="${fixed(x + w / 2)}" y="${fixed(y + h / 2 + fontSize * 0.35)}" text-anchor="middle" font-size="${fontSize.toFixed(0)}" font-family="Arial, sans-serif" fill="${palette.textDim}">${deck.kind === '2x1' ? '2×1' : '1×1'}</text>`
+          : `<text x="${fixed(x + w / 2)}" y="${fixed(y + h / 2 + fontSize * 0.35)}" text-anchor="middle" font-size="${fontSize.toFixed(0)}" font-family="Arial, sans-serif" fill="${palette.textDim}">${text}</text>`
       return `<rect x="${fixed(x)}" y="${fixed(y)}" width="${fixed(w)}" height="${fixed(h)}" fill="${fill}" stroke="${palette.deckStroke}" stroke-width="1.1"/>${label}`
     })
     .join('')
@@ -361,7 +375,13 @@ export function renderStagePlanSvg(
 
   const stairs = plan.stairs
     .map((stair) => {
-      const shape = stageStairShape(stair, plan.legHeightCm)
+      const stairH = stairAttachedHeightCm(
+        stair,
+        plan.decks,
+        plan.edges,
+        plan.legHeightCm
+      )
+      const shape = stageStairShape(stair, stairH)
       const rect = `<rect x="${fixed(toX(shape.rect.x))}" y="${fixed(toY(shape.rect.y + shape.rect.h))}" width="${fixed(shape.rect.w * viewport.scale)}" height="${fixed(shape.rect.h * viewport.scale)}" fill="${palette.stairFill}" stroke="${palette.stairStroke}" stroke-width="1"/>`
       const steps = shape.steps
         .map(
@@ -373,10 +393,18 @@ export function renderStagePlanSvg(
     })
     .join('')
 
+  const heightSet = [
+    ...new Set(plan.decks.map((deck) => deckHeightCm(deck, plan.legHeightCm))),
+  ].sort((a, b) => a - b)
+  const heightLabel =
+    heightSet.length <= 1
+      ? `nogi ${plan.legHeightCm} cm`
+      : `nogi ${heightSet.join('/')} cm`
+
   const summary = [
     plan.decks.length > 0 ? `${plan.widthM} × ${plan.depthM} m` : 'brak podestów',
     plan.areaM2 > 0 ? `${formatMeters(plan.areaM2)} m²` : '',
-    `nogi ${plan.legHeightCm} cm`,
+    heightLabel,
     plan.claddingMb > 0
       ? `obicie ${formatMeters(plan.claddingMb)} mb / ${formatMeters(plan.claddingM2)} m²`
       : '',
@@ -398,9 +426,24 @@ export function renderStagePlanSvg(
 
 /** Legenda rysunku — potrzebna głównie w PDF, gdzie nie ma panelu obok. */
 export function stagePlanLegend(plan: StagePlan): Array<{ label: string; value: string }> {
+  const deckParts = [
+    plan.counts.decks2x1 ? `${plan.counts.decks2x1}× 2×1` : null,
+    plan.counts.decks1x1 ? `${plan.counts.decks1x1}× 1×1` : null,
+    plan.counts.decks05x2 ? `${plan.counts.decks05x2}× 0,5×2` : null,
+    plan.counts.decksCustom ? `${plan.counts.decksCustom}× W×D` : null,
+  ].filter(Boolean)
+  const heightSet = [
+    ...new Set(plan.decks.map((deck) => deckHeightCm(deck, plan.legHeightCm))),
+  ].sort((a, b) => a - b)
   const legend: Array<{ label: string; value: string }> = [
-    { label: 'Podesty', value: `${plan.counts.decksTotal} szt. (${plan.counts.decks2x1}× 2×1, ${plan.counts.decks1x1}× 1×1)` },
-    { label: 'Nogi', value: `${plan.counts.legs} szt. · ${plan.legHeightCm} cm` },
+    {
+      label: 'Podesty',
+      value: `${plan.counts.decksTotal} szt.${deckParts.length ? ` (${deckParts.join(', ')})` : ''}`,
+    },
+    {
+      label: 'Nogi',
+      value: `${plan.counts.legs} szt. · ${heightSet.length ? heightSet.join('/') : plan.legHeightCm} cm`,
+    },
     { label: 'Powierzchnia', value: `${formatMeters(plan.areaM2)} m²` },
   ]
   if (plan.claddingMb > 0) {
