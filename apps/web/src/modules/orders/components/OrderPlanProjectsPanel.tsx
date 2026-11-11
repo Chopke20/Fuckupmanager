@@ -11,9 +11,7 @@ import {
 } from '../../toolbox/utils/ledScreenPlanSet'
 
 export interface OrderPlanProjectsPanelProps {
-  /** stagePlanJson dla bloku / zlecenia */
   stagePlanJson?: string | null
-  /** ledScreenJson dla bloku / zlecenia */
   ledScreenJson?: string | null
   offerBlockId: string | null
   blockTitle?: string
@@ -38,62 +36,30 @@ function promptName(label: string, current: string): string | null {
   return trimmed || null
 }
 
-function RowActions({
-  onOpen,
-  onRename,
-  onDuplicate,
-  onRemove,
-  renameTitle,
-  removeTitle,
+function IconBtn({
+  title,
+  onClick,
+  danger,
+  children,
 }: {
-  onOpen: () => void
-  onRename?: () => void
-  onDuplicate?: () => void
-  onRemove?: () => void
-  renameTitle: string
-  removeTitle: string
+  title: string
+  onClick: () => void
+  danger?: boolean
+  children: React.ReactNode
 }) {
   return (
-    <span className="flex shrink-0 items-center gap-1">
-      {onRename ? (
-        <button
-          type="button"
-          title={renameTitle}
-          className="rounded p-1 text-muted-foreground hover:bg-surface"
-          onClick={onRename}
-        >
-          <Pencil className="h-3.5 w-3.5" />
-        </button>
-      ) : null}
-      {onDuplicate ? (
-        <button
-          type="button"
-          title="Duplikuj"
-          className="rounded p-1 text-muted-foreground hover:bg-surface"
-          onClick={onDuplicate}
-        >
-          <Copy className="h-3.5 w-3.5" />
-        </button>
-      ) : null}
-      {onRemove ? (
-        <button
-          type="button"
-          title={removeTitle}
-          className="rounded p-1 text-red-500 hover:bg-red-500/10"
-          onClick={onRemove}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
-      ) : null}
-      <button
-        type="button"
-        title="Otwórz"
-        className="rounded border border-border px-1.5 py-0.5 text-[10px] hover:bg-surface"
-        onClick={onOpen}
-      >
-        Edytuj
-      </button>
-    </span>
+    <button
+      type="button"
+      title={title}
+      onClick={onClick}
+      className={`rounded p-0.5 ${
+        danger
+          ? 'text-red-500 hover:bg-red-500/10'
+          : 'text-muted-foreground hover:bg-background hover:text-foreground'
+      }`}
+    >
+      {children}
+    </button>
   )
 }
 
@@ -117,8 +83,8 @@ function SceneRow({
   onRemoveStage?: OrderPlanProjectsPanelProps['onRemoveStage']
 }) {
   return (
-    <li className="flex flex-wrap items-center gap-2 rounded border border-border bg-background/60 px-2 py-1.5 text-xs">
-      <LayoutGrid className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+    <li className="flex items-center gap-1.5 rounded border border-border/70 bg-background/50 px-1.5 py-0.5 text-[11px]">
+      <LayoutGrid className="h-3 w-3 shrink-0 text-muted-foreground" />
       <button
         type="button"
         className="min-w-0 flex-1 truncate text-left font-medium hover:underline"
@@ -128,23 +94,33 @@ function SceneRow({
         {stagePlanSceneSummary(scene)}
       </button>
       {!readOnly ? (
-        <RowActions
-          renameTitle="Zmień nazwę sceny"
-          removeTitle="Usuń scenę"
-          onOpen={() => onOpenStage?.(offerBlockId, blockTitle, scene.id)}
-          onRename={
-            onRenameStage
-              ? () => {
-                  const next = promptName('Nazwa sceny', scene.name)
-                  if (next) onRenameStage(offerBlockId, scene.id, next)
-                }
-              : undefined
-          }
-          onDuplicate={
-            onDuplicateStage ? () => onDuplicateStage(offerBlockId, scene.id) : undefined
-          }
-          onRemove={onRemoveStage ? () => onRemoveStage(offerBlockId, scene.id) : undefined}
-        />
+        <span className="flex shrink-0 items-center">
+          {onRenameStage ? (
+            <IconBtn
+              title="Zmień nazwę"
+              onClick={() => {
+                const next = promptName('Nazwa sceny', scene.name)
+                if (next) onRenameStage(offerBlockId, scene.id, next)
+              }}
+            >
+              <Pencil className="h-3 w-3" />
+            </IconBtn>
+          ) : null}
+          {onDuplicateStage ? (
+            <IconBtn title="Duplikuj" onClick={() => onDuplicateStage(offerBlockId, scene.id)}>
+              <Copy className="h-3 w-3" />
+            </IconBtn>
+          ) : null}
+          {onRemoveStage ? (
+            <IconBtn
+              title="Usuń scenę"
+              danger
+              onClick={() => onRemoveStage(offerBlockId, scene.id)}
+            >
+              <Trash2 className="h-3 w-3" />
+            </IconBtn>
+          ) : null}
+        </span>
       ) : null}
     </li>
   )
@@ -170,8 +146,8 @@ function LedRow({
   onRemoveLed?: OrderPlanProjectsPanelProps['onRemoveLed']
 }) {
   return (
-    <li className="flex flex-wrap items-center gap-2 rounded border border-border bg-background/60 px-2 py-1.5 text-xs">
-      <Monitor className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+    <li className="flex items-center gap-1.5 rounded border border-border/70 bg-background/50 px-1.5 py-0.5 text-[11px]">
+      <Monitor className="h-3 w-3 shrink-0 text-muted-foreground" />
       <button
         type="button"
         className="min-w-0 flex-1 truncate text-left font-medium hover:underline"
@@ -181,25 +157,65 @@ function LedRow({
         {ledScreenEntrySummary(entry)}
       </button>
       {!readOnly ? (
-        <RowActions
-          renameTitle="Zmień nazwę ekranu"
-          removeTitle="Usuń ekran"
-          onOpen={() => onOpenLed?.(offerBlockId, blockTitle, entry.id)}
-          onRename={
-            onRenameLed
-              ? () => {
-                  const next = promptName('Nazwa projektu LED', entry.name)
-                  if (next) onRenameLed(offerBlockId, entry.id, next)
-                }
-              : undefined
-          }
-          onDuplicate={
-            onDuplicateLed ? () => onDuplicateLed(offerBlockId, entry.id) : undefined
-          }
-          onRemove={onRemoveLed ? () => onRemoveLed(offerBlockId, entry.id) : undefined}
-        />
+        <span className="flex shrink-0 items-center">
+          {onRenameLed ? (
+            <IconBtn
+              title="Zmień nazwę"
+              onClick={() => {
+                const next = promptName('Nazwa projektu LED', entry.name)
+                if (next) onRenameLed(offerBlockId, entry.id, next)
+              }}
+            >
+              <Pencil className="h-3 w-3" />
+            </IconBtn>
+          ) : null}
+          {onDuplicateLed ? (
+            <IconBtn title="Duplikuj" onClick={() => onDuplicateLed(offerBlockId, entry.id)}>
+              <Copy className="h-3 w-3" />
+            </IconBtn>
+          ) : null}
+          {onRemoveLed ? (
+            <IconBtn
+              title="Usuń ekran"
+              danger
+              onClick={() => onRemoveLed(offerBlockId, entry.id)}
+            >
+              <Trash2 className="h-3 w-3" />
+            </IconBtn>
+          ) : null}
+        </span>
       ) : null}
     </li>
+  )
+}
+
+function SectionHeader({
+  label,
+  addLabel,
+  onAdd,
+  readOnly,
+}: {
+  label: string
+  addLabel: string
+  onAdd?: () => void
+  readOnly?: boolean
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <h4 className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </h4>
+      {!readOnly && onAdd ? (
+        <button
+          type="button"
+          onClick={onAdd}
+          className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] text-muted-foreground hover:bg-background hover:text-foreground"
+        >
+          <Plus className="h-3 w-3" />
+          {addLabel}
+        </button>
+      ) : null}
+    </div>
   )
 }
 
@@ -209,7 +225,6 @@ export default function OrderPlanProjectsPanel({
   offerBlockId,
   blockTitle,
   readOnly,
-  compact,
   onOpenStage,
   onAddStage,
   onRenameStage,
@@ -223,84 +238,63 @@ export default function OrderPlanProjectsPanel({
 }: OrderPlanProjectsPanelProps) {
   const stageSet = parseStagePlanSetJson(stagePlanJson ?? null)
   const ledSet = parseLedScreenSetJson(ledScreenJson ?? null)
-  const titleClass = compact
-    ? 'text-[11px] font-semibold uppercase tracking-wide text-muted-foreground'
-    : 'text-xs font-semibold uppercase tracking-wide text-muted-foreground'
+  const hasStages = stageSet.scenes.length > 0
+  const hasLed = ledSet.entries.length > 0
 
   return (
-    <div className="space-y-3 rounded-lg border border-border bg-surface/40 p-3">
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h4 className={titleClass}>Sceny z podestów</h4>
-          {!readOnly && onAddStage ? (
-            <button
-              type="button"
-              onClick={() => onAddStage(offerBlockId, blockTitle)}
-              className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] hover:bg-surface"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Nowa scena
-            </button>
+    <div className="rounded border border-border/80 bg-surface/30 px-2 py-1.5">
+      <div className="grid gap-1.5 md:grid-cols-2 md:gap-3">
+        <div className="min-w-0 space-y-1">
+          <SectionHeader
+            label="Sceny"
+            addLabel="Nowa"
+            readOnly={readOnly}
+            onAdd={onAddStage ? () => onAddStage(offerBlockId, blockTitle) : undefined}
+          />
+          {hasStages ? (
+            <ul className="space-y-0.5">
+              {stageSet.scenes.map((scene) => (
+                <SceneRow
+                  key={scene.id}
+                  scene={scene}
+                  offerBlockId={offerBlockId}
+                  blockTitle={blockTitle}
+                  readOnly={readOnly}
+                  onOpenStage={onOpenStage}
+                  onRenameStage={onRenameStage}
+                  onDuplicateStage={onDuplicateStage}
+                  onRemoveStage={onRemoveStage}
+                />
+              ))}
+            </ul>
           ) : null}
         </div>
-        {stageSet.scenes.length > 0 ? (
-          <ul className="space-y-1">
-            {stageSet.scenes.map((scene) => (
-              <SceneRow
-                key={scene.id}
-                scene={scene}
-                offerBlockId={offerBlockId}
-                blockTitle={blockTitle}
-                readOnly={readOnly}
-                onOpenStage={onOpenStage}
-                onRenameStage={onRenameStage}
-                onDuplicateStage={onDuplicateStage}
-                onRemoveStage={onRemoveStage}
-              />
-            ))}
-          </ul>
-        ) : (
-          <p className="text-[11px] text-muted-foreground">
-            Brak scen — dodaj układ podestów, żeby wpaść do wykazu.
-          </p>
-        )}
-      </div>
 
-      <div className="space-y-2 border-t border-border pt-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h4 className={titleClass}>Ekrany LED</h4>
-          {!readOnly && onAddLed ? (
-            <button
-              type="button"
-              onClick={() => onAddLed(offerBlockId, blockTitle)}
-              className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] hover:bg-surface"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Nowy ekran
-            </button>
+        <div className="min-w-0 space-y-1">
+          <SectionHeader
+            label="Ekrany LED"
+            addLabel="Nowy"
+            readOnly={readOnly}
+            onAdd={onAddLed ? () => onAddLed(offerBlockId, blockTitle) : undefined}
+          />
+          {hasLed ? (
+            <ul className="space-y-0.5">
+              {ledSet.entries.map((entry) => (
+                <LedRow
+                  key={entry.id}
+                  entry={entry}
+                  offerBlockId={offerBlockId}
+                  blockTitle={blockTitle}
+                  readOnly={readOnly}
+                  onOpenLed={onOpenLed}
+                  onRenameLed={onRenameLed}
+                  onDuplicateLed={onDuplicateLed}
+                  onRemoveLed={onRemoveLed}
+                />
+              ))}
+            </ul>
           ) : null}
         </div>
-        {ledSet.entries.length > 0 ? (
-          <ul className="space-y-1">
-            {ledSet.entries.map((entry) => (
-              <LedRow
-                key={entry.id}
-                entry={entry}
-                offerBlockId={offerBlockId}
-                blockTitle={blockTitle}
-                readOnly={readOnly}
-                onOpenLed={onOpenLed}
-                onRenameLed={onRenameLed}
-                onDuplicateLed={onDuplicateLed}
-                onRemoveLed={onRemoveLed}
-              />
-            ))}
-          </ul>
-        ) : (
-          <p className="text-[11px] text-muted-foreground">
-            Brak projektów LED — dodaj ekran i zapisz do wykazu (zębatka mapowań jak przy podestach).
-          </p>
-        )}
       </div>
     </div>
   )

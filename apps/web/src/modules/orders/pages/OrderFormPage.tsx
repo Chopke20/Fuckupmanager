@@ -1556,7 +1556,7 @@ export default function OrderFormPage() {
                           Wykaz sprzętu
                         </h2>
                       </div>
-                      <div className="mb-3">
+                      <div className="mb-2">
                         <OrderPlanProjectsPanel
                           stagePlanJson={
                             typeof formData?.stagePlanJson === 'string' ? formData.stagePlanJson : null
