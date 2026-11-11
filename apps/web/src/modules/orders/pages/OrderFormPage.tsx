@@ -225,6 +225,7 @@ export default function OrderFormPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [dismissedHints, setDismissedHints] = useState<Set<string>>(new Set());
   const [unsavedModalOpen, setUnsavedModalOpen] = useState(false);
+  const [planActionError, setPlanActionError] = useState<string | null>(null);
   const [stageModal, setStageModal] = useState<{
     offerBlockId: string | null
     blockTitle?: string
@@ -567,7 +568,9 @@ export default function OrderFormPage() {
       try {
         roleMaps = await listStagePlanRoleMaps()
       } catch {
-        window.alert('Nie udało się wczytać mapowania ról kreatora. Otwórz zębatkę w edytorze i zapisz przepis.')
+        setPlanActionError(
+          'Nie udało się wczytać mapowania ról kreatora. Otwórz zębatkę w edytorze i zapisz przepis.'
+        )
         return
       }
       const currentSet = readStagePlanSetJson(offerBlockId)
@@ -584,7 +587,7 @@ export default function OrderFormPage() {
         primarySceneId,
       })
       if (result.blockingIssues.length > 0) {
-        window.alert(
+        setPlanActionError(
           `Nie można dodać do zlecenia — popraw mapowanie (zębatka przy rozpisce):\n` +
             result.blockingIssues
               .slice(0, 8)
@@ -598,6 +601,7 @@ export default function OrderFormPage() {
         )
         return
       }
+      setPlanActionError(null)
       handleEquipmentChange(result.items)
 
       const nextSet = upsertStagePlanScene(currentSet, { sceneId, name: sceneName, plan })
@@ -684,13 +688,6 @@ export default function OrderFormPage() {
     (offerBlockId: string | null, sceneId: string) => {
       const current = readStagePlanSetJson(offerBlockId)
       if (!current.scenes.some((s) => s.id === sceneId)) return
-      if (
-        !window.confirm(
-          'Usunąć tę scenę z bloku? Pozycje sprzętu z planu tej sceny też znikną z wykazu.'
-        )
-      ) {
-        return
-      }
       const primarySceneId = current.scenes[0]?.id ?? null
       const nextSet = removeStagePlanScene(current, sceneId)
       writeStagePlanSetJson(offerBlockId, serializeStagePlanSet(nextSet))
@@ -814,13 +811,6 @@ export default function OrderFormPage() {
     (offerBlockId: string | null, entryId: string) => {
       const current = readLedScreenSetJson(offerBlockId)
       if (!current.entries.some((e) => e.id === entryId)) return
-      if (
-        !window.confirm(
-          'Usunąć ten projekt LED? Pozycje sprzętu z tego projektu też znikną z wykazu.'
-        )
-      ) {
-        return
-      }
       const primaryEntryId = current.entries[0]?.id ?? null
       const nextSet = removeLedScreenSetEntry(current, entryId)
       writeLedScreenSetJson(offerBlockId, serializeLedScreenSet(nextSet))
@@ -909,7 +899,7 @@ export default function OrderFormPage() {
       try {
         roleMaps = await listStagePlanRoleMaps()
       } catch {
-        window.alert(
+        setPlanActionError(
           'Nie udało się wczytać mapowania LED. Otwórz zębatkę i zapisz przepis (ekran / stabilizacja / procesor).'
         )
         return
@@ -928,7 +918,7 @@ export default function OrderFormPage() {
         primaryEntryId,
       })
       if (result.blockingIssues.length > 0) {
-        window.alert(
+        setPlanActionError(
           `Nie można dodać LED do zlecenia — popraw mapowanie (zębatka):\n` +
             result.blockingIssues
               .slice(0, 8)
@@ -942,6 +932,7 @@ export default function OrderFormPage() {
         )
         return
       }
+      setPlanActionError(null)
       handleEquipmentChange(result.items)
       const nextSet = upsertLedScreenSetEntry(currentSet, {
         entryId,
@@ -1510,6 +1501,19 @@ export default function OrderFormPage() {
                 </section>
 
                 <section id="offer-blocks" className="scroll-mt-24 mb-6">
+                  {planActionError ? (
+                    <div className="mb-2 flex items-start justify-between gap-2 rounded border border-red-500/40 bg-red-500/10 px-2.5 py-2 text-xs text-red-300 whitespace-pre-wrap">
+                      <span>{planActionError}</span>
+                      <button
+                        type="button"
+                        className="shrink-0 text-red-200/80 hover:text-red-100"
+                        onClick={() => setPlanActionError(null)}
+                        aria-label="Zamknij"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ) : null}
                   <OrderOfferBlocksEditor
                     blocks={(offerBlocksRaw as Partial<OrderOfferBlock>[]) ?? []}
                     onBlocksChange={handleOfferBlocksChange}
@@ -1556,7 +1560,20 @@ export default function OrderFormPage() {
                           Wykaz sprzętu
                         </h2>
                       </div>
-                      <div className="mb-2">
+                      <div className="mb-2 space-y-2">
+                        {planActionError ? (
+                          <div className="flex items-start justify-between gap-2 rounded border border-red-500/40 bg-red-500/10 px-2.5 py-2 text-xs text-red-300 whitespace-pre-wrap">
+                            <span>{planActionError}</span>
+                            <button
+                              type="button"
+                              className="shrink-0 text-red-200/80 hover:text-red-100"
+                              onClick={() => setPlanActionError(null)}
+                              aria-label="Zamknij"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ) : null}
                         <OrderPlanProjectsPanel
                           stagePlanJson={
                             typeof formData?.stagePlanJson === 'string' ? formData.stagePlanJson : null

@@ -1,5 +1,14 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Copy, Redo2, RotateCw, Trash2, Undo2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  Check,
+  ChevronDown,
+  Copy,
+  HelpCircle,
+  Redo2,
+  RotateCw,
+  Trash2,
+  Undo2,
+} from 'lucide-react'
 import {
   claddingMaterialLabel,
   clampStageDeckSizeM,
@@ -22,7 +31,7 @@ import {
   type StagePlan,
 } from '@lama-stage/shared-types'
 import StagePlanCanvas, { type StagePlanTool } from './StagePlanCanvas'
-import StageBomCatalogTable from './StageBomCatalogTable'
+import StageBomCatalogTable, { type StageBomPreview } from './StageBomCatalogTable'
 import { useStagePlanEditor } from '../hooks/useStagePlanEditor'
 import { useEquipment } from '../../equipment/hooks/useEquipment'
 import { listStagePlanRoleMaps } from '../api/stagePlanRoleMaps.api'
@@ -36,18 +45,19 @@ export interface StagePlatformVisualizerProps {
   applyLabel?: string
   onApply?: (plan: StagePlan) => void
   onPlanChange?: (plan: StagePlan) => void
+  onDirtyChange?: (dirty: boolean) => void
 }
 
-const PLACE_TOOLS: Array<{ id: StagePlanTool; label: string; hint: string }> = [
-  { id: 'deck-2x1', label: '2×1', hint: 'Klik na rzucie stawia blat 2×1' },
-  { id: 'deck-1x1', label: '1×1', hint: 'Klik na rzucie stawia blat 1×1' },
-  { id: 'deck-0.5x2', label: '0,5×2', hint: 'Klik na rzucie stawia blat 0,5×2' },
-  { id: 'deck-custom', label: 'W×D', hint: 'Klik stawia blat o wpisanych wymiarach' },
-]
-
-const EDGE_TOOLS: Array<{ id: StagePlanTool; label: string; hint: string }> = [
-  { id: 'cladding', label: 'Obicie', hint: 'Klik w krawędź włącza lub wyłącza obicie' },
-  { id: 'railings', label: 'Barierki', hint: 'Klik w krawędź włącza lub wyłącza barierkę' },
+const PLACE_TOOLS: Array<{
+  id: StagePlanTool
+  label: string
+  hint: string
+  icon: { w: number; h: number }
+}> = [
+  { id: 'deck-2x1', label: '2×1', hint: 'Klik na rzucie stawia blat 2×1', icon: { w: 18, h: 9 } },
+  { id: 'deck-1x1', label: '1×1', hint: 'Klik na rzucie stawia blat 1×1', icon: { w: 10, h: 10 } },
+  { id: 'deck-0.5x2', label: '0,5×2', hint: 'Klik na rzucie stawia blat 0,5×2', icon: { w: 6, h: 14 } },
+  { id: 'deck-custom', label: 'W×D', hint: 'Klik stawia blat o wpisanych wymiarach', icon: { w: 12, h: 8 } },
 ]
 
 function parseDim(raw: string): number {
@@ -55,28 +65,29 @@ function parseDim(raw: string): number {
   return Number.isFinite(value) ? value : NaN
 }
 
-function pillClass(active: boolean): string {
-  return `rounded border px-2 py-1 text-xs ${
+function segmentBtn(active: boolean): string {
+  return `px-2 py-1 text-xs tabular-nums transition-colors ${
+    active
+      ? 'bg-primary/15 text-primary'
+      : 'text-muted-foreground hover:bg-background hover:text-foreground'
+  }`
+}
+
+function toolBtn(active: boolean): string {
+  return `inline-flex items-center gap-1.5 rounded border px-2 py-1 text-xs ${
     active
       ? 'border-primary bg-primary/10 text-primary'
       : 'border-border text-muted-foreground hover:text-foreground'
   }`
 }
 
-function ToolGroup({
-  label,
-  children,
-}: {
-  label: string
-  children: ReactNode
-}) {
+function DeckIcon({ w, h }: { w: number; h: number }) {
   return (
-    <div className="flex flex-wrap items-center gap-1">
-      <span className="mr-0.5 text-[10px] uppercase tracking-wide text-muted-foreground/80">
-        {label}
-      </span>
-      {children}
-    </div>
+    <span
+      className="inline-block rounded-[2px] border border-current opacity-80"
+      style={{ width: w, height: h }}
+      aria-hidden
+    />
   )
 }
 
@@ -85,6 +96,7 @@ export default function StagePlatformVisualizer({
   applyLabel,
   onApply,
   onPlanChange,
+  onDirtyChange,
 }: StagePlatformVisualizerProps) {
   const editor = useStagePlanEditor(initialPlan)
   const [tool, setTool] = useState<StagePlanTool>('select')
@@ -93,6 +105,17 @@ export default function StagePlatformVisualizer({
   const [rectAlongFront, setRectAlongFront] = useState(true)
   const [customWidth, setCustomWidth] = useState('0,5')
   const [customDepth, setCustomDepth] = useState('2')
+  const [layoutOpen, setLayoutOpen] = useState(() => !(initialPlan?.decks?.length))
+  const [addMenuOpen, setAddMenuOpen] = useState(false)
+  const [gridOpen, setGridOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
+  const [assumptionsOpen, setAssumptionsOpen] = useState(false)
+  const [rightTab, setRightTab] = useState<'config' | 'bom'>('config')
+  const [confirmClear, setConfirmClear] = useState(false)
+  const [applyError, setApplyError] = useState<string | null>(null)
+  const [bomPreview, setBomPreview] = useState<StageBomPreview | null>(null)
+  const [dirty, setDirty] = useState(false)
+  const baselineRef = useRef(JSON.stringify(initialPlan ?? null))
   const { plan } = editor
   const skipInitialPlanChangeRef = useRef(true)
   const customDeckSize = {
@@ -129,27 +152,58 @@ export default function StagePlatformVisualizer({
       skipInitialPlanChangeRef.current = false
       return
     }
+    const nextDirty = JSON.stringify(plan) !== baselineRef.current
+    setDirty(nextDirty)
+    onDirtyChange?.(nextDirty)
     onPlanChange?.(plan)
-  }, [plan, onPlanChange])
+  }, [plan, onPlanChange, onDirtyChange])
 
-  const activeHint =
-    tool === 'select'
-      ? 'Przesuwaj blaty; Shift+klik zaznacza wiele. Wysokość ustawiasz po zaznaczeniu.'
-      : tool === 'stairs'
-        ? 'Klik w krawędź dostawia bieg schodów.'
-        : PLACE_TOOLS.find((item) => item.id === tool)?.hint ||
-          EDGE_TOOLS.find((item) => item.id === tool)?.hint ||
-          ''
+  const activeHint = useMemo(() => {
+    if (tool === 'select') {
+      return hasSelectionText(editor.selectedDeckIds.length)
+    }
+    if (tool === 'stairs') return 'Schody: kliknij krawędź blatu, żeby dodać'
+    if (tool === 'cladding') return 'Obicie: kliknij krawędź, żeby włączyć lub wyłączyć'
+    if (tool === 'railings') return 'Barierki: kliknij krawędź, żeby włączyć lub wyłączyć'
+    const place = PLACE_TOOLS.find((item) => item.id === tool)
+    return place?.hint ?? ''
+  }, [tool, editor.selectedDeckIds.length])
+
   const hasSelection = editor.selectedDeckIds.length > 0
+  const maxDeckHeight = useMemo(() => {
+    if (plan.decks.length === 0) return plan.legHeightCm
+    return Math.max(...plan.decks.map((d) => deckHeightCm(d, plan.legHeightCm)), plan.legHeightCm)
+  }, [plan.decks, plan.legHeightCm])
+
+  const clampWarning =
+    maxDeckHeight > 60
+      ? maxDeckHeight >= 168
+        ? 'Od 168 cm: dodatkowe stężenia poziome i ukośne; klamry nóg obowiązkowe.'
+        : maxDeckHeight > 100
+          ? 'Powyżej 100 cm: druga linia klamer nóg; klamry obowiązkowe.'
+          : 'Powyżej 60 cm wysokości klamry nóg są obowiązkowe (stężenie).'
+      : null
+
+  const assumptionNotes = plan.notes.filter(
+    (note) =>
+      !note.includes('Powyżej 60') &&
+      !note.includes('Powyżej 100') &&
+      !note.includes('Od 168') &&
+      !note.startsWith('Gabaryt') &&
+      !note.startsWith('Obicie') &&
+      !note.startsWith('Barierki') &&
+      !note.includes('Siatka')
+  )
 
   const handleApplyClick = useCallback(async () => {
     if (!onApply) return
+    setApplyError(null)
     let maps = roleMaps
     try {
       maps = await listStagePlanRoleMaps()
       setRoleMaps(maps)
     } catch {
-      // użyj cache
+      // cache
     }
     const { issues } = resolveStagePlanOrderLines({
       plan,
@@ -158,8 +212,8 @@ export default function StagePlatformVisualizer({
     })
     const blocking = stagePlanApplyBlockingIssues(issues)
     if (blocking.length > 0) {
-      window.alert(
-        `Nie można dodać do zlecenia — popraw mapowanie (zębatka przy rozpisce):\n` +
+      setApplyError(
+        `Nie można dodać do zlecenia — popraw mapowanie:\n` +
           blocking
             .slice(0, 8)
             .map((issue) => {
@@ -170,277 +224,372 @@ export default function StagePlatformVisualizer({
             })
             .join('\n')
       )
+      setRightTab('bom')
       return
     }
     onApply(plan)
-  }, [catalog, onApply, plan, roleMaps])
+    baselineRef.current = JSON.stringify(plan)
+    setDirty(false)
+    onDirtyChange?.(false)
+  }, [catalog, onApply, onDirtyChange, plan, roleMaps])
 
-  const deckBreakdown = [
-    plan.counts.decks2x1 ? `${plan.counts.decks2x1}×2×1` : null,
-    plan.counts.decks1x1 ? `${plan.counts.decks1x1}×1×1` : null,
-    plan.counts.decks05x2 ? `${plan.counts.decks05x2}×0,5×2` : null,
-    plan.counts.decksCustom ? `${plan.counts.decksCustom}×W×D` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ')
+  const applyButtonLabel = useMemo(() => {
+    const lines = bomPreview?.lines ?? []
+    if (lines.length === 0) return applyLabel || 'Dodaj do zlecenia'
+    const deckLine = lines.find(
+      (line) =>
+        line.catalogKey.startsWith('deck-') ||
+        line.equipment.name.toLowerCase().includes('podest')
+    )
+    if (deckLine && lines.length === 1) {
+      const qty = formatMeters(deckLine.quantity)
+      return `Dodaj do zlecenia: ${qty} ${
+        deckLine.unit === 'szt.' ? (Number(deckLine.quantity) === 1 ? 'podest' : 'podestów') : deckLine.unit
+      }`
+    }
+    if (deckLine && lines.every((l) => l.catalogKey.startsWith('deck-') || l.sourceKeys.some((k) => k.startsWith('deck-')))) {
+      return `Dodaj do zlecenia: ${formatMeters(deckLine.quantity)} podestów`
+    }
+    if (lines.length === 1) {
+      return `Dodaj do zlecenia: ${formatMeters(lines[0]!.quantity)} ${lines[0]!.unit}`
+    }
+    return `Dodaj do zlecenia: ${lines.length} pozycji`
+  }, [applyLabel, bomPreview?.lines])
+
+  const unmappedWarn =
+    bomPreview && bomPreview.unmappedOfferCount > 0
+      ? `${bomPreview.unmappedOfferCount} pozycji oferty bez mapowania`
+      : null
 
   return (
-    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(280px,1fr)]">
-      {/* LEWA — projektowanie */}
-      <section className="space-y-3 rounded-lg border border-border bg-surface/40 p-3">
-        <div className="flex items-baseline justify-between gap-2">
-          <h3 className="text-sm font-semibold tracking-tight">Rzut</h3>
-          <p className="text-[11px] text-muted-foreground">{activeHint}</p>
-        </div>
+    <div className="grid min-h-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1.6fr)_minmax(300px,1fr)] xl:items-stretch">
+      {/* LEWA */}
+      <section className="flex min-h-0 flex-col gap-2 rounded-lg border border-border/80 bg-background/50 p-3">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setTool('select')}
+            className={toolBtn(tool === 'select')}
+          >
+            Zaznacz
+          </button>
 
-        <div className="flex flex-wrap items-end gap-2 rounded-md border border-border/80 bg-background/60 px-2.5 py-2">
-          <div>
-            <label className="mb-0.5 block text-[10px] text-muted-foreground" htmlFor="stage-rect-width">
-              Front m
-            </label>
-            <input
-              id="stage-rect-width"
-              type="text"
-              inputMode="decimal"
-              className="w-14 rounded border border-border bg-background px-2 py-1 text-sm tabular-nums"
-              value={rectWidth}
-              onChange={(event) => setRectWidth(event.target.value)}
-            />
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setAddMenuOpen((v) => !v)}
+              className={toolBtn(PLACE_TOOLS.some((t) => t.id === tool))}
+            >
+              Dodaj blat
+              <ChevronDown size={12} />
+            </button>
+            {addMenuOpen ? (
+              <div className="absolute left-0 z-20 mt-1 min-w-[10rem] overflow-hidden rounded-md border border-border bg-surface shadow-lg">
+                {PLACE_TOOLS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs hover:bg-background"
+                    onClick={() => {
+                      setTool(item.id)
+                      setAddMenuOpen(false)
+                    }}
+                  >
+                    <DeckIcon w={item.icon.w} h={item.icon.h} />
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
-          <div>
-            <label className="mb-0.5 block text-[10px] text-muted-foreground" htmlFor="stage-rect-depth">
-              Głęb. m
-            </label>
-            <input
-              id="stage-rect-depth"
-              type="text"
-              inputMode="decimal"
-              className="w-14 rounded border border-border bg-background px-2 py-1 text-sm tabular-nums"
-              value={rectDepth}
-              onChange={(event) => setRectDepth(event.target.value)}
-            />
-          </div>
+
           <button
             type="button"
-            onClick={() => setRectAlongFront((value) => !value)}
-            className={pillClass(false)}
-            title="Kierunek dłuższego boku blatów 2×1"
+            onClick={() => setTool('stairs')}
+            className={toolBtn(tool === 'stairs')}
           >
-            {rectAlongFront ? '2 m wzdłuż frontu' : '2 m w głąb'}
+            Schody
           </button>
           <button
             type="button"
-            onClick={() => editor.fillRect(parseDim(rectWidth), parseDim(rectDepth), rectAlongFront)}
-            className="rounded border border-primary px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/10"
+            onClick={() => setTool('cladding')}
+            className={toolBtn(tool === 'cladding')}
           >
-            Ułóż prostokąt
+            Obicie
           </button>
           <button
             type="button"
-            onClick={editor.clearAll}
-            className="rounded border border-border px-2 py-1 text-xs text-muted-foreground hover:text-destructive"
+            onClick={() => setTool('railings')}
+            className={toolBtn(tool === 'railings')}
           >
-            Wyczyść
+            Barierki
           </button>
-        </div>
 
-        <div className="flex flex-col gap-2 rounded-md border border-border/80 bg-background/40 px-2.5 py-2">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <ToolGroup label="Tryb">
+          <div className="ml-auto flex items-center gap-1">
+            <div className="relative">
               <button
                 type="button"
-                onClick={() => setTool('select')}
-                className={pillClass(tool === 'select')}
-                title="Zaznaczanie i przesuwanie"
+                onClick={() => setGridOpen((v) => !v)}
+                className={toolBtn(plan.snapToGrid)}
+                title="Siatka"
               >
-                Zaznacz
+                Siatka {plan.snapToGrid ? formatMeters(plan.gridStepM) : 'off'}
               </button>
-            </ToolGroup>
-
-            <ToolGroup label="Dodaj">
-              {PLACE_TOOLS.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setTool(item.id)}
-                  className={pillClass(tool === item.id)}
-                  title={item.hint}
-                >
-                  {item.label}
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => setTool('stairs')}
-                className={pillClass(tool === 'stairs')}
-                title="Klik w krawędź dostawia bieg schodów"
-              >
-                Schody
-              </button>
-            </ToolGroup>
-
-            <ToolGroup label="Krawędź">
-              {EDGE_TOOLS.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setTool(item.id)}
-                  className={pillClass(tool === item.id)}
-                  title={item.hint}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </ToolGroup>
-
-            <div className="ml-auto flex items-center gap-1">
-              <button
-                type="button"
-                onClick={editor.undo}
-                disabled={!editor.canUndo}
-                className="rounded border border-border p-1 text-muted-foreground hover:text-foreground disabled:opacity-40"
-                title="Cofnij (Ctrl+Z)"
-              >
-                <Undo2 size={14} />
-              </button>
-              <button
-                type="button"
-                onClick={editor.redo}
-                disabled={!editor.canRedo}
-                className="rounded border border-border p-1 text-muted-foreground hover:text-foreground disabled:opacity-40"
-                title="Ponów (Ctrl+Shift+Z)"
-              >
-                <Redo2 size={14} />
-              </button>
-              <button
-                type="button"
-                onClick={editor.rotateSelected}
-                disabled={!hasSelection}
-                className="rounded border border-border p-1 text-muted-foreground hover:text-foreground disabled:opacity-40"
-                title="Obróć o 90° (R)"
-              >
-                <RotateCw size={14} />
-              </button>
-              <button
-                type="button"
-                onClick={editor.duplicateSelected}
-                disabled={!hasSelection}
-                className="rounded border border-border p-1 text-muted-foreground hover:text-foreground disabled:opacity-40"
-                title="Duplikuj (Ctrl+D)"
-              >
-                <Copy size={14} />
-              </button>
-              <button
-                type="button"
-                onClick={editor.deleteSelected}
-                disabled={!hasSelection && !editor.selectedStairId}
-                className="rounded border border-border p-1 text-muted-foreground hover:text-destructive disabled:opacity-40"
-                title="Usuń (Delete)"
-              >
-                <Trash2 size={14} />
-              </button>
+              {gridOpen ? (
+                <div className="absolute right-0 z-20 mt-1 w-40 rounded-md border border-border bg-surface p-2 shadow-lg">
+                  <button
+                    type="button"
+                    className={`mb-1 w-full rounded border px-2 py-1 text-xs ${
+                      plan.snapToGrid ? 'border-primary text-primary' : 'border-border'
+                    }`}
+                    onClick={() => editor.patch({ snapToGrid: !plan.snapToGrid })}
+                  >
+                    {plan.snapToGrid ? 'Włączona' : 'Wyłączona'}
+                  </button>
+                  <div className="flex flex-wrap gap-1">
+                    {STAGE_GRID_STEPS_M.map((step) => (
+                      <button
+                        key={step}
+                        type="button"
+                        className={`rounded border px-2 py-0.5 text-[11px] ${
+                          plan.snapToGrid && plan.gridStepM === step
+                            ? 'border-primary text-primary'
+                            : 'border-border text-muted-foreground'
+                        }`}
+                        onClick={() => {
+                          editor.patch({ gridStepM: step, snapToGrid: true })
+                          setGridOpen(false)
+                        }}
+                      >
+                        {formatMeters(step)} m
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    Magnet {Math.round(STAGE_MAGNET_M * 100)} cm bez siatki
+                  </p>
+                </div>
+              ) : null}
             </div>
           </div>
+        </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 border-t border-border/60 pt-1.5">
-            <ToolGroup label="Siatka">
+        {tool === 'deck-custom' ? (
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <label className="text-muted-foreground">
+              W
+              <input
+                type="text"
+                inputMode="decimal"
+                className="ml-1 w-12 rounded border border-border bg-background px-1.5 py-1 tabular-nums"
+                value={customWidth}
+                onChange={(e) => setCustomWidth(e.target.value)}
+                title={`${STAGE_PLAN_MIN_CUSTOM_M}–${STAGE_PLAN_MAX_CUSTOM_M} m`}
+              />
+            </label>
+            <label className="text-muted-foreground">
+              D
+              <input
+                type="text"
+                inputMode="decimal"
+                className="ml-1 w-12 rounded border border-border bg-background px-1.5 py-1 tabular-nums"
+                value={customDepth}
+                onChange={(e) => setCustomDepth(e.target.value)}
+              />
+            </label>
+            <span className="text-muted-foreground">m</span>
+          </div>
+        ) : null}
+
+        {layoutOpen || plan.decks.length === 0 ? (
+          <div className="flex flex-wrap items-end gap-2 rounded-md border border-border/70 bg-surface/40 px-2.5 py-2">
+            <div>
+              <label className="mb-0.5 block text-[10px] text-muted-foreground" htmlFor="stage-rect-width">
+                Front m
+              </label>
+              <input
+                id="stage-rect-width"
+                type="text"
+                inputMode="decimal"
+                className="w-14 rounded border border-border bg-background px-2 py-1 text-sm tabular-nums"
+                value={rectWidth}
+                onChange={(e) => setRectWidth(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="mb-0.5 block text-[10px] text-muted-foreground" htmlFor="stage-rect-depth">
+                Głęb. m
+              </label>
+              <input
+                id="stage-rect-depth"
+                type="text"
+                inputMode="decimal"
+                className="w-14 rounded border border-border bg-background px-2 py-1 text-sm tabular-nums"
+                value={rectDepth}
+                onChange={(e) => setRectDepth(e.target.value)}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setRectAlongFront((v) => !v)}
+              className="rounded border border-border px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+              title="Orientacja blatów 2×1"
+            >
+              {rectAlongFront ? 'Dłuższy bok: front' : 'Dłuższy bok: w głąb'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                editor.fillRect(parseDim(rectWidth), parseDim(rectDepth), rectAlongFront)
+                setLayoutOpen(false)
+              }}
+              className="rounded border border-primary px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/10"
+            >
+              Ułóż prostokąt
+            </button>
+            {confirmClear ? (
+              <span className="flex items-center gap-1 text-xs">
+                <span className="text-muted-foreground">Wyczyścić rzut?</span>
+                <button
+                  type="button"
+                  className="rounded border border-red-500/50 px-1.5 py-0.5 text-red-400"
+                  onClick={() => {
+                    editor.clearAll()
+                    setConfirmClear(false)
+                    setLayoutOpen(true)
+                  }}
+                >
+                  Tak
+                </button>
+                <button
+                  type="button"
+                  className="rounded border border-border px-1.5 py-0.5 text-muted-foreground"
+                  onClick={() => setConfirmClear(false)}
+                >
+                  Nie
+                </button>
+              </span>
+            ) : (
               <button
                 type="button"
-                onClick={() => editor.patch({ snapToGrid: !plan.snapToGrid })}
-                className={pillClass(plan.snapToGrid)}
-                title={
-                  plan.snapToGrid
-                    ? 'Siatka włączona'
-                    : `Wyłączona — magnet ${Math.round(STAGE_MAGNET_M * 100)} cm`
-                }
+                onClick={() => setConfirmClear(true)}
+                className="ml-auto rounded border border-border/60 px-2 py-1 text-xs text-muted-foreground/80 hover:border-red-500/40 hover:text-red-400"
               >
-                {plan.snapToGrid ? 'On' : 'Off'}
+                Wyczyść…
               </button>
-              {STAGE_GRID_STEPS_M.map((step) => (
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setLayoutOpen(true)}
+              className="rounded border border-border px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+            >
+              Nowy układ…
+            </button>
+          </div>
+        )}
+
+        <div className="flex items-center gap-1">
+          <IconAction title="Cofnij (Ctrl+Z)" onClick={editor.undo} disabled={!editor.canUndo}>
+            <Undo2 size={15} />
+          </IconAction>
+          <IconAction title="Ponów" onClick={editor.redo} disabled={!editor.canRedo}>
+            <Redo2 size={15} />
+          </IconAction>
+          <IconAction title="Obróć (R)" onClick={editor.rotateSelected} disabled={!hasSelection}>
+            <RotateCw size={15} />
+          </IconAction>
+          <IconAction title="Duplikuj (Ctrl+D)" onClick={editor.duplicateSelected} disabled={!hasSelection}>
+            <Copy size={15} />
+          </IconAction>
+          <IconAction
+            title="Usuń (Del)"
+            onClick={editor.deleteSelected}
+            disabled={!hasSelection && !editor.selectedStairId}
+            danger
+          >
+            <Trash2 size={15} />
+          </IconAction>
+        </div>
+
+        {hasSelection ? (
+          <div className="rounded-md border border-primary/35 bg-primary/5 px-2.5 py-2">
+            <div className="mb-1 text-xs font-medium">
+              Zaznaczenie ({editor.selectedDeckIds.length})
+            </div>
+            <div className="mb-1 text-[10px] text-muted-foreground">Wysokość nóg</div>
+            <div className="inline-flex flex-wrap overflow-hidden rounded-md border border-border">
+              {STAGE_LEG_HEIGHTS_CM.map((height, index) => (
                 <button
-                  key={step}
+                  key={`sel-h-${height}`}
                   type="button"
-                  onClick={() => editor.patch({ gridStepM: step, snapToGrid: true })}
-                  className={pillClass(plan.snapToGrid && plan.gridStepM === step)}
+                  onClick={() => editor.setSelectedDeckHeight(height)}
+                  className={`${segmentBtn(selectedHeight === height)} ${
+                    index > 0 ? 'border-l border-border' : ''
+                  }`}
                 >
-                  {formatMeters(step)}
+                  {height}
                 </button>
               ))}
-            </ToolGroup>
+              <button
+                type="button"
+                onClick={() => editor.setSelectedDeckHeight(null)}
+                className={`${segmentBtn(false)} border-l border-border`}
+                title="Jak domyślna planu"
+              >
+                domyślna
+              </button>
+            </div>
+            <span className="ml-1 text-[11px] text-muted-foreground">cm</span>
+          </div>
+        ) : null}
 
-            {tool === 'deck-custom' ? (
-              <span className="ml-1 flex items-center gap-1.5">
-                <label className="text-[10px] text-muted-foreground">
-                  W
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    className="ml-1 w-12 rounded border border-border bg-background px-1.5 py-1 text-xs tabular-nums"
-                    value={customWidth}
-                    onChange={(event) => setCustomWidth(event.target.value)}
-                    title={`Szerokość ${STAGE_PLAN_MIN_CUSTOM_M}–${STAGE_PLAN_MAX_CUSTOM_M} m`}
-                  />
-                </label>
-                <label className="text-[10px] text-muted-foreground">
-                  D
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    className="ml-1 w-12 rounded border border-border bg-background px-1.5 py-1 text-xs tabular-nums"
-                    value={customDepth}
-                    onChange={(event) => setCustomDepth(event.target.value)}
-                    title={`Głębokość ${STAGE_PLAN_MIN_CUSTOM_M}–${STAGE_PLAN_MAX_CUSTOM_M} m`}
-                  />
-                </label>
-                <span className="text-[10px] text-muted-foreground">m</span>
-              </span>
+        <div className="min-h-[280px] flex-1 overflow-hidden rounded-md border border-border bg-background">
+          <StagePlanCanvas
+            editor={editor}
+            tool={tool}
+            customDeckSize={customDeckSize}
+            onToolDone={() => setTool('select')}
+            sparseLabels
+            showOuterDimensions
+          />
+        </div>
+
+        <div className="flex items-start gap-2 rounded-md border border-border/60 bg-surface/30 px-2.5 py-1.5">
+          <p className="min-w-0 flex-1 text-[12px] leading-snug text-foreground/85">{activeHint}</p>
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              className="rounded p-0.5 text-muted-foreground hover:text-foreground"
+              onClick={() => setHelpOpen((v) => !v)}
+              aria-label="Skróty klawiszowe"
+            >
+              <HelpCircle size={15} />
+            </button>
+            {helpOpen ? (
+              <div className="absolute bottom-full right-0 z-20 mb-1 w-56 rounded-md border border-border bg-surface p-2 text-[11px] text-muted-foreground shadow-lg">
+                <div>R — obrót</div>
+                <div>Del — usuń</div>
+                <div>Ctrl+D — duplikat</div>
+                <div>Ctrl+Z — cofnij</div>
+                <div>Strzałki — krok siatki</div>
+                <div>Shift+klik — wiele blatów</div>
+              </div>
             ) : null}
           </div>
         </div>
 
-        {hasSelection ? (
-          <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-primary/30 bg-primary/5 px-2.5 py-2">
-            <span className="text-xs font-medium text-foreground">
-              Wysokość zaznaczonych
-              <span className="ml-1 font-normal text-muted-foreground">
-                ({editor.selectedDeckIds.length})
-              </span>
-            </span>
-            {STAGE_LEG_HEIGHTS_CM.map((height) => (
-              <button
-                key={`sel-h-${height}`}
-                type="button"
-                onClick={() => editor.setSelectedDeckHeight(height)}
-                className={`${pillClass(selectedHeight === height)} tabular-nums`}
-              >
-                {height}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => editor.setSelectedDeckHeight(null)}
-              className={pillClass(false)}
-              title="Użyj domyślnej wysokości z prawej kolumny"
-            >
-              jak domyślna
-            </button>
-            <span className="text-[11px] text-muted-foreground">cm · na rzucie pod wymiarem</span>
-          </div>
-        ) : null}
-
-        <StagePlanCanvas
-          editor={editor}
-          tool={tool}
-          customDeckSize={customDeckSize}
-          onToolDone={() => setTool('select')}
-        />
-
-        <p className="text-[11px] text-muted-foreground">
-          <span className="text-foreground/80">R</span> obrót ·{' '}
-          <span className="text-foreground/80">Del</span> usuń ·{' '}
-          <span className="text-foreground/80">Ctrl+D</span> duplikat ·{' '}
-          <span className="text-foreground/80">Ctrl+Z</span> cofnij · strzałki = krok siatki
-        </p>
+        <div className="flex flex-wrap gap-3 text-[10px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1">
+            <span className="h-0.5 w-4 bg-amber-400/90" /> Obicie
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="h-0.5 w-4 bg-sky-400/90" /> Barierki
+          </span>
+          <span>Etykieta blatu tylko przy innej wysokości</span>
+        </div>
 
         {plan.warnings.length > 0 ? (
           <ul className="space-y-1 rounded border border-warning/40 bg-warning/10 p-2 text-xs text-warning">
@@ -451,240 +600,376 @@ export default function StagePlatformVisualizer({
         ) : null}
       </section>
 
-      {/* PRAWA — opcje + overview */}
-      <aside className="space-y-4 rounded-lg border border-border bg-surface p-4">
-        <div>
-          <h3 className="mb-2 text-sm font-semibold tracking-tight">Podsumowanie</h3>
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            <Metric label="Gabaryt" value={`${plan.widthM} × ${plan.depthM} m`} />
-            <Metric label="Powierzchnia" value={`${formatMeters(plan.areaM2)} m²`} />
-            <Metric
-              label="Podesty"
-              value={`${plan.counts.decksTotal} szt.${deckBreakdown ? ` · ${deckBreakdown}` : ''}`}
-            />
-            <Metric label="Nogi" value={`${plan.counts.legs} szt.`} />
-          </div>
+      {/* PRAWA */}
+      <aside className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-surface">
+        <div className="shrink-0 border-b border-border px-3 py-2 text-xs tabular-nums text-foreground/90">
+          <span className="font-medium">
+            {plan.widthM}×{plan.depthM} m
+          </span>
+          <span className="text-muted-foreground"> · </span>
+          {formatMeters(plan.areaM2)} m²
+          <span className="text-muted-foreground"> · </span>
+          {plan.counts.decksTotal} pod.
+          <span className="text-muted-foreground"> · </span>
+          {plan.counts.legs} nóg
         </div>
 
-        <div className="border-t border-border pt-3">
-          <h3 className="mb-2 text-sm font-semibold tracking-tight">Opcje</h3>
+        <div className="flex shrink-0 border-b border-border">
+          <button
+            type="button"
+            className={`flex-1 px-3 py-2 text-xs font-medium ${
+              rightTab === 'config'
+                ? 'border-b-2 border-primary text-primary'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+            onClick={() => setRightTab('config')}
+          >
+            Konfiguracja
+          </button>
+          <button
+            type="button"
+            className={`flex-1 px-3 py-2 text-xs font-medium ${
+              rightTab === 'bom'
+                ? 'border-b-2 border-primary text-primary'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+            onClick={() => setRightTab('bom')}
+          >
+            Rozpiska ({plan.bom.length})
+          </button>
+        </div>
 
-          <div className="space-y-3">
-            <div>
-              <div className="mb-1 text-xs font-medium">Domyślna wysokość nóg</div>
-              <div className="flex flex-wrap gap-1">
-                {STAGE_LEG_HEIGHTS_CM.map((height) => (
-                  <button
-                    key={height}
-                    type="button"
-                    onClick={() => editor.patch({ legHeightCm: height })}
-                    className={`${pillClass(plan.legHeightCm === height)} tabular-nums`}
-                  >
-                    {height}
-                  </button>
-                ))}
-                <span className="self-center text-[11px] text-muted-foreground">cm</span>
-              </div>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                Pojedyncze blaty: zaznacz na rzucie i ustaw wysokość po lewej.
-              </p>
-            </div>
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+          <div className={rightTab === 'bom' ? 'block' : 'hidden'}>
+            <StageBomCatalogTable
+              plan={plan}
+              hideApplyPreview
+              onPreviewChange={setBomPreview}
+            />
+          </div>
+          {rightTab === 'config' ? (
+            <>
+              <ConfigSection
+                label="Domyślna wysokość nóg"
+                value={`${plan.legHeightCm} cm`}
+              >
+                <div className="inline-flex max-w-full flex-wrap overflow-hidden rounded-md border border-border">
+                  {STAGE_LEG_HEIGHTS_CM.map((height, index) => (
+                    <button
+                      key={height}
+                      type="button"
+                      onClick={() => editor.patch({ legHeightCm: height })}
+                      className={`${segmentBtn(plan.legHeightCm === height)} ${
+                        index > 0 ? 'border-l border-border' : ''
+                      }`}
+                    >
+                      {height}
+                    </button>
+                  ))}
+                </div>
+              </ConfigSection>
 
-            <div>
-              <div className="mb-1 text-xs font-medium">
-                Obicie
-                {plan.claddingMb > 0 ? (
-                  <span className="ml-1 font-normal text-muted-foreground">
-                    {formatMeters(plan.claddingMb)} mb · {formatMeters(plan.claddingM2)} m²
-                  </span>
-                ) : null}
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {(['none', 'skirt', 'hips'] as StageCladdingMaterial[]).map((material) => (
-                  <button
-                    key={material}
-                    type="button"
-                    onClick={() => editor.patch({ claddingMaterial: material })}
-                    className={pillClass(plan.claddingMaterial === material)}
-                  >
-                    {claddingMaterialLabel(material)}
-                  </button>
-                ))}
-              </div>
-              {plan.claddingMaterial !== 'none' ? (
-                <SideToggles
+              <ConfigSection
+                label="Obicie"
+                value={
+                  plan.claddingMaterial === 'none'
+                    ? claddingMaterialLabel('none')
+                    : `${claddingMaterialLabel(plan.claddingMaterial)} · ${formatMeters(plan.claddingMb)} mb · ${formatMeters(plan.claddingM2)} m²`
+                }
+              >
+                <div className="inline-flex overflow-hidden rounded-md border border-border">
+                  {(['none', 'skirt', 'hips'] as StageCladdingMaterial[]).map((material, index) => (
+                    <button
+                      key={material}
+                      type="button"
+                      onClick={() => editor.patch({ claddingMaterial: material })}
+                      className={`${segmentBtn(plan.claddingMaterial === material)} ${
+                        index > 0 ? 'border-l border-border' : ''
+                      }`}
+                    >
+                      {claddingMaterialLabel(material)}
+                    </button>
+                  ))}
+                </div>
+                <EdgeChips
                   plan={plan}
                   target="cladding"
+                  disabled={plan.claddingMaterial === 'none'}
                   onToggle={(side) =>
                     editor.patch({
                       cladding: toggleSideInSelection(plan.cladding, side, plan.edges),
                     })
                   }
                 />
-              ) : null}
-            </div>
+              </ConfigSection>
 
-            <div>
-              <div className="mb-1 text-xs font-medium">
-                Podłoga
-                {plan.floorMaterial !== 'none' && plan.areaM2 > 0 ? (
-                  <span className="ml-1 font-normal text-muted-foreground">
-                    {formatMeters(plan.areaM2)} m²
-                  </span>
-                ) : null}
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {(['none', 'carpet', 'hips'] as StageFloorMaterial[]).map((material) => (
-                  <button
-                    key={material}
-                    type="button"
-                    onClick={() => editor.patch({ floorMaterial: material })}
-                    className={pillClass(plan.floorMaterial === material)}
-                  >
-                    {floorMaterialLabel(material)}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <div className="mb-1 text-xs font-medium">
-                Barierki
-                {plan.railingMb > 0 ? (
-                  <span className="ml-1 font-normal text-muted-foreground">
-                    {formatMeters(plan.railingMb)} mb
-                  </span>
-                ) : null}
-              </div>
-              <SideToggles
-                plan={plan}
-                target="railings"
-                onToggle={(side) =>
-                  editor.patch({
-                    railings: toggleSideInSelection(plan.railings, side, plan.edges),
-                  })
+              <ConfigSection
+                label="Podłoga"
+                value={
+                  plan.floorMaterial === 'none'
+                    ? floorMaterialLabel('none')
+                    : `${floorMaterialLabel(plan.floorMaterial)} · ${formatMeters(plan.areaM2)} m²`
                 }
-              />
-            </div>
-
-            <div>
-              <div className="mb-1 text-xs font-medium">
-                Schody
-                <span className="ml-1 font-normal text-muted-foreground">
-                  {plan.stairs.length === 0
-                    ? 'brak — narzędzie Schody na rzucie'
-                    : `${plan.stairs.length} × ${plan.counts.stepsPerStair} ${
-                        plan.counts.stepsPerStair === 1 ? 'stopień' : 'stopnie'
-                      }`}
-                </span>
-              </div>
-              {plan.stairs.length > 0 ? (
-                <ul className="space-y-1">
-                  {plan.stairs.map((stair, index) => (
-                    <li
-                      key={stair.id}
-                      className={`flex items-center gap-2 rounded border px-2 py-1 text-xs ${
-                        editor.selectedStairId === stair.id
-                          ? 'border-primary/60 bg-primary/5'
-                          : 'border-border'
+              >
+                <div className="inline-flex overflow-hidden rounded-md border border-border">
+                  {(['none', 'carpet', 'hips'] as StageFloorMaterial[]).map((material, index) => (
+                    <button
+                      key={material}
+                      type="button"
+                      onClick={() => editor.patch({ floorMaterial: material })}
+                      className={`${segmentBtn(plan.floorMaterial === material)} ${
+                        index > 0 ? 'border-l border-border' : ''
                       }`}
                     >
-                      <button
-                        type="button"
-                        onClick={() => editor.selectStair(stair.id)}
-                        className="flex-1 text-left text-muted-foreground hover:text-foreground"
+                      {floorMaterialLabel(material)}
+                    </button>
+                  ))}
+                </div>
+              </ConfigSection>
+
+              <ConfigSection
+                label="Barierki"
+                value={
+                  plan.railingMb > 0 ? `${formatMeters(plan.railingMb)} mb` : 'brak'
+                }
+              >
+                <EdgeChips
+                  plan={plan}
+                  target="railings"
+                  onToggle={(side) =>
+                    editor.patch({
+                      railings: toggleSideInSelection(plan.railings, side, plan.edges),
+                    })
+                  }
+                />
+              </ConfigSection>
+
+              <ConfigSection
+                label="Schody"
+                value={
+                  plan.stairs.length === 0
+                    ? 'brak'
+                    : `${plan.stairs.length} × ${plan.counts.stepsPerStair} st.`
+                }
+              >
+                {plan.stairs.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    Narzędzie Schody na rzucie — klik w krawędź.
+                  </p>
+                ) : (
+                  <ul className="space-y-1">
+                    {plan.stairs.map((stair, index) => (
+                      <li
+                        key={stair.id}
+                        className={`flex items-center gap-2 rounded border px-2 py-1 text-xs ${
+                          editor.selectedStairId === stair.id
+                            ? 'border-primary/60 bg-primary/5'
+                            : 'border-border'
+                        }`}
                       >
-                        {index + 1}. {edgeSideLabel(stair.side)} · {formatMeters(stair.posM)} m
-                      </button>
-                      <input
-                        type="number"
-                        step="0.25"
-                        min="0.5"
-                        max="4"
-                        value={stair.widthM}
-                        onChange={(event) => {
-                          const widthM = clampStairWidth(Number(event.target.value))
-                          editor.commit((prev) => ({
-                            ...prev,
-                            stairs: prev.stairs.map((item) =>
-                              item.id === stair.id ? { ...item, widthM } : item
-                            ),
-                          }))
-                        }}
-                        className="w-14 rounded border border-border bg-background px-1.5 py-0.5 text-right tabular-nums"
-                        aria-label="Szerokość biegu w metrach"
-                      />
-                      <span className="text-muted-foreground">m</span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          editor.commit((prev) => ({
-                            ...prev,
-                            stairs: prev.stairs.filter((item) => item.id !== stair.id),
-                          }))
-                        }
-                        className="text-muted-foreground hover:text-destructive"
-                        aria-label="Usuń bieg schodów"
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => editor.selectStair(stair.id)}
+                          className="flex-1 text-left text-muted-foreground hover:text-foreground"
+                        >
+                          {index + 1}. {edgeSideLabel(stair.side)} · {formatMeters(stair.posM)} m
+                        </button>
+                        <input
+                          type="number"
+                          step="0.25"
+                          min="0.5"
+                          max="4"
+                          value={stair.widthM}
+                          onChange={(event) => {
+                            const widthM = clampStairWidth(Number(event.target.value))
+                            editor.commit((prev) => ({
+                              ...prev,
+                              stairs: prev.stairs.map((item) =>
+                                item.id === stair.id ? { ...item, widthM } : item
+                              ),
+                            }))
+                          }}
+                          className="w-14 rounded border border-border bg-background px-1.5 py-0.5 text-right tabular-nums"
+                        />
+                        <span className="text-muted-foreground">m</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            editor.commit((prev) => ({
+                              ...prev,
+                              stairs: prev.stairs.filter((item) => item.id !== stair.id),
+                            }))
+                          }
+                          className="text-muted-foreground hover:text-destructive"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </ConfigSection>
+
+              {clampWarning ? (
+                <p className="rounded border border-warning/40 bg-warning/10 px-2.5 py-2 text-xs text-warning">
+                  {clampWarning}
+                </p>
+              ) : null}
+
+              {assumptionNotes.length > 0 ? (
+                <div>
+                  <button
+                    type="button"
+                    className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+                    onClick={() => setAssumptionsOpen((v) => !v)}
+                  >
+                    <ChevronDown
+                      size={12}
+                      className={`transition-transform ${assumptionsOpen ? 'rotate-180' : ''}`}
+                    />
+                    Założenia obliczeń
+                  </button>
+                  {assumptionsOpen ? (
+                    <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[11px] text-muted-foreground">
+                      {assumptionNotes.map((note) => (
+                        <li key={note}>{note}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              ) : null}
+            </>
+          ) : null}
+        </div>
+
+        {/* Sticky apply bar */}
+        {onApply ? (
+          <div className="shrink-0 space-y-2 border-t border-border bg-surface px-3 py-3 shadow-[0_-8px_24px_rgba(0,0,0,0.25)]">
+            <div className="rounded border border-border bg-background/70 px-2.5 py-2 text-xs">
+              <div className="mb-1 font-medium text-foreground">Po zastosowaniu</div>
+              {(bomPreview?.lines.length ?? 0) === 0 ? (
+                <p className="text-muted-foreground">Brak pozycji do dodania — ustaw Mapowanie.</p>
+              ) : (
+                <ul className="space-y-0.5">
+                  {bomPreview!.lines.map((line) => (
+                    <li key={line.catalogKey} className="flex justify-between gap-2">
+                      <span className="min-w-0 truncate">{line.equipment.name}</span>
+                      <span className="shrink-0 whitespace-nowrap tabular-nums text-muted-foreground">
+                        {formatMeters(line.quantity)} {line.unit}
+                      </span>
                     </li>
                   ))}
                 </ul>
+              )}
+              {(bomPreview?.skippedCount ?? 0) > 0 ? (
+                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  Pominięte: {bomPreview!.skippedCount} pozycji (tylko plan)
+                </p>
+              ) : null}
+              {unmappedWarn ? (
+                <p className="mt-1 text-[11px] text-warning">{unmappedWarn}</p>
               ) : null}
             </div>
+
+            {applyError ? (
+              <p className="whitespace-pre-wrap rounded border border-red-500/40 bg-red-500/10 px-2 py-1.5 text-[11px] text-red-300">
+                {applyError}
+              </p>
+            ) : null}
+
+            <div className="flex items-center gap-2">
+              <span
+                className={`text-[11px] ${
+                  dirty ? 'text-warning' : 'text-muted-foreground'
+                }`}
+              >
+                {dirty ? 'Niezapisane zmiany' : 'Zapisano'}
+              </span>
+              <button
+                type="button"
+                disabled={plan.counts.decksTotal === 0}
+                onClick={() => void handleApplyClick()}
+                className="ml-auto rounded border-2 border-primary px-3 py-2 text-xs font-semibold text-primary hover:bg-primary/10 disabled:opacity-50"
+              >
+                {applyButtonLabel}
+              </button>
+            </div>
           </div>
-        </div>
-
-        <div className="border-t border-border pt-3">
-          <h3 className="mb-2 text-sm font-semibold tracking-tight">Rozpiska</h3>
-          <StageBomCatalogTable plan={plan} />
-        </div>
-
-        {plan.notes.length > 0 ? (
-          <ul className="list-disc space-y-1 pl-4 text-xs text-muted-foreground">
-            {plan.notes.map((note) => (
-              <li key={note}>{note}</li>
-            ))}
-          </ul>
-        ) : null}
-
-        {onApply ? (
-          <button
-            type="button"
-            disabled={plan.counts.decksTotal === 0}
-            onClick={() => void handleApplyClick()}
-            className="w-full rounded border-2 border-primary px-3 py-2 text-sm font-medium text-primary hover:bg-primary/10 disabled:opacity-50"
-          >
-            {applyLabel || 'Zastosuj'}
-          </button>
         ) : null}
       </aside>
     </div>
   )
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function hasSelectionText(count: number): string {
+  if (count > 0) return `Zaznaczono ${count} — ustaw wysokość w panelu Zaznaczenie`
+  return 'Zaznacz i przeciągaj blaty. Shift+klik zaznacza wiele.'
+}
+
+function IconAction({
+  title,
+  onClick,
+  disabled,
+  danger,
+  children,
+}: {
+  title: string
+  onClick: () => void
+  disabled?: boolean
+  danger?: boolean
+  children: ReactNode
+}) {
   return (
-    <div className="rounded border border-border bg-background px-2 py-1.5">
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className="text-sm tabular-nums leading-snug">{value}</div>
+    <button
+      type="button"
+      title={title}
+      onClick={onClick}
+      disabled={disabled}
+      className={`rounded border border-border/80 bg-background px-1.5 py-1 disabled:opacity-35 ${
+        danger
+          ? 'text-foreground/80 hover:border-red-500/40 hover:text-red-400'
+          : 'text-foreground/85 hover:border-primary/40 hover:text-primary'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
+function ConfigSection({
+  label,
+  value,
+  children,
+}: {
+  label: string
+  value: string
+  children: ReactNode
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[11px] text-muted-foreground">{label}</span>
+        <span className="text-right text-xs font-medium tabular-nums text-foreground">{value}</span>
+      </div>
+      {children}
     </div>
   )
 }
 
-function SideToggles({
+function EdgeChips({
   plan,
   target,
   onToggle,
+  disabled,
 }: {
   plan: StagePlan
   target: 'cladding' | 'railings'
   onToggle: (side: StageEdgeSide) => void
+  disabled?: boolean
 }) {
   const selection = target === 'cladding' ? plan.cladding : plan.railings
   return (
-    <div className="mt-1.5 flex flex-wrap gap-1">
+    <div className={`mt-1.5 flex flex-wrap gap-1 ${disabled ? 'pointer-events-none opacity-40' : ''}`}>
       {STAGE_EDGE_SIDES.map((side) => {
         const sideEdges = plan.edges.filter((edge) => edge.side === side)
         const active = sideEdges.some((edge) => isEdgeSelected(selection, edge))
@@ -695,13 +980,14 @@ function SideToggles({
             key={side}
             type="button"
             onClick={() => onToggle(side)}
-            className={pillClass(active)}
-            title={
-              sideEdges.length === 0
-                ? 'Ta strona nie ma krawędzi w tym układzie'
-                : 'Cała strona; pojedyncze krawędzie — tryb Obicie/Barierki na rzucie'
-            }
+            disabled={disabled || sideEdges.length === 0}
+            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${
+              active
+                ? 'border-primary/60 bg-primary/10 text-primary'
+                : 'border-border text-muted-foreground'
+            }`}
           >
+            {active ? <Check size={10} /> : null}
             {edgeSideLabel(side)}
             {partial ? ' ·' : ''}
           </button>

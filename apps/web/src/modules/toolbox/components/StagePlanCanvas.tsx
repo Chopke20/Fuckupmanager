@@ -5,6 +5,7 @@ import {
   deckHeightCm,
   deckPlanHeightLabel,
   deckPlanLabel,
+  formatMeters,
   isEdgeSelected,
   roundM,
   snapToStep,
@@ -65,11 +66,16 @@ export default function StagePlanCanvas({
   tool,
   onToolDone,
   customDeckSize = { w: 0.5, h: 2 },
+  sparseLabels = false,
+  showOuterDimensions = false,
 }: {
   editor: StagePlanEditor
   tool: StagePlanTool
   onToolDone?: () => void
   customDeckSize?: { w: number; h: number }
+  /** Pokaż etykietę tylko gdy wysokość ≠ domyślna (albo przy hover). */
+  sparseLabels?: boolean
+  showOuterDimensions?: boolean
 }) {
   const { plan } = editor
   const palette = STAGE_PALETTES.dark
@@ -77,6 +83,7 @@ export default function StagePlanCanvas({
   const dragRef = useRef<DragState | null>(null)
   const frozenViewport = useRef<StageViewport | null>(null)
   const [dragging, setDragging] = useState(false)
+  const [hoveredDeckId, setHoveredDeckId] = useState<string | null>(null)
 
   const computedViewport = useMemo(
     () => stagePlanViewport(plan, { widthPx: CANVAS_WIDTH_PX }),
@@ -434,9 +441,13 @@ export default function StagePlanCanvas({
           const deckH = deckHeightCm(deck, plan.legHeightCm)
           const sizeLabel = deckPlanLabel(deck)
           const heightLabel = deckPlanHeightLabel(deck, plan.legHeightCm)
+          const hovered = hoveredDeckId === deck.id
+          const showBecauseCustom = Boolean(heightLabel)
+          const showLabel =
+            Math.min(width, height) >= 16 &&
+            (!sparseLabels || showBecauseCustom || hovered || selected)
           const cx = toX(deck.x) + width / 2
           const cy = toY(deck.y + deck.h) + height / 2
-          const showLabel = Math.min(width, height) >= 16
           return (
             <g key={deck.id}>
               <rect
@@ -447,6 +458,8 @@ export default function StagePlanCanvas({
                 fill={deckFillForHeight(deckH, palette.deckFill, palette.deckAltFill)}
                 strokeWidth={selected ? 2 : 1.1}
                 onPointerDown={(event) => handleDeckPointerDown(event, deck.id)}
+                onPointerEnter={() => setHoveredDeckId(deck.id)}
+                onPointerLeave={() => setHoveredDeckId((id) => (id === deck.id ? null : id))}
                 style={{
                   stroke: selected ? palette.cladding : palette.deckStroke,
                   cursor: tool === 'select' ? 'move' : addingDeck ? 'copy' : 'default',
@@ -459,7 +472,7 @@ export default function StagePlanCanvas({
                     <tspan x={cx} y={cy - heightFont * 0.15} fontSize={sizeFont} fontWeight={600}>
                       {sizeLabel}
                     </tspan>
-                    <tspan x={cx} y={cy + heightFont * 1.05} fontSize={heightFont} opacity={0.85}>
+                    <tspan x={cx} y={cy + heightFont * 1.05} fontSize={heightFont} opacity={0.9}>
                       {heightLabel}
                     </tspan>
                   </text>
@@ -479,6 +492,32 @@ export default function StagePlanCanvas({
             </g>
           )
         })}
+
+        {showOuterDimensions && plan.decks.length > 0 ? (
+          <>
+            <text
+              x={(toX(viewport.minX) + toX(viewport.maxX)) / 2}
+              y={toY(Math.max(...plan.decks.map((d) => d.y + d.h))) - 6}
+              textAnchor="middle"
+              fontSize={11}
+              fill={palette.textDim}
+              pointerEvents="none"
+            >
+              {formatMeters(plan.widthM)} m
+            </text>
+            <text
+              x={toX(Math.min(...plan.decks.map((d) => d.x))) - 8}
+              y={(toY(viewport.minY) + toY(viewport.maxY)) / 2}
+              textAnchor="middle"
+              fontSize={11}
+              fill={palette.textDim}
+              pointerEvents="none"
+              transform={`rotate(-90 ${toX(Math.min(...plan.decks.map((d) => d.x))) - 8} ${(toY(viewport.minY) + toY(viewport.maxY)) / 2})`}
+            >
+              {formatMeters(plan.depthM)} m
+            </text>
+          </>
+        ) : null}
 
         {legDots.map((dot, index) => (
           <circle

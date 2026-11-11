@@ -170,7 +170,36 @@ function SceneRow({
   onRemoveStage?: OrderPlanProjectsPanelProps['onRemoveStage']
 }) {
   const [renaming, setRenaming] = useState(false)
+  const [confirmRemove, setConfirmRemove] = useState(false)
   const meta = sceneMeta(scene)
+
+  if (confirmRemove && onRemoveStage) {
+    return (
+      <li className="flex flex-wrap items-center gap-1.5 rounded border border-red-500/40 bg-red-500/5 px-1.5 py-1 text-[11px]">
+        <LayoutGrid className="h-3 w-3 shrink-0 text-red-400" />
+        <span className="min-w-0 flex-1 text-muted-foreground">
+          Usunąć <span className="font-medium text-foreground">{scene.name}</span>? Zniknie też sprzęt z wykazu.
+        </span>
+        <button
+          type="button"
+          className="rounded border border-red-500/50 px-1.5 py-0.5 text-[10px] font-medium text-red-400 hover:bg-red-500/10"
+          onClick={() => {
+            onRemoveStage(offerBlockId, scene.id)
+            setConfirmRemove(false)
+          }}
+        >
+          Usuń
+        </button>
+        <button
+          type="button"
+          className="rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+          onClick={() => setConfirmRemove(false)}
+        >
+          Anuluj
+        </button>
+      </li>
+    )
+  }
 
   return (
     <li className="flex items-center gap-1.5 rounded border border-border/70 bg-background/50 px-1.5 py-0.5 text-[11px]">
@@ -209,11 +238,7 @@ function SceneRow({
             </IconBtn>
           ) : null}
           {onRemoveStage ? (
-            <IconBtn
-              title="Usuń scenę"
-              danger
-              onClick={() => onRemoveStage(offerBlockId, scene.id)}
-            >
+            <IconBtn title="Usuń scenę" danger onClick={() => setConfirmRemove(true)}>
               <Trash2 className="h-3 w-3" />
             </IconBtn>
           ) : null}
@@ -243,7 +268,36 @@ function LedRow({
   onRemoveLed?: OrderPlanProjectsPanelProps['onRemoveLed']
 }) {
   const [renaming, setRenaming] = useState(false)
+  const [confirmRemove, setConfirmRemove] = useState(false)
   const meta = ledMeta(entry)
+
+  if (confirmRemove && onRemoveLed) {
+    return (
+      <li className="flex flex-wrap items-center gap-1.5 rounded border border-red-500/40 bg-red-500/5 px-1.5 py-1 text-[11px]">
+        <Monitor className="h-3 w-3 shrink-0 text-red-400" />
+        <span className="min-w-0 flex-1 text-muted-foreground">
+          Usunąć <span className="font-medium text-foreground">{entry.name}</span>? Zniknie też sprzęt z wykazu.
+        </span>
+        <button
+          type="button"
+          className="rounded border border-red-500/50 px-1.5 py-0.5 text-[10px] font-medium text-red-400 hover:bg-red-500/10"
+          onClick={() => {
+            onRemoveLed(offerBlockId, entry.id)
+            setConfirmRemove(false)
+          }}
+        >
+          Usuń
+        </button>
+        <button
+          type="button"
+          className="rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+          onClick={() => setConfirmRemove(false)}
+        >
+          Anuluj
+        </button>
+      </li>
+    )
+  }
 
   return (
     <li className="flex items-center gap-1.5 rounded border border-border/70 bg-background/50 px-1.5 py-0.5 text-[11px]">
@@ -282,11 +336,7 @@ function LedRow({
             </IconBtn>
           ) : null}
           {onRemoveLed ? (
-            <IconBtn
-              title="Usuń ekran"
-              danger
-              onClick={() => onRemoveLed(offerBlockId, entry.id)}
-            >
+            <IconBtn title="Usuń ekran" danger onClick={() => setConfirmRemove(true)}>
               <Trash2 className="h-3 w-3" />
             </IconBtn>
           ) : null}
