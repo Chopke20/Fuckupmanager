@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   calculateScreenFromSpec,
   type LedScreenSpec,
@@ -93,19 +93,50 @@ function ScreenBox({
   )
 }
 
+type Bounds = { minX: number; minY: number; maxX: number; maxY: number }
+
+function computeBounds(
+  calcs: Array<{ screen: LedScreenSpec; calc: { screenWidthM: number; screenHeightM: number } }>
+): Bounds {
+  if (calcs.length === 0) {
+    return { minX: -1, minY: -1, maxX: 11, maxY: 7 }
+  }
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  for (const { screen, calc } of calcs) {
+    minX = Math.min(minX, screen.layoutXM)
+    minY = Math.min(minY, screen.layoutYM)
+    maxX = Math.max(maxX, screen.layoutXM + calc.screenWidthM)
+    maxY = Math.max(maxY, screen.layoutYM + calc.screenHeightM)
+  }
+  const pad = 2
+  minX = Math.min(minX - pad, -1)
+  minY = Math.min(minY - pad, -1)
+  maxX = Math.max(maxX + pad, minX + 12)
+  maxY = Math.max(maxY + pad, minY + 8)
+  return { minX, minY, maxX, maxY }
+}
+
 export default function LedScreenCssPreview({
   screens,
   activeScreenId,
   onSelectScreen,
   onMoveScreen,
+  fillContainer = false,
 }: {
   screens: LedScreenSpec[]
   activeScreenId: string
   onSelectScreen?: (id: string) => void
   onMoveScreen?: (id: string, layoutXM: number, layoutYM: number) => void
+  /** Stały kontener — przeciąganie nie zmienia rozmiaru layoutu. */
+  fillContainer?: boolean
 }) {
   const stageRef = useRef<HTMLDivElement>(null)
   const [dragId, setDragId] = useState<string | null>(null)
+  const [containerSize, setContainerSize] = useState({ w: 720, h: 380 })
+  const frozenBounds = useRef<Bounds | null>(null)
   const dragRef = useRef<{
     id: string
     startClientX: number
@@ -114,6 +145,21 @@ export default function LedScreenCssPreview({
     originYM: number
     moved: boolean
   } | null>(null)
+
+  useEffect(() => {
+    if (!fillContainer || !stageRef.current) return
+    const el = stageRef.current
+    const sync = () => {
+      const rect = el.getBoundingClientRect()
+      if (rect.width > 0 && rect.height > 0) {
+        setContainerSize({ w: rect.width, h: rect.height })
+      }
+    }
+    sync()
+    const ro = new ResizeObserver(sync)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [fillContainer])
 
   const calcs = useMemo(
     () =>
@@ -126,39 +172,25 @@ export default function LedScreenCssPreview({
     [screens]
   )
 
-  const bounds = useMemo(() => {
-    if (calcs.length === 0) {
-      return { minX: -1, minY: -1, maxX: 11, maxY: 7 }
-    }
-    let minX = Infinity
-    let minY = Infinity
-    let maxX = -Infinity
-    let maxY = -Infinity
-    for (const { screen, calc } of calcs) {
-      minX = Math.min(minX, screen.layoutXM)
-      minY = Math.min(minY, screen.layoutYM)
-      maxX = Math.max(maxX, screen.layoutXM + calc.screenWidthM)
-      maxY = Math.max(maxY, screen.layoutYM + calc.screenHeightM)
-    }
-    // Zapas na przeciąganie + minimum sceny
-    const pad = 2
-    minX = Math.min(minX - pad, -1)
-    minY = Math.min(minY - pad, -1)
-    maxX = Math.max(maxX + pad, minX + 12)
-    maxY = Math.max(maxY + pad, minY + 8)
-    return { minX, minY, maxX, maxY }
-  }, [calcs])
+  const liveBounds = useMemo(() => computeBounds(calcs), [calcs])
+  const bounds = dragId && frozenBounds.current ? frozenBounds.current : liveBounds
 
   const worldW = bounds.maxX - bounds.minX
   const worldH = bounds.maxY - bounds.minY
-  const maxCssW = 720
-  const maxCssH = 380
+  const maxCssW = fillContainer ? containerSize.w : 720
+  const maxCssH = fillContainer ? containerSize.h : 380
   const pxPerM = Math.min(maxCssW / worldW, maxCssH / worldH)
-  const stageW = worldW * pxPerM
-  const stageH = worldH * pxPerM
+  const stageW = fillContainer ? containerSize.w : worldW * pxPerM
+  const stageH = fillContainer ? containerSize.h : worldH * pxPerM
+  // W trybie fill wyśrodkuj świat w kontenerze
+  const contentW = worldW * pxPerM
+  const contentH = worldH * pxPerM
+  const offsetPadX = fillContainer ? Math.max(0, (stageW - contentW) / 2) : 0
+  const offsetPadY = fillContainer ? Math.max(0, (stageH - contentH) / 2) : 0
 
   const endDrag = useCallback(() => {
     dragRef.current = null
+    frozenBounds.current = null
     setDragId(null)
   }, [])
 
@@ -202,6 +234,7 @@ export default function LedScreenCssPreview({
       event.stopPropagation()
       onSelectScreen?.(screen.id)
       if (!onMoveScreen) return
+      frozenBounds.current = liveBounds
       dragRef.current = {
         id: screen.id,
         startClientX: event.clientX,
@@ -213,12 +246,16 @@ export default function LedScreenCssPreview({
       setDragId(screen.id)
       event.currentTarget.setPointerCapture(event.pointerId)
     },
-    [onMoveScreen, onSelectScreen]
+    [liveBounds, onMoveScreen, onSelectScreen]
   )
 
   if (calcs.length === 0) {
     return (
-      <div className="flex h-56 items-center justify-center rounded-lg border border-border bg-background text-sm text-muted-foreground">
+      <div
+        className={`flex items-center justify-center rounded-lg border border-border bg-background text-sm text-muted-foreground ${
+          fillContainer ? 'h-full' : 'h-56'
+        }`}
+      >
         Brak poprawnych ekranów do podglądu.
       </div>
     )
@@ -226,27 +263,32 @@ export default function LedScreenCssPreview({
 
   const minorPx = GRID_MINOR_M * pxPerM
   const majorPx = GRID_MAJOR_M * pxPerM
-  // Offset siatki tak, żeby linie 0 m / 1 m wypadały na całkowitych metrach świata
-  const offsetXPx = -((bounds.minX % GRID_MAJOR_M) + GRID_MAJOR_M) % GRID_MAJOR_M * pxPerM
-  const offsetYPx = -((bounds.minY % GRID_MAJOR_M) + GRID_MAJOR_M) % GRID_MAJOR_M * pxPerM
+  const offsetXPx =
+    -(((bounds.minX % GRID_MAJOR_M) + GRID_MAJOR_M) % GRID_MAJOR_M) * pxPerM + offsetPadX
+  const offsetYPx =
+    -(((bounds.minY % GRID_MAJOR_M) + GRID_MAJOR_M) % GRID_MAJOR_M) * pxPerM + offsetPadY
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs text-muted-foreground">
-        <span>
-          Podgląd CSS · przeciągnij ekrany · snap {LED_LAYOUT_SNAP_M} m · siatka {GRID_MINOR_M}/{GRID_MAJOR_M} m
-        </span>
-        <span className="tabular-nums">
-          {worldW.toFixed(1)} × {worldH.toFixed(1)} m · {pxPerM.toFixed(0)} px/m
-        </span>
-      </div>
+    <div className={fillContainer ? 'flex h-full min-h-0 flex-col' : 'space-y-2'}>
+      {!fillContainer ? (
+        <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs text-muted-foreground">
+          <span>
+            Podgląd · przeciągnij · snap {LED_LAYOUT_SNAP_M} m
+          </span>
+          <span className="tabular-nums">
+            {worldW.toFixed(1)} × {worldH.toFixed(1)} m
+          </span>
+        </div>
+      ) : null}
       <div
         ref={stageRef}
-        className="relative mx-auto overflow-hidden rounded-lg border border-border"
+        className={`relative overflow-hidden rounded-lg border border-border ${
+          fillContainer ? 'min-h-0 flex-1' : 'mx-auto'
+        }`}
         style={{
-          width: stageW,
+          width: fillContainer ? '100%' : stageW,
           maxWidth: '100%',
-          height: stageH,
+          height: fillContainer ? '100%' : stageH,
           background: '#0c0c0f',
           touchAction: 'none',
         }}
@@ -254,7 +296,6 @@ export default function LedScreenCssPreview({
         onPointerUp={onPointerUp}
         onPointerCancel={endDrag}
       >
-        {/* Siatka metrów */}
         <div
           className="pointer-events-none absolute inset-0"
           style={{
@@ -268,17 +309,16 @@ export default function LedScreenCssPreview({
             backgroundPosition: `${offsetXPx}px ${offsetYPx}px`,
           }}
         />
-        {/* Oś 0,0 jeśli w widoku */}
         {bounds.minX <= 0 && bounds.maxX >= 0 ? (
           <div
             className="pointer-events-none absolute top-0 bottom-0 w-px bg-primary/40"
-            style={{ left: -bounds.minX * pxPerM }}
+            style={{ left: -bounds.minX * pxPerM + offsetPadX }}
           />
         ) : null}
         {bounds.minY <= 0 && bounds.maxY >= 0 ? (
           <div
             className="pointer-events-none absolute left-0 right-0 h-px bg-primary/40"
-            style={{ top: -bounds.minY * pxPerM }}
+            style={{ top: -bounds.minY * pxPerM + offsetPadY }}
           />
         ) : null}
 
@@ -287,8 +327,8 @@ export default function LedScreenCssPreview({
             key={screen.id}
             screen={{
               ...screen,
-              layoutXM: screen.layoutXM - bounds.minX,
-              layoutYM: screen.layoutYM - bounds.minY,
+              layoutXM: screen.layoutXM - bounds.minX + offsetPadX / pxPerM,
+              layoutYM: screen.layoutYM - bounds.minY + offsetPadY / pxPerM,
             }}
             selected={screen.id === activeScreenId}
             pxPerM={pxPerM}

@@ -1,11 +1,10 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
-import { Copy, Download, Plus, Trash2 } from 'lucide-react'
+import { Copy, Download, Plus, Settings2, Trash2 } from 'lucide-react'
 import {
   LED_ASPECT_PRESETS,
   LED_CABINET_PRESETS,
   calculateScreenFromSpec,
   createDefaultLedScreen,
-  formatMm,
   formatPx,
   metersToCabinetGrid,
   otherSideFromAspect,
@@ -22,6 +21,17 @@ import {
   type LedPixelMapExportMode,
 } from '../calculators/ledPixelMap'
 import LedScreenCssPreview from './LedScreenCssPreview'
+import LedScreenRoleMapModal from './LedScreenRoleMapModal'
+import { useEquipment } from '../../equipment/hooks/useEquipment'
+import { listStagePlanRoleMaps } from '../api/stagePlanRoleMaps.api'
+import {
+  LED_SCREEN_CATALOG_KEY_LABELS,
+  ledScreenBomLines,
+} from '../utils/ledScreenPlanSet'
+import {
+  resolveLedScreenOrderLines,
+  ledScreenApplyBlockingIssues,
+} from '../utils/applyLedScreenToOrder'
 
 function parseNum(raw: string): number {
   const normalized = raw.trim().replace(/\s/g, '').replace(',', '.')
@@ -51,6 +61,14 @@ function Row({
   )
 }
 
+function segmentBtn(active: boolean): string {
+  return `px-2 py-1 text-xs transition-colors ${
+    active
+      ? 'bg-primary/15 text-primary'
+      : 'text-muted-foreground hover:bg-background hover:text-foreground'
+  }`
+}
+
 type SizeMode = 'cabinets' | 'meters' | 'widthAspect' | 'heightAspect'
 
 function closestAspectId(ratio: number): LedAspectPresetId {
@@ -66,13 +84,20 @@ export default function LedScreensWorkspace({
   logoUrl,
   projectName,
   compactHeader: _compactHeader,
+  fillHeight = false,
+  onApply,
+  applyBusy = false,
+  onDirtyChange,
 }: {
   project: LedScreenProjectPayload
   onChange: (next: LedScreenProjectPayload) => void
   logoUrl?: string | null
   projectName?: string
-  /** Zachowane dla kompatybilności z modalem zlecenia. */
   compactHeader?: boolean
+  fillHeight?: boolean
+  onApply?: (project: LedScreenProjectPayload) => void | Promise<void>
+  applyBusy?: boolean
+  onDirtyChange?: (dirty: boolean) => void
 }) {
   void _compactHeader
   const active =
@@ -95,8 +120,27 @@ export default function LedScreensWorkspace({
   const [exportBusy, setExportBusy] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
+  const [rightTab, setRightTab] = useState<'config' | 'bom'>('config')
+  const [roleMapOpen, setRoleMapOpen] = useState(false)
+  const [confirmRemove, setConfirmRemove] = useState(false)
+  const [applyError, setApplyError] = useState<string | null>(null)
+  const [roleMaps, setRoleMaps] = useState<
+    Array<{
+      roleKey: string
+      action: 'map' | 'attach' | 'skip'
+      equipmentId?: string | null
+      attachToRoleKey?: string | null
+    }>
+  >([])
+  const { data: catalogPage } = useEquipment({ limit: 500 })
+  const catalog = catalogPage?.data ?? []
 
-  // Sync form from active screen when selection changes
+  useEffect(() => {
+    void listStagePlanRoleMaps()
+      .then((maps) => setRoleMaps(maps))
+      .catch(() => setRoleMaps([]))
+  }, [roleMapOpen])
+
   useEffect(() => {
     if (!active) return
     setCabWRaw(String(active.cabinetWidthMm))
@@ -177,7 +221,6 @@ export default function LedScreensWorkspace({
     })
   }
 
-  // Push form → model
   useEffect(() => {
     if (!active) return
     const layoutXM = Number.isFinite(parseNum(layoutXRaw)) ? parseNum(layoutXRaw) : 0
@@ -222,6 +265,40 @@ export default function LedScreensWorkspace({
   ])
 
   const result = active ? calculateScreenFromSpec(active) : { ok: false as const, error: 'Brak ekranu' }
+
+  const bom = useMemo(() => ledScreenBomLines(project), [project])
+  const orderPreview = useMemo(
+    () =>
+      resolveLedScreenOrderLines({
+        project,
+        maps: roleMaps,
+        catalog,
+      }),
+    [project, roleMaps, catalog]
+  )
+  const blocking = useMemo(
+    () => ledScreenApplyBlockingIssues(orderPreview.issues),
+    [orderPreview.issues]
+  )
+  const skippedCount = bom.filter((line) => {
+    const mapped = orderPreview.lines.some((l) => l.catalogKey === line.catalogKey)
+    if (mapped) return false
+    const map = roleMaps.find((m) => m.roleKey === line.catalogKey)
+    return map?.action === 'skip'
+  }).length
+  const needsMapping = bom.length > 0 && (roleMaps.length === 0 || blocking.length > 0)
+
+  const applyButtonLabel = useMemo(() => {
+    const lines = orderPreview.lines
+    if (lines.length === 0) return 'Dodaj do zlecenia'
+    if (lines.length === 1) {
+      const l = lines[0]!
+      return `Dodaj do zlecenia: ${l.quantity} ${l.unit === 'szt.' ? 'szt.' : l.unit}`
+    }
+    const screen = lines.find((l) => l.catalogKey === 'led-screen')
+    if (screen) return `Dodaj do zlecenia: ${screen.quantity} m² ekranu (+ ${lines.length - 1} poz.)`
+    return `Dodaj do zlecenia: ${lines.length} pozycji`
+  }, [orderPreview.lines])
 
   const applyPreset = (id: string) => {
     const preset = LED_CABINET_PRESETS.find((p) => p.id === id)
@@ -269,6 +346,7 @@ export default function LedScreensWorkspace({
       activeScreenId: screens[0]!.id,
       screens,
     })
+    setConfirmRemove(false)
   }
 
   const applyBetter = (cols: number, rws: number) => {
@@ -284,7 +362,6 @@ export default function LedScreensWorkspace({
     setExportError(null)
     const baseName = projectName?.trim() || 'Projekt LED'
     try {
-      // logoUrl z props = override; brak = domyślne logo Lama na mapie
       const mapOpts = { logoUrl, variant: 'tech' as const }
       if (mode === 'active') {
         if (pixelMapTooLarge(result)) {
@@ -312,6 +389,29 @@ export default function LedScreensWorkspace({
     }
   }
 
+  const handleApplyClick = async () => {
+    if (!onApply) return
+    setApplyError(null)
+    let maps = roleMaps
+    try {
+      maps = await listStagePlanRoleMaps()
+      setRoleMaps(maps)
+    } catch {
+      // cache
+    }
+    const preview = resolveLedScreenOrderLines({ project, maps, catalog })
+    const block = ledScreenApplyBlockingIssues(preview.issues)
+    if (block.length > 0) {
+      setApplyError(
+        'Nie można dodać LED — ustaw Mapowanie (ekran / stabilizacja / procesor).'
+      )
+      setRightTab('bom')
+      return
+    }
+    await onApply(project)
+    onDirtyChange?.(false)
+  }
+
   const preventSubmit = (e: FormEvent) => e.preventDefault()
 
   if (!active) {
@@ -327,91 +427,452 @@ export default function LedScreensWorkspace({
     return acc + (r.ok ? r.areaM2 : 0)
   }, 0)
 
-  return (
-    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(300px,1fr)]">
-      {/* LEWA — scena / projektowanie */}
-      <section className="space-y-3 rounded-lg border border-border bg-surface/40 p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-sm font-semibold tracking-tight">Scena</h3>
-          <div className="flex flex-wrap gap-1.5">
-            {project.screens.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => onChange({ ...project, activeScreenId: s.id })}
-                className={`rounded border px-2.5 py-1 text-xs ${
-                  s.id === active.id
-                    ? 'border-primary bg-primary/10 text-primary'
-                    : 'border-border text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {s.label}
-              </button>
-            ))}
+  const configForm = (
+    <form onSubmit={preventSubmit} className="space-y-3">
+      <div>
+        <label className="mb-1 block text-[11px] text-muted-foreground" htmlFor="led-label">
+          Nazwa ekranu
+        </label>
+        <input
+          id="led-label"
+          className="w-full rounded border border-border bg-background px-2.5 py-1.5 text-sm"
+          value={labelRaw}
+          onChange={(e) => setLabelRaw(e.target.value)}
+        />
+      </div>
+
+      <div>
+        <div className="mb-1 flex items-baseline justify-between gap-2">
+          <span className="text-[11px] text-muted-foreground">Preset kabinetu</span>
+        </div>
+        <div className="inline-flex max-w-full flex-wrap overflow-hidden rounded-md border border-border">
+          {LED_CABINET_PRESETS.map((preset, index) => (
+            <button
+              key={preset.id}
+              type="button"
+              onClick={() => applyPreset(preset.id)}
+              className={`${segmentBtn(activePreset === preset.id)} ${
+                index > 0 ? 'border-l border-border' : ''
+              }`}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        <div>
+          <label className="mb-1 block text-[11px] text-muted-foreground" htmlFor="cab-w">
+            Kabinet szer. mm
+          </label>
+          <input
+            id="cab-w"
+            type="text"
+            inputMode="decimal"
+            className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm tabular-nums"
+            value={cabWRaw}
+            onChange={(e) => {
+              setActivePreset(null)
+              setCabWRaw(e.target.value)
+            }}
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] text-muted-foreground" htmlFor="cab-h">
+            Kabinet wys. mm
+          </label>
+          <input
+            id="cab-h"
+            type="text"
+            inputMode="decimal"
+            className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm tabular-nums"
+            value={cabHRaw}
+            onChange={(e) => {
+              setActivePreset(null)
+              setCabHRaw(e.target.value)
+            }}
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] text-muted-foreground" htmlFor="pitch">
+            Pitch P mm
+          </label>
+          <input
+            id="pitch"
+            type="text"
+            inputMode="decimal"
+            className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm tabular-nums"
+            value={pitchRaw}
+            onChange={(e) => {
+              setActivePreset(null)
+              setPitchRaw(e.target.value)
+            }}
+          />
+        </div>
+      </div>
+
+      <div>
+        <div className="mb-1 flex items-baseline justify-between">
+          <span className="text-[11px] text-muted-foreground">Proporcja</span>
+          {result.ok ? (
+            <span className="text-xs font-medium tabular-nums">{result.aspectLabel}</span>
+          ) : null}
+        </div>
+        <div className="inline-flex max-w-full flex-wrap overflow-hidden rounded-md border border-border">
+          {LED_ASPECT_PRESETS.map((preset, index) => (
+            <button
+              key={preset.id}
+              type="button"
+              onClick={() => setAspectId(preset.id)}
+              className={`${segmentBtn(aspectId === preset.id)} ${
+                index > 0 ? 'border-l border-border' : ''
+              }`}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+        {aspectId === 'custom' ? (
+          <input
+            type="text"
+            inputMode="decimal"
+            aria-label="Własna proporcja"
+            placeholder="16:9 albo 1.78"
+            className="mt-2 w-full rounded border border-border bg-background px-2.5 py-1.5 text-sm tabular-nums"
+            value={customAspectRaw}
+            onChange={(e) => setCustomAspectRaw(e.target.value)}
+          />
+        ) : null}
+      </div>
+
+      <div>
+        <div className="mb-1 text-[11px] text-muted-foreground">Wymiary ekranu</div>
+        <div className="inline-flex max-w-full flex-wrap overflow-hidden rounded-md border border-border">
+          {(
+            [
+              ['cabinets', 'Kabinety'],
+              ['meters', 'Metry'],
+              ['widthAspect', 'Szer.+prop.'],
+              ['heightAspect', 'Wys.+prop.'],
+            ] as const
+          ).map(([id, label], index) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setSizeMode(id)}
+              className={`${segmentBtn(sizeMode === id)} ${index > 0 ? 'border-l border-border' : ''}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {sizeMode === 'cabinets' ? (
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="mb-1 block text-[11px] text-muted-foreground" htmlFor="cols">
+              Kolumny
+            </label>
+            <input
+              id="cols"
+              type="number"
+              min={1}
+              step={1}
+              className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm tabular-nums"
+              value={colsRaw}
+              onChange={(e) => setColsRaw(e.target.value)}
+            />
           </div>
+          <div>
+            <label className="mb-1 block text-[11px] text-muted-foreground" htmlFor="rows">
+              Wiersze
+            </label>
+            <input
+              id="rows"
+              type="number"
+              min={1}
+              step={1}
+              className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm tabular-nums"
+              value={rowsRaw}
+              onChange={(e) => setRowsRaw(e.target.value)}
+            />
+          </div>
+        </div>
+      ) : null}
+
+      {sizeMode === 'meters' || sizeMode === 'widthAspect' ? (
+        <div>
+          <label className="mb-1 block text-[11px] text-muted-foreground" htmlFor="target-w">
+            Docelowa szerokość (m)
+          </label>
+          <input
+            id="target-w"
+            type="text"
+            inputMode="decimal"
+            className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm tabular-nums"
+            value={targetWRaw}
+            onChange={(e) => setTargetWRaw(e.target.value)}
+          />
+        </div>
+      ) : null}
+
+      {sizeMode === 'meters' || sizeMode === 'heightAspect' ? (
+        <div>
+          <label className="mb-1 block text-[11px] text-muted-foreground" htmlFor="target-h">
+            Docelowa wysokość (m)
+          </label>
+          <input
+            id="target-h"
+            type="text"
+            inputMode="decimal"
+            className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm tabular-nums"
+            value={targetHRaw}
+            onChange={(e) => setTargetHRaw(e.target.value)}
+          />
+        </div>
+      ) : null}
+
+      {gridFromMeters ? (
+        <p className="rounded border border-border bg-background/50 px-2.5 py-2 text-xs text-muted-foreground">
+          Snap do siatki: {gridFromMeters.columns}×{gridFromMeters.rows} →{' '}
+          {gridFromMeters.actualWidthM} × {gridFromMeters.actualHeightM} m
+        </p>
+      ) : null}
+
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="mb-1 block text-[11px] text-muted-foreground" htmlFor="layout-x">
+            Pozycja X (m)
+          </label>
+          <input
+            id="layout-x"
+            type="text"
+            inputMode="decimal"
+            className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm tabular-nums"
+            value={layoutXRaw}
+            onChange={(e) => setLayoutXRaw(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] text-muted-foreground" htmlFor="layout-y">
+            Pozycja Y (m)
+          </label>
+          <input
+            id="layout-y"
+            type="text"
+            inputMode="decimal"
+            className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm tabular-nums"
+            value={layoutYRaw}
+            onChange={(e) => setLayoutYRaw(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {result.ok && result.deviation.percent > 0.5 ? (
+        <div className="space-y-1 rounded border border-warning/30 bg-warning/5 p-2 text-xs">
+          <Row
+            label="Δ proporcji"
+            value={`${result.deviation.percent.toFixed(2)} %`}
+            emphasize
+          />
+          {result.deviation.betterSameColumns ? (
+            <button
+              type="button"
+              onClick={() =>
+                applyBetter(
+                  result.deviation.betterSameColumns!.columns,
+                  result.deviation.betterSameColumns!.rows
+                )
+              }
+              className="w-full rounded border border-border px-2 py-1 text-left text-[11px] hover:border-primary/40"
+            >
+              Bliżej przy {result.deviation.betterSameColumns.columns}×
+              {result.deviation.betterSameColumns.rows}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </form>
+  )
+
+  const bomPanel = (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium">Rozpiska LED</span>
+        <button
+          type="button"
+          onClick={() => setRoleMapOpen(true)}
+          className={`inline-flex items-center gap-1.5 rounded border px-2.5 py-1.5 text-xs font-medium ${
+            needsMapping
+              ? 'border-warning bg-warning/15 text-warning'
+              : 'border-primary/50 bg-primary/10 text-primary'
+          }`}
+        >
+          <Settings2 size={14} />
+          Mapowanie
+          {needsMapping ? ' · ustaw' : ''}
+        </button>
+      </div>
+      {needsMapping ? (
+        <p className="rounded border border-warning/40 bg-warning/10 px-2 py-1.5 text-[11px] text-warning">
+          Ustaw mapowanie ekranu / stabilizacji / procesora przed dodaniem do zlecenia.
+        </p>
+      ) : null}
+      {bom.length === 0 ? (
+        <p className="text-xs text-muted-foreground">Dodaj ekran, żeby zobaczyć rozpiskę.</p>
+      ) : (
+        <div className="overflow-auto rounded border border-border">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-surface-2 text-left text-xs text-muted-foreground">
+              <tr>
+                <th className="px-2 py-1.5 font-medium">Pozycja</th>
+                <th className="w-20 whitespace-nowrap px-2 py-1.5 text-right font-medium">Ilość</th>
+                <th className="px-2 py-1.5 font-medium">W zleceniu</th>
+              </tr>
+            </thead>
+            <tbody>
+              {bom.map((line) => {
+                const mapped = orderPreview.lines.find((l) => l.catalogKey === line.catalogKey)
+                const map = roleMaps.find((m) => m.roleKey === line.catalogKey)
+                const skipped = map?.action === 'skip'
+                return (
+                  <tr key={line.catalogKey} className="border-t border-border/60">
+                    <td className="px-2 py-1.5">
+                      {line.name}
+                      <div className="text-[10px] text-muted-foreground">
+                        {LED_SCREEN_CATALOG_KEY_LABELS[line.catalogKey] ?? line.catalogKey}
+                      </div>
+                    </td>
+                    <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums">
+                      {line.quantity}&nbsp;{line.unit}
+                    </td>
+                    <td className="px-2 py-1.5 text-xs">
+                      {mapped ? (
+                        <span className="text-primary">
+                          ✓ w zleceniu
+                          <span className="mt-0.5 block text-[10px] text-muted-foreground">
+                            {mapped.equipment.name}
+                          </span>
+                        </span>
+                      ) : skipped ? (
+                        <span className="text-muted-foreground/70">tylko plan</span>
+                      ) : (
+                        <span className="text-warning">— brak mapowania</span>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+
+  return (
+    <div
+      className={`grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1.55fr)_minmax(300px,1fr)] xl:items-stretch ${
+        fillHeight ? 'h-full min-h-0' : ''
+      }`}
+    >
+      <section
+        className={`flex flex-col gap-2 rounded-lg border border-border/80 bg-background/50 p-3 ${
+          fillHeight ? 'h-full min-h-0 overflow-hidden' : ''
+        }`}
+      >
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-sm font-semibold">Scena</span>
+          {project.screens.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => onChange({ ...project, activeScreenId: s.id })}
+              className={`rounded border px-2 py-1 text-xs ${
+                s.id === active.id
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
           <button
             type="button"
             onClick={addScreen}
-            className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:border-primary/40"
+            className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs"
           >
             <Plus size={12} /> Dodaj
           </button>
           <button
             type="button"
             onClick={duplicateActive}
-            className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:border-primary/40"
+            className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs"
           >
             <Copy size={12} /> Duplikuj
           </button>
-          <button
-            type="button"
-            onClick={removeActive}
-            disabled={project.screens.length <= 1}
-            className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs text-red-400 hover:border-red-400/50 disabled:opacity-40"
-          >
-            <Trash2 size={12} /> Usuń
-          </button>
+          {confirmRemove ? (
+            <span className="flex items-center gap-1 text-[11px]">
+              <span className="text-muted-foreground">Usunąć {active.label}?</span>
+              <button
+                type="button"
+                className="rounded border border-red-500/50 px-1.5 py-0.5 text-red-400"
+                onClick={removeActive}
+              >
+                Tak
+              </button>
+              <button
+                type="button"
+                className="rounded border border-border px-1.5 py-0.5"
+                onClick={() => setConfirmRemove(false)}
+              >
+                Nie
+              </button>
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmRemove(true)}
+              disabled={project.screens.length <= 1}
+              className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs text-red-400 disabled:opacity-40"
+            >
+              <Trash2 size={12} /> Usuń
+            </button>
+          )}
           <div className="relative ml-auto">
             <button
               type="button"
-              onClick={() => setExportMenuOpen((open) => !open)}
+              onClick={() => setExportMenuOpen((o) => !o)}
               disabled={exportBusy || !result.ok}
-              className="inline-flex items-center gap-1.5 rounded border border-primary px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/10 disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs disabled:opacity-50"
             >
               <Download size={14} />
-              {exportBusy ? 'Generuję…' : 'PNG'}
+              {exportBusy ? '…' : 'PNG'}
             </button>
             {exportMenuOpen ? (
-              <div className="absolute right-0 z-30 mt-1 w-64 overflow-hidden rounded-md border border-border bg-surface shadow-lg">
+              <div className="absolute right-0 z-30 mt-1 w-56 overflow-hidden rounded-md border border-border bg-surface shadow-lg">
                 <button
                   type="button"
-                  className="block w-full px-3 py-2 text-left text-xs hover:bg-surface-2"
+                  className="block w-full px-3 py-2 text-left text-xs hover:bg-background"
                   onClick={() => void onExport('active')}
                 >
-                  <span className="font-medium">Tylko aktywny</span>
-                  <span className="mt-0.5 block text-[10px] text-muted-foreground">
-                    {active.label} — jeden PNG 1:1
-                  </span>
+                  Tylko aktywny
                 </button>
                 <button
                   type="button"
-                  className="block w-full px-3 py-2 text-left text-xs hover:bg-surface-2"
+                  className="block w-full px-3 py-2 text-left text-xs hover:bg-background"
                   onClick={() => void onExport('all-separate')}
                 >
-                  <span className="font-medium">Wszystkie osobno</span>
-                  <span className="mt-0.5 block text-[10px] text-muted-foreground">
-                    {project.screens.length} plików PNG
-                  </span>
+                  Wszystkie osobno
                 </button>
                 <button
                   type="button"
-                  className="block w-full px-3 py-2 text-left text-xs hover:bg-surface-2"
+                  className="block w-full px-3 py-2 text-left text-xs hover:bg-background"
                   onClick={() => void onExport('combined-canvas')}
                 >
-                  <span className="font-medium">Pełen canvas</span>
-                  <span className="mt-0.5 block text-[10px] text-muted-foreground">
-                    Jeden PNG wg pozycji na scenie
-                  </span>
+                  Pełen canvas
                 </button>
               </div>
             ) : null}
@@ -419,386 +880,153 @@ export default function LedScreensWorkspace({
         </div>
 
         {exportError ? (
-          <p className="rounded border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-xs text-red-400">
+          <p className="rounded border border-red-500/30 bg-red-500/10 px-2 py-1 text-xs text-red-400">
             {exportError}
           </p>
         ) : null}
 
-        <LedScreenCssPreview
-          screens={project.screens}
-          activeScreenId={active.id}
-          onSelectScreen={(id) => onChange({ ...project, activeScreenId: id })}
-          onMoveScreen={(id, layoutXM, layoutYM) => {
-            onChange({
-              ...project,
-              activeScreenId: id,
-              screens: project.screens.map((s) =>
-                s.id === id ? { ...s, layoutXM, layoutYM } : s
-              ),
-            })
-            if (id === active.id) {
-              setLayoutXRaw(String(layoutXM))
-              setLayoutYRaw(String(layoutYM))
-            }
-          }}
-        />
-        <p className="text-[11px] text-muted-foreground">
-          Przeciągaj ekrany na scenie · etykieta: rozmiar, pod spodem siatka kabinetów i pitch
+        <div
+          className={`relative min-h-[240px] overflow-hidden rounded-md border border-border bg-background ${
+            fillHeight ? 'flex-1' : 'h-[380px]'
+          }`}
+        >
+          <LedScreenCssPreview
+            fillContainer
+            screens={project.screens}
+            activeScreenId={active.id}
+            onSelectScreen={(id) => onChange({ ...project, activeScreenId: id })}
+            onMoveScreen={(id, layoutXM, layoutYM) => {
+              onChange({
+                ...project,
+                activeScreenId: id,
+                screens: project.screens.map((s) =>
+                  s.id === id ? { ...s, layoutXM, layoutYM } : s
+                ),
+              })
+              if (id === active.id) {
+                setLayoutXRaw(String(layoutXM))
+                setLayoutYRaw(String(layoutYM))
+              }
+            }}
+          />
+        </div>
+        <p className="shrink-0 text-[12px] text-foreground/85">
+          Przeciągaj ekrany na scenie · snap 0,25 m · etykieta: rozmiar, pod spodem siatka i pitch
         </p>
       </section>
 
-      {/* PRAWA — opcje + overview */}
-      <aside className="space-y-4 rounded-lg border border-border bg-surface p-4">
-        <div>
-          <h3 className="mb-2 text-sm font-semibold tracking-tight">Podsumowanie</h3>
-          {!result.ok ? (
-            <p className="text-sm text-red-400">{result.error}</p>
+      <aside
+        className={`flex flex-col overflow-hidden rounded-lg border border-border bg-surface ${
+          fillHeight ? 'h-full min-h-0' : ''
+        }`}
+      >
+        <div className="shrink-0 border-b border-border px-3 py-2 text-xs tabular-nums">
+          {result.ok ? (
+            <>
+              <span className="font-medium">
+                {result.screenWidthM}×{result.screenHeightM} m
+              </span>
+              <span className="text-muted-foreground"> · </span>
+              {result.areaM2} m²
+              <span className="text-muted-foreground"> · </span>
+              {result.columns}×{result.rows}
+              <span className="text-muted-foreground"> · </span>
+              {formatPx(result.screenPxW)}×{formatPx(result.screenPxH)} px
+            </>
           ) : (
-            <div className="space-y-2">
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="rounded border border-border bg-background px-2 py-1.5">
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Rozmiar</div>
-                  <div className="tabular-nums leading-snug">
-                    {result.screenWidthM} × {result.screenHeightM} m
-                  </div>
-                </div>
-                <div className="rounded border border-border bg-background px-2 py-1.5">
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Kabinety</div>
-                  <div className="tabular-nums leading-snug">
-                    {result.columns}×{result.rows} · {result.cabinetsTotal} szt.
-                  </div>
-                </div>
-                <div className="rounded border border-border bg-background px-2 py-1.5">
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Powierzchnia</div>
-                  <div className="tabular-nums leading-snug">{result.areaM2} m²</div>
-                </div>
-                <div className="rounded border border-border bg-background px-2 py-1.5">
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Piksele</div>
-                  <div className="tabular-nums leading-snug">
-                    {formatPx(result.screenPxW)} × {formatPx(result.screenPxH)}
-                  </div>
-                </div>
-              </div>
-              <Row
-                label="Proporcja"
-                value={`${result.aspectLabel} (${result.actualRatio.toFixed(3)})`}
-                muted
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Projekt łącznie: {projectCabinets} kab. · {projectArea.toFixed(2)} m²
-              </p>
-            </div>
+            <span className="text-red-400">{result.error}</span>
           )}
+          <div className="mt-0.5 text-[10px] text-muted-foreground">
+            Projekt: {projectCabinets} kab. · {projectArea.toFixed(2)} m² · {project.screens.length}{' '}
+            ekr.
+          </div>
         </div>
 
-        {result.ok ? (
-          <div className="space-y-2 rounded border border-border bg-background/40 p-3">
-            <h3 className="text-xs font-semibold">Rozjazd vs proporcja</h3>
-            <Row
-              label="Δ procent"
-              value={`${result.deviation.percent.toFixed(2)} %`}
-              emphasize={result.deviation.percent > 0.5}
-            />
-            <Row
-              label="Żeby trafić: wysokość"
-              value={
-                result.deviation.heightDeltaMm === 0
-                  ? 'OK'
-                  : `${result.deviation.heightDeltaMm > 0 ? '+' : ''}${formatMm(result.deviation.heightDeltaMm)}`
-              }
-            />
-            <Row
-              label="Żeby trafić: szerokość"
-              value={
-                result.deviation.widthDeltaMm === 0
-                  ? 'OK'
-                  : `${result.deviation.widthDeltaMm > 0 ? '+' : ''}${formatMm(result.deviation.widthDeltaMm)}`
-              }
-            />
-            {result.deviation.betterSameColumns ? (
-              <button
-                type="button"
-                onClick={() =>
-                  applyBetter(
-                    result.deviation.betterSameColumns!.columns,
-                    result.deviation.betterSameColumns!.rows
-                  )
-                }
-                className="mt-1 w-full rounded border border-border px-2.5 py-1.5 text-left text-xs hover:border-primary/40 hover:bg-primary/5"
-              >
-                Przy {result.deviation.betterSameColumns.columns} kolumnach bliżej:{' '}
-                <span className="font-medium text-primary">
-                  {result.deviation.betterSameColumns.columns}×{result.deviation.betterSameColumns.rows}
-                </span>
-              </button>
+        <div className="flex shrink-0 border-b border-border">
+          <button
+            type="button"
+            className={`flex-1 px-3 py-2 text-xs font-medium ${
+              rightTab === 'config'
+                ? 'border-b-2 border-primary text-primary'
+                : 'text-muted-foreground'
+            }`}
+            onClick={() => setRightTab('config')}
+          >
+            Konfiguracja
+          </button>
+          <button
+            type="button"
+            className={`flex-1 px-3 py-2 text-xs font-medium ${
+              rightTab === 'bom'
+                ? 'border-b-2 border-primary text-primary'
+                : 'text-muted-foreground'
+            }`}
+            onClick={() => setRightTab('bom')}
+          >
+            Rozpiska ({bom.length})
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+          {rightTab === 'config' ? configForm : bomPanel}
+        </div>
+
+        {onApply ? (
+          <div className="shrink-0 space-y-2 border-t border-border bg-surface px-3 py-3 shadow-[0_-8px_24px_rgba(0,0,0,0.25)]">
+            <div className="rounded border border-border bg-background/70 px-2.5 py-2 text-xs">
+              <div className="mb-1 font-medium">Po zastosowaniu</div>
+              {orderPreview.lines.length === 0 ? (
+                <p className="text-muted-foreground">Brak pozycji — ustaw Mapowanie.</p>
+              ) : (
+                <ul className="space-y-0.5">
+                  {orderPreview.lines.map((line) => (
+                    <li key={line.catalogKey} className="flex justify-between gap-2">
+                      <span className="truncate">{line.equipment.name}</span>
+                      <span className="whitespace-nowrap tabular-nums text-muted-foreground">
+                        {line.quantity} {line.unit}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {skippedCount > 0 ? (
+                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  Pominięte: {skippedCount} pozycji (tylko plan)
+                </p>
+              ) : null}
+              {needsMapping ? (
+                <p className="mt-1 text-[11px] text-warning">
+                  Brak mapowania części pozycji oferty
+                </p>
+              ) : null}
+            </div>
+            {applyError ? (
+              <p className="rounded border border-red-500/40 bg-red-500/10 px-2 py-1.5 text-[11px] text-red-300">
+                {applyError}
+              </p>
             ) : null}
-            {result.deviation.betterSameRows ? (
-              <button
-                type="button"
-                onClick={() =>
-                  applyBetter(
-                    result.deviation.betterSameRows!.columns,
-                    result.deviation.betterSameRows!.rows
-                  )
-                }
-                className="w-full rounded border border-border px-2.5 py-1.5 text-left text-xs hover:border-primary/40 hover:bg-primary/5"
-              >
-                Przy {result.deviation.betterSameRows.rows} wierszach bliżej:{' '}
-                <span className="font-medium text-primary">
-                  {result.deviation.betterSameRows.columns}×{result.deviation.betterSameRows.rows}
-                </span>
-              </button>
-            ) : null}
+            <button
+              type="button"
+              disabled={applyBusy || project.screens.length === 0}
+              onClick={() => void handleApplyClick()}
+              className="w-full rounded border-2 border-primary px-3 py-2 text-xs font-semibold text-primary hover:bg-primary/10 disabled:opacity-50"
+            >
+              {applyBusy ? 'Zapis…' : applyButtonLabel}
+            </button>
           </div>
         ) : null}
-
-        <div className="border-t border-border pt-3">
-          <h3 className="mb-2 text-sm font-semibold tracking-tight">Opcje — {active.label}</h3>
-          <form onSubmit={preventSubmit} className="space-y-3">
-          <div>
-            <label className="mb-1 block text-xs font-medium" htmlFor="led-label">
-              Nazwa ekranu
-            </label>
-            <input
-              id="led-label"
-              className="w-full rounded border border-border bg-background px-2.5 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-              value={labelRaw}
-              onChange={(e) => setLabelRaw(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <div className="mb-1.5 text-xs font-medium">Preset kabinetu</div>
-            <div className="flex flex-wrap gap-1.5">
-              {LED_CABINET_PRESETS.map((preset) => (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => applyPreset(preset.id)}
-                  className={`rounded border px-2 py-1 text-xs ${
-                    activePreset === preset.id
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <label className="mb-1 block text-xs font-medium" htmlFor="cab-w">
-                Kabinet szer. mm
-              </label>
-              <input
-                id="cab-w"
-                type="text"
-                inputMode="decimal"
-                className="w-full rounded border border-border bg-background px-2.5 py-1.5 text-sm tabular-nums focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-                value={cabWRaw}
-                onChange={(e) => {
-                  setActivePreset(null)
-                  setCabWRaw(e.target.value)
-                }}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium" htmlFor="cab-h">
-                Kabinet wys. mm
-              </label>
-              <input
-                id="cab-h"
-                type="text"
-                inputMode="decimal"
-                className="w-full rounded border border-border bg-background px-2.5 py-1.5 text-sm tabular-nums focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-                value={cabHRaw}
-                onChange={(e) => {
-                  setActivePreset(null)
-                  setCabHRaw(e.target.value)
-                }}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium" htmlFor="pitch">
-                Pitch P mm
-              </label>
-              <input
-                id="pitch"
-                type="text"
-                inputMode="decimal"
-                className="w-full rounded border border-border bg-background px-2.5 py-1.5 text-sm tabular-nums focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-                value={pitchRaw}
-                onChange={(e) => {
-                  setActivePreset(null)
-                  setPitchRaw(e.target.value)
-                }}
-              />
-            </div>
-          </div>
-
-          <div>
-            <div className="mb-1.5 text-xs font-medium">Proporcja odniesienia</div>
-            <div className="flex flex-wrap gap-1.5">
-              {LED_ASPECT_PRESETS.map((preset) => (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => setAspectId(preset.id)}
-                  className={`rounded border px-2 py-1 text-xs ${
-                    aspectId === preset.id
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
-            {aspectId === 'custom' ? (
-              <input
-                type="text"
-                inputMode="decimal"
-                aria-label="Własna proporcja"
-                placeholder="16:9 albo 1.78"
-                className="mt-2 w-full rounded border border-border bg-background px-2.5 py-1.5 text-sm tabular-nums"
-                value={customAspectRaw}
-                onChange={(e) => setCustomAspectRaw(e.target.value)}
-              />
-            ) : null}
-          </div>
-
-          <div>
-            <div className="mb-1.5 text-xs font-medium">Wymiary ekranu</div>
-            <div className="flex flex-wrap gap-1.5">
-              {(
-                [
-                  ['cabinets', 'Kabinety X×Y'],
-                  ['meters', 'Metry W×H'],
-                  ['widthAspect', 'Szer. + proporcja'],
-                  ['heightAspect', 'Wys. + proporcja'],
-                ] as const
-              ).map(([id, label]) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setSizeMode(id)}
-                  className={`rounded border px-2 py-1 text-xs ${
-                    sizeMode === id
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {sizeMode === 'cabinets' ? (
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="mb-1 block text-xs font-medium" htmlFor="cols">
-                  Kolumny
-                </label>
-                <input
-                  id="cols"
-                  type="number"
-                  min={1}
-                  step={1}
-                  className="w-full rounded border border-border bg-background px-2.5 py-1.5 text-sm tabular-nums focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  value={colsRaw}
-                  onChange={(e) => setColsRaw(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium" htmlFor="rows">
-                  Wiersze
-                </label>
-                <input
-                  id="rows"
-                  type="number"
-                  min={1}
-                  step={1}
-                  className="w-full rounded border border-border bg-background px-2.5 py-1.5 text-sm tabular-nums focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  value={rowsRaw}
-                  onChange={(e) => setRowsRaw(e.target.value)}
-                />
-              </div>
-            </div>
-          ) : null}
-
-          {sizeMode === 'meters' || sizeMode === 'widthAspect' ? (
-            <div>
-              <label className="mb-1 block text-xs font-medium" htmlFor="target-w">
-                Docelowa szerokość (m)
-              </label>
-              <input
-                id="target-w"
-                type="text"
-                inputMode="decimal"
-                className="w-full rounded border border-border bg-background px-2.5 py-1.5 text-sm tabular-nums focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-                value={targetWRaw}
-                onChange={(e) => setTargetWRaw(e.target.value)}
-              />
-            </div>
-          ) : null}
-
-          {sizeMode === 'meters' || sizeMode === 'heightAspect' ? (
-            <div>
-              <label className="mb-1 block text-xs font-medium" htmlFor="target-h">
-                Docelowa wysokość (m)
-              </label>
-              <input
-                id="target-h"
-                type="text"
-                inputMode="decimal"
-                className="w-full rounded border border-border bg-background px-2.5 py-1.5 text-sm tabular-nums focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-                value={targetHRaw}
-                onChange={(e) => setTargetHRaw(e.target.value)}
-              />
-            </div>
-          ) : null}
-
-          {gridFromMeters ? (
-            <p className="rounded border border-border bg-background/50 px-2.5 py-2 text-xs text-muted-foreground">
-              Snap do siatki: {gridFromMeters.columns}×{gridFromMeters.rows} →{' '}
-              {gridFromMeters.actualWidthM} × {gridFromMeters.actualHeightM} m
-            </p>
-          ) : null}
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="mb-1 block text-xs font-medium" htmlFor="layout-x">
-                Pozycja X (m)
-              </label>
-              <input
-                id="layout-x"
-                type="text"
-                inputMode="decimal"
-                className="w-full rounded border border-border bg-background px-2.5 py-1.5 text-sm tabular-nums"
-                value={layoutXRaw}
-                onChange={(e) => setLayoutXRaw(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium" htmlFor="layout-y">
-                Pozycja Y (m)
-              </label>
-              <input
-                id="layout-y"
-                type="text"
-                inputMode="decimal"
-                className="w-full rounded border border-border bg-background px-2.5 py-1.5 text-sm tabular-nums"
-                value={layoutYRaw}
-                onChange={(e) => setLayoutYRaw(e.target.value)}
-              />
-            </div>
-          </div>
-          </form>
-        </div>
       </aside>
+
+      <LedScreenRoleMapModal
+        open={roleMapOpen}
+        project={project}
+        onClose={() => setRoleMapOpen(false)}
+        onSaved={() => {
+          void listStagePlanRoleMaps()
+            .then(setRoleMaps)
+            .catch(() => undefined)
+        }}
+      />
     </div>
   )
 }
