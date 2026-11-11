@@ -427,24 +427,26 @@ export default function LedScreensWorkspace({
     return acc + (r.ok ? r.areaM2 : 0)
   }, 0)
 
+  const fieldLabel = 'mb-0.5 block text-[10px] text-muted-foreground'
+  const fieldInput =
+    'w-full rounded border border-border bg-background px-2 py-1 text-xs tabular-nums'
+
   const configForm = (
-    <form onSubmit={preventSubmit} className="space-y-3">
+    <form onSubmit={preventSubmit} className="space-y-2">
       <div>
-        <label className="mb-1 block text-[11px] text-muted-foreground" htmlFor="led-label">
+        <label className={fieldLabel} htmlFor="led-label">
           Nazwa ekranu
         </label>
         <input
           id="led-label"
-          className="w-full rounded border border-border bg-background px-2.5 py-1.5 text-sm"
+          className="w-full rounded border border-border bg-background px-2 py-1 text-xs"
           value={labelRaw}
           onChange={(e) => setLabelRaw(e.target.value)}
         />
       </div>
 
       <div>
-        <div className="mb-1 flex items-baseline justify-between gap-2">
-          <span className="text-[11px] text-muted-foreground">Preset kabinetu</span>
-        </div>
+        <div className="mb-0.5 text-[10px] text-muted-foreground">Preset kabinetu</div>
         <div className="inline-flex max-w-full flex-wrap overflow-hidden rounded-md border border-border">
           {LED_CABINET_PRESETS.map((preset, index) => (
             <button
@@ -461,16 +463,16 @@ export default function LedScreensWorkspace({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 gap-1.5">
         <div>
-          <label className="mb-1 block text-[11px] text-muted-foreground" htmlFor="cab-w">
-            Kabinet szer. mm
+          <label className={fieldLabel} htmlFor="cab-w">
+            Kab. szer. mm
           </label>
           <input
             id="cab-w"
             type="text"
             inputMode="decimal"
-            className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm tabular-nums"
+            className={fieldInput}
             value={cabWRaw}
             onChange={(e) => {
               setActivePreset(null)
@@ -479,14 +481,14 @@ export default function LedScreensWorkspace({
           />
         </div>
         <div>
-          <label className="mb-1 block text-[11px] text-muted-foreground" htmlFor="cab-h">
-            Kabinet wys. mm
+          <label className={fieldLabel} htmlFor="cab-h">
+            Kab. wys. mm
           </label>
           <input
             id="cab-h"
             type="text"
             inputMode="decimal"
-            className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm tabular-nums"
+            className={fieldInput}
             value={cabHRaw}
             onChange={(e) => {
               setActivePreset(null)
@@ -495,14 +497,14 @@ export default function LedScreensWorkspace({
           />
         </div>
         <div>
-          <label className="mb-1 block text-[11px] text-muted-foreground" htmlFor="pitch">
+          <label className={fieldLabel} htmlFor="pitch">
             Pitch P mm
           </label>
           <input
             id="pitch"
             type="text"
             inputMode="decimal"
-            className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm tabular-nums"
+            className={fieldInput}
             value={pitchRaw}
             onChange={(e) => {
               setActivePreset(null)
@@ -513,10 +515,10 @@ export default function LedScreensWorkspace({
       </div>
 
       <div>
-        <div className="mb-1 flex items-baseline justify-between">
-          <span className="text-[11px] text-muted-foreground">Proporcja</span>
+        <div className="mb-0.5 flex items-baseline justify-between">
+          <span className="text-[10px] text-muted-foreground">Proporcja</span>
           {result.ok ? (
-            <span className="text-xs font-medium tabular-nums">{result.aspectLabel}</span>
+            <span className="text-[11px] font-medium tabular-nums">{result.aspectLabel}</span>
           ) : null}
         </div>
         <div className="inline-flex max-w-full flex-wrap overflow-hidden rounded-md border border-border">
@@ -539,7 +541,7 @@ export default function LedScreensWorkspace({
             inputMode="decimal"
             aria-label="Własna proporcja"
             placeholder="16:9 albo 1.78"
-            className="mt-2 w-full rounded border border-border bg-background px-2.5 py-1.5 text-sm tabular-nums"
+            className={`mt-1.5 ${fieldInput}`}
             value={customAspectRaw}
             onChange={(e) => setCustomAspectRaw(e.target.value)}
           />
@@ -547,7 +549,7 @@ export default function LedScreensWorkspace({
       </div>
 
       <div>
-        <div className="mb-1 text-[11px] text-muted-foreground">Wymiary ekranu</div>
+        <div className="mb-0.5 text-[10px] text-muted-foreground">Wymiary ekranu</div>
         <div className="inline-flex max-w-full flex-wrap overflow-hidden rounded-md border border-border">
           {(
             [
@@ -570,9 +572,9 @@ export default function LedScreensWorkspace({
       </div>
 
       {sizeMode === 'cabinets' ? (
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-1.5">
           <div>
-            <label className="mb-1 block text-[11px] text-muted-foreground" htmlFor="cols">
+            <label className={fieldLabel} htmlFor="cols">
               Kolumny
             </label>
             <input
@@ -580,13 +582,13 @@ export default function LedScreensWorkspace({
               type="number"
               min={1}
               step={1}
-              className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm tabular-nums"
+              className={fieldInput}
               value={colsRaw}
               onChange={(e) => setColsRaw(e.target.value)}
             />
           </div>
           <div>
-            <label className="mb-1 block text-[11px] text-muted-foreground" htmlFor="rows">
+            <label className={fieldLabel} htmlFor="rows">
               Wiersze
             </label>
             <input
@@ -594,7 +596,7 @@ export default function LedScreensWorkspace({
               type="number"
               min={1}
               step={1}
-              className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm tabular-nums"
+              className={fieldInput}
               value={rowsRaw}
               onChange={(e) => setRowsRaw(e.target.value)}
             />
@@ -602,32 +604,63 @@ export default function LedScreensWorkspace({
         </div>
       ) : null}
 
-      {sizeMode === 'meters' || sizeMode === 'widthAspect' ? (
+      {sizeMode === 'meters' ? (
+        <div className="grid grid-cols-2 gap-1.5">
+          <div>
+            <label className={fieldLabel} htmlFor="target-w">
+              Szerokość (m)
+            </label>
+            <input
+              id="target-w"
+              type="text"
+              inputMode="decimal"
+              className={fieldInput}
+              value={targetWRaw}
+              onChange={(e) => setTargetWRaw(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className={fieldLabel} htmlFor="target-h">
+              Wysokość (m)
+            </label>
+            <input
+              id="target-h"
+              type="text"
+              inputMode="decimal"
+              className={fieldInput}
+              value={targetHRaw}
+              onChange={(e) => setTargetHRaw(e.target.value)}
+            />
+          </div>
+        </div>
+      ) : null}
+
+      {sizeMode === 'widthAspect' ? (
         <div>
-          <label className="mb-1 block text-[11px] text-muted-foreground" htmlFor="target-w">
+          <label className={fieldLabel} htmlFor="target-w">
             Docelowa szerokość (m)
           </label>
           <input
             id="target-w"
             type="text"
             inputMode="decimal"
-            className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm tabular-nums"
+            className={fieldInput}
             value={targetWRaw}
             onChange={(e) => setTargetWRaw(e.target.value)}
           />
         </div>
       ) : null}
 
-      {sizeMode === 'meters' || sizeMode === 'heightAspect' ? (
+      {sizeMode === 'heightAspect' ? (
         <div>
-          <label className="mb-1 block text-[11px] text-muted-foreground" htmlFor="target-h">
+          <label className={fieldLabel} htmlFor="target-h">
             Docelowa wysokość (m)
           </label>
           <input
             id="target-h"
             type="text"
             inputMode="decimal"
-            className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm tabular-nums"
+            className={fieldInput}
             value={targetHRaw}
             onChange={(e) => setTargetHRaw(e.target.value)}
           />
@@ -635,35 +668,35 @@ export default function LedScreensWorkspace({
       ) : null}
 
       {gridFromMeters ? (
-        <p className="rounded border border-border bg-background/50 px-2.5 py-2 text-xs text-muted-foreground">
-          Snap do siatki: {gridFromMeters.columns}×{gridFromMeters.rows} →{' '}
-          {gridFromMeters.actualWidthM} × {gridFromMeters.actualHeightM} m
+        <p className="rounded border border-border bg-background/50 px-2 py-1 text-[11px] text-muted-foreground">
+          Snap: {gridFromMeters.columns}×{gridFromMeters.rows} → {gridFromMeters.actualWidthM} ×{' '}
+          {gridFromMeters.actualHeightM} m
         </p>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-1.5">
         <div>
-          <label className="mb-1 block text-[11px] text-muted-foreground" htmlFor="layout-x">
+          <label className={fieldLabel} htmlFor="layout-x">
             Pozycja X (m)
           </label>
           <input
             id="layout-x"
             type="text"
             inputMode="decimal"
-            className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm tabular-nums"
+            className={fieldInput}
             value={layoutXRaw}
             onChange={(e) => setLayoutXRaw(e.target.value)}
           />
         </div>
         <div>
-          <label className="mb-1 block text-[11px] text-muted-foreground" htmlFor="layout-y">
+          <label className={fieldLabel} htmlFor="layout-y">
             Pozycja Y (m)
           </label>
           <input
             id="layout-y"
             type="text"
             inputMode="decimal"
-            className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm tabular-nums"
+            className={fieldInput}
             value={layoutYRaw}
             onChange={(e) => setLayoutYRaw(e.target.value)}
           />
@@ -774,12 +807,12 @@ export default function LedScreensWorkspace({
 
   return (
     <div
-      className={`grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1.55fr)_minmax(300px,1fr)] xl:items-stretch ${
-        fillHeight ? 'h-full min-h-0' : ''
+      className={`grid grid-cols-1 gap-2 xl:grid-cols-[minmax(0,1.55fr)_minmax(280px,1fr)] xl:items-stretch ${
+        fillHeight ? 'h-full min-h-0 overflow-hidden' : ''
       }`}
     >
       <section
-        className={`flex flex-col gap-2 rounded-lg border border-border/80 bg-background/50 p-3 ${
+        className={`flex flex-col gap-1.5 rounded-lg border border-border/80 bg-background/50 p-2.5 ${
           fillHeight ? 'h-full min-h-0 overflow-hidden' : ''
         }`}
       >
@@ -886,8 +919,8 @@ export default function LedScreensWorkspace({
         ) : null}
 
         <div
-          className={`relative min-h-[240px] overflow-hidden rounded-md border border-border bg-background ${
-            fillHeight ? 'flex-1' : 'h-[380px]'
+          className={`relative overflow-hidden rounded-md border border-border bg-background ${
+            fillHeight ? 'min-h-0 flex-1' : 'h-[380px] min-h-[240px]'
           }`}
         >
           <LedScreenCssPreview
@@ -910,17 +943,17 @@ export default function LedScreensWorkspace({
             }}
           />
         </div>
-        <p className="shrink-0 text-[12px] text-foreground/85">
-          Przeciągaj ekrany na scenie · snap 0,25 m · etykieta: rozmiar, pod spodem siatka i pitch
+        <p className="shrink-0 text-[11px] text-foreground/80">
+          Przeciągaj ekrany · snap 0,25 m · etykieta: rozmiar / siatka / pitch
         </p>
       </section>
 
       <aside
-        className={`flex flex-col overflow-hidden rounded-lg border border-border bg-surface ${
-          fillHeight ? 'h-full min-h-0' : ''
+        className={`flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-surface ${
+          fillHeight ? 'h-full' : ''
         }`}
       >
-        <div className="shrink-0 border-b border-border px-3 py-2 text-xs tabular-nums">
+        <div className="shrink-0 border-b border-border px-2.5 py-1.5 text-[11px] tabular-nums">
           {result.ok ? (
             <>
               <span className="font-medium">
@@ -936,7 +969,7 @@ export default function LedScreensWorkspace({
           ) : (
             <span className="text-red-400">{result.error}</span>
           )}
-          <div className="mt-0.5 text-[10px] text-muted-foreground">
+          <div className="text-[10px] text-muted-foreground">
             Projekt: {projectCabinets} kab. · {projectArea.toFixed(2)} m² · {project.screens.length}{' '}
             ekr.
           </div>
@@ -945,7 +978,7 @@ export default function LedScreensWorkspace({
         <div className="flex shrink-0 border-b border-border">
           <button
             type="button"
-            className={`flex-1 px-3 py-2 text-xs font-medium ${
+            className={`flex-1 px-2.5 py-1.5 text-xs font-medium ${
               rightTab === 'config'
                 ? 'border-b-2 border-primary text-primary'
                 : 'text-muted-foreground'
@@ -956,7 +989,7 @@ export default function LedScreensWorkspace({
           </button>
           <button
             type="button"
-            className={`flex-1 px-3 py-2 text-xs font-medium ${
+            className={`flex-1 px-2.5 py-1.5 text-xs font-medium ${
               rightTab === 'bom'
                 ? 'border-b-2 border-primary text-primary'
                 : 'text-muted-foreground'
@@ -967,18 +1000,18 @@ export default function LedScreensWorkspace({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2.5">
           {rightTab === 'config' ? configForm : bomPanel}
         </div>
 
         {onApply ? (
-          <div className="shrink-0 space-y-2 border-t border-border bg-surface px-3 py-3 shadow-[0_-8px_24px_rgba(0,0,0,0.25)]">
-            <div className="rounded border border-border bg-background/70 px-2.5 py-2 text-xs">
-              <div className="mb-1 font-medium">Po zastosowaniu</div>
+          <div className="shrink-0 space-y-1.5 border-t border-border bg-surface px-2.5 py-2 shadow-[0_-6px_16px_rgba(0,0,0,0.2)]">
+            <div className="rounded border border-border bg-background/70 px-2 py-1.5 text-[11px]">
+              <div className="mb-0.5 font-medium">Po zastosowaniu</div>
               {orderPreview.lines.length === 0 ? (
                 <p className="text-muted-foreground">Brak pozycji — ustaw Mapowanie.</p>
               ) : (
-                <ul className="space-y-0.5">
+                <ul className="max-h-[4.5rem] space-y-0.5 overflow-y-auto overscroll-contain">
                   {orderPreview.lines.map((line) => (
                     <li key={line.catalogKey} className="flex justify-between gap-2">
                       <span className="truncate">{line.equipment.name}</span>
@@ -990,18 +1023,16 @@ export default function LedScreensWorkspace({
                 </ul>
               )}
               {skippedCount > 0 ? (
-                <p className="mt-1.5 text-[11px] text-muted-foreground">
-                  Pominięte: {skippedCount} pozycji (tylko plan)
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  Pominięte: {skippedCount} (tylko plan)
                 </p>
               ) : null}
               {needsMapping ? (
-                <p className="mt-1 text-[11px] text-warning">
-                  Brak mapowania części pozycji oferty
-                </p>
+                <p className="mt-0.5 text-[10px] text-warning">Brak mapowania części pozycji</p>
               ) : null}
             </div>
             {applyError ? (
-              <p className="rounded border border-red-500/40 bg-red-500/10 px-2 py-1.5 text-[11px] text-red-300">
+              <p className="rounded border border-red-500/40 bg-red-500/10 px-2 py-1 text-[11px] text-red-300">
                 {applyError}
               </p>
             ) : null}
@@ -1009,7 +1040,7 @@ export default function LedScreensWorkspace({
               type="button"
               disabled={applyBusy || project.screens.length === 0}
               onClick={() => void handleApplyClick()}
-              className="w-full rounded border-2 border-primary px-3 py-2 text-xs font-semibold text-primary hover:bg-primary/10 disabled:opacity-50"
+              className="w-full rounded border-2 border-primary px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/10 disabled:opacity-50"
             >
               {applyBusy ? 'Zapis…' : applyButtonLabel}
             </button>

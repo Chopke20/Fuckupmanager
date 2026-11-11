@@ -43,6 +43,15 @@ export default function LedScreensOrderModal({
     setPayload(initialProject ?? emptyLedScreenProject())
   }, [open, entryId, entryName, initialProject])
 
+  useEffect(() => {
+    if (!open) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [open])
+
   const requestClose = useCallback(() => {
     if (dirty) {
       setConfirmClose(true)
@@ -81,27 +90,27 @@ export default function LedScreensOrderModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden overscroll-none bg-black/50 p-2 sm:p-3"
       onClick={(e) => {
         if (e.target === e.currentTarget) requestClose()
       }}
     >
       <div
-        className="flex h-[min(90vh,880px)] w-full max-w-7xl flex-col overflow-hidden rounded-xl border border-border bg-surface"
+        className="flex h-[calc(100dvh-1rem)] max-h-[880px] w-full max-w-7xl flex-col overflow-hidden rounded-xl border border-border bg-surface"
         role="dialog"
         aria-modal="true"
         aria-labelledby="led-screens-dialog-title"
       >
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
           <div className="min-w-0 flex-1">
-            <h2 id="led-screens-dialog-title" className="text-lg font-bold">
+            <h2 id="led-screens-dialog-title" className="text-base font-bold">
               Ekrany LED
             </h2>
-            <div className="mt-1 flex flex-wrap items-center gap-2">
+            <div className="mt-0.5 flex flex-wrap items-center gap-2">
               <label className="text-[11px] text-muted-foreground">
                 Nazwa projektu
                 <input
-                  className="ml-1.5 rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+                  className="ml-1.5 rounded border border-border bg-background px-2 py-0.5 text-xs text-foreground"
                   value={name}
                   onChange={(e) => {
                     setName(e.target.value)
@@ -132,11 +141,11 @@ export default function LedScreensOrderModal({
           </button>
         </div>
         {error ? (
-          <p className="shrink-0 border-b border-red-500/30 bg-red-500/10 px-4 py-2 text-xs text-red-400">
+          <p className="shrink-0 border-b border-red-500/30 bg-red-500/10 px-4 py-1.5 text-xs text-red-400">
             {error}
           </p>
         ) : null}
-        <div className="min-h-0 flex-1 overflow-hidden p-3 sm:p-4">
+        <div className="min-h-0 flex-1 overflow-hidden p-2 sm:p-3">
           <LedScreensWorkspace
             project={payload}
             onChange={(next) => {
