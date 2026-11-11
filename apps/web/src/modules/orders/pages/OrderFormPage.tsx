@@ -25,12 +25,14 @@ import {
   serializeStagePlanSet,
   upsertStagePlanScene,
   addStagePlanScene,
+  duplicateStagePlanScene,
   removeStagePlanScene,
   renameStagePlanScene,
   findStagePlanScene,
   type StagePlan,
 } from '@lama-stage/shared-types';
 import OrderOfferBlocksEditor from '../components/OrderOfferBlocksEditor';
+import OrderPlanProjectsPanel from '../components/OrderPlanProjectsPanel';
 import { randomClientUuid } from '../../../shared/utils/uuid';
 import OrderHeaderSection from '../components/OrderHeaderSection';
 import OrderScheduleSection from '../components/OrderScheduleSection';
@@ -44,8 +46,27 @@ import StagePlatformsOrderModal from '../components/StagePlatformsOrderModal';
 import LedScreensOrderModal from '../components/LedScreensOrderModal';
 import {
   applyStagePlanToEquipmentItems,
+  duplicateStagePlanSceneEquipmentItems,
   removeStagePlanSceneEquipmentItems,
+  renameStagePlanSceneEquipmentItems,
 } from '../../toolbox/utils/applyStagePlanToOrder'
+import {
+  applyLedScreenToEquipmentItems,
+  duplicateLedScreenEntryEquipmentItems,
+  removeLedScreenEntryEquipmentItems,
+  renameLedScreenEntryEquipmentItems,
+} from '../../toolbox/utils/applyLedScreenToOrder'
+import {
+  addLedScreenSetEntry,
+  duplicateLedScreenSetEntry,
+  findLedScreenSetEntry,
+  parseLedScreenSetJson,
+  removeLedScreenSetEntry,
+  renameLedScreenSetEntry,
+  serializeLedScreenSet,
+  upsertLedScreenSetEntry,
+} from '../../toolbox/utils/ledScreenPlanSet'
+import type { LedScreenProjectPayload } from '../../toolbox/calculators/ledScreen'
 import { listStagePlanRoleMaps } from '../../toolbox/api/stagePlanRoleMaps.api';
 import { upsertStagePlanProjectForOrder } from '../../toolbox/api/stagePlanProjects.api';
 import { useEquipment } from '../../equipment/hooks/useEquipment';
@@ -89,6 +110,7 @@ function mapApiOrderToFormValues(o: any): Partial<Order> {
     isRecurring: o.isRecurring ?? false,
     recurringConfig: o.recurringConfig,
     stagePlanJson: o.stagePlanJson ?? null,
+    ledScreenJson: o.ledScreenJson ?? null,
     parentOrderId: o.parentOrderId,
     stages: Array.isArray(o.stages)
       ? o.stages.map((s: any) => ({
@@ -143,6 +165,7 @@ function mapApiOrderToFormValues(o: any): Partial<Order> {
           title: b?.title ?? '',
           sortOrder: typeof b?.sortOrder === 'number' ? b.sortOrder : idx,
           stagePlanJson: b?.stagePlanJson ?? null,
+          ledScreenJson: b?.ledScreenJson ?? null,
         }))
       : [],
   };
@@ -208,7 +231,12 @@ export default function OrderFormPage() {
     sceneId: string
     sceneName: string
   } | null>(null);
-  const [ledModal, setLedModal] = useState<{ offerBlockId: string | null; blockTitle?: string } | null>(null);
+  const [ledModal, setLedModal] = useState<{
+    offerBlockId: string | null
+    blockTitle?: string
+    entryId: string
+    entryName: string
+  } | null>(null);
   const [pendingNav, setPendingNav] = useState<null | { kind: 'path'; to: string } | { kind: 'blocker' }>(null);
   const submitInFlightRef = useRef(false);
   const allowNextNavigationRef = useRef(false);
@@ -233,6 +261,7 @@ export default function OrderFormPage() {
       isRecurring: false,
       recurringConfig: undefined,
       stagePlanJson: null,
+      ledScreenJson: null,
       parentOrderId: undefined,
       stages: [],
       equipmentItems: [],
@@ -472,11 +501,50 @@ export default function OrderFormPage() {
     [offerBlocksRaw, handleOfferBlocksChange, setValue]
   )
 
+  const readLedScreenSetJson = useCallback(
+    (offerBlockId: string | null) => {
+      if (offerBlockId) {
+        const block = (offerBlocksRaw as Partial<OrderOfferBlock>[]).find((item) => item.id === offerBlockId)
+        return parseLedScreenSetJson(
+          typeof (block as { ledScreenJson?: string | null })?.ledScreenJson === 'string'
+            ? (block as { ledScreenJson?: string | null }).ledScreenJson
+            : null
+        )
+      }
+      return parseLedScreenSetJson(
+        typeof (formData as { ledScreenJson?: string | null })?.ledScreenJson === 'string'
+          ? (formData as { ledScreenJson?: string | null }).ledScreenJson
+          : null
+      )
+    },
+    [offerBlocksRaw, formData]
+  )
+
+  const writeLedScreenSetJson = useCallback(
+    (offerBlockId: string | null, serialized: string) => {
+      if (offerBlockId) {
+        const nextBlocks = (offerBlocksRaw as Partial<OrderOfferBlock>[]).map((block) =>
+          block.id === offerBlockId ? { ...block, ledScreenJson: serialized } : block
+        )
+        handleOfferBlocksChange(nextBlocks)
+      } else {
+        setValue('ledScreenJson', serialized, { shouldDirty: true })
+      }
+    },
+    [offerBlocksRaw, handleOfferBlocksChange, setValue]
+  )
+
   const stageModalInitialPlan = useMemo(() => {
     if (!stageModal) return null
     const set = readStagePlanSetJson(stageModal.offerBlockId)
     return findStagePlanScene(set, stageModal.sceneId)?.plan ?? null
   }, [stageModal, readStagePlanSetJson])
+
+  const ledModalInitialProject = useMemo(() => {
+    if (!ledModal) return null
+    const set = readLedScreenSetJson(ledModal.offerBlockId)
+    return findLedScreenSetEntry(set, ledModal.entryId)?.project ?? null
+  }, [ledModal, readLedScreenSetJson])
 
   const stageOrderLabel = useMemo(() => {
     const name = (formData?.name || order?.name || '').trim()
@@ -648,18 +716,250 @@ export default function OrderFormPage() {
   const handleRenameStageScene = useCallback(
     (offerBlockId: string | null, sceneId: string, name: string) => {
       const current = readStagePlanSetJson(offerBlockId)
-      const next = renameStagePlanScene(current, sceneId, name)
+      const nextName = name.trim()
+      if (!nextName) return
+      const next = renameStagePlanScene(current, sceneId, nextName)
       writeStagePlanSetJson(offerBlockId, serializeStagePlanSet(next))
+      const primarySceneId = current.scenes[0]?.id ?? null
+      handleEquipmentChange(
+        renameStagePlanSceneEquipmentItems({
+          existing: equipmentItems as Partial<OrderEquipmentItem>[],
+          offerBlockId,
+          sceneId,
+          sceneName: nextName,
+          primarySceneId,
+        })
+      )
       if (stageModal?.sceneId === sceneId) {
-        setStageModal((prev) => (prev ? { ...prev, sceneName: name.trim() || prev.sceneName } : prev))
+        setStageModal((prev) => (prev ? { ...prev, sceneName: nextName } : prev))
       }
     },
-    [readStagePlanSetJson, writeStagePlanSetJson, stageModal?.sceneId]
+    [
+      readStagePlanSetJson,
+      writeStagePlanSetJson,
+      stageModal?.sceneId,
+      handleEquipmentChange,
+      equipmentItems,
+    ]
   )
 
-  const openLedScreensModal = useCallback((offerBlockId: string | null, blockTitle?: string) => {
-    setLedModal({ offerBlockId, blockTitle })
-  }, [])
+  const handleDuplicateStageScene = useCallback(
+    (offerBlockId: string | null, sceneId: string) => {
+      const current = readStagePlanSetJson(offerBlockId)
+      const duplicated = duplicateStagePlanScene(current, sceneId)
+      if (!duplicated) return
+      writeStagePlanSetJson(offerBlockId, serializeStagePlanSet(duplicated.set))
+      const primarySceneId = current.scenes[0]?.id ?? null
+      handleEquipmentChange(
+        duplicateStagePlanSceneEquipmentItems({
+          existing: equipmentItems as Partial<OrderEquipmentItem>[],
+          offerBlockId,
+          sourceSceneId: sceneId,
+          targetSceneId: duplicated.scene.id,
+          targetSceneName: duplicated.scene.name,
+          primarySceneId,
+        })
+      )
+    },
+    [
+      readStagePlanSetJson,
+      writeStagePlanSetJson,
+      handleEquipmentChange,
+      equipmentItems,
+    ]
+  )
+
+  const openLedScreensModal = useCallback(
+    (offerBlockId: string | null, blockTitle?: string, entryId?: string) => {
+      let set = readLedScreenSetJson(offerBlockId)
+      let targetId = entryId
+      if (!targetId) {
+        if (set.entries.length === 0) {
+          const created = addLedScreenSetEntry(set)
+          set = created.set
+          writeLedScreenSetJson(offerBlockId, serializeLedScreenSet(set))
+          targetId = created.entry.id
+        } else {
+          targetId = set.entries[0]!.id
+        }
+      }
+      const entry = findLedScreenSetEntry(set, targetId)
+      if (!entry) return
+      setLedModal({
+        offerBlockId,
+        blockTitle,
+        entryId: entry.id,
+        entryName: entry.name,
+      })
+    },
+    [readLedScreenSetJson, writeLedScreenSetJson]
+  )
+
+  const handleAddLedEntry = useCallback(
+    (offerBlockId: string | null, blockTitle?: string) => {
+      const current = readLedScreenSetJson(offerBlockId)
+      const { set, entry } = addLedScreenSetEntry(current)
+      writeLedScreenSetJson(offerBlockId, serializeLedScreenSet(set))
+      setLedModal({
+        offerBlockId,
+        blockTitle,
+        entryId: entry.id,
+        entryName: entry.name,
+      })
+    },
+    [readLedScreenSetJson, writeLedScreenSetJson]
+  )
+
+  const handleRemoveLedEntry = useCallback(
+    (offerBlockId: string | null, entryId: string) => {
+      const current = readLedScreenSetJson(offerBlockId)
+      if (!current.entries.some((e) => e.id === entryId)) return
+      if (
+        !window.confirm(
+          'Usunąć ten projekt LED? Pozycje sprzętu z tego projektu też znikną z wykazu.'
+        )
+      ) {
+        return
+      }
+      const primaryEntryId = current.entries[0]?.id ?? null
+      const nextSet = removeLedScreenSetEntry(current, entryId)
+      writeLedScreenSetJson(offerBlockId, serializeLedScreenSet(nextSet))
+      handleEquipmentChange(
+        removeLedScreenEntryEquipmentItems({
+          existing: equipmentItems as Partial<OrderEquipmentItem>[],
+          offerBlockId,
+          entryId,
+          primaryEntryId,
+        })
+      )
+      if (ledModal?.entryId === entryId) setLedModal(null)
+    },
+    [
+      readLedScreenSetJson,
+      writeLedScreenSetJson,
+      handleEquipmentChange,
+      equipmentItems,
+      ledModal?.entryId,
+    ]
+  )
+
+  const handleRenameLedEntry = useCallback(
+    (offerBlockId: string | null, entryId: string, name: string) => {
+      const current = readLedScreenSetJson(offerBlockId)
+      const nextName = name.trim()
+      if (!nextName) return
+      const next = renameLedScreenSetEntry(current, entryId, nextName)
+      writeLedScreenSetJson(offerBlockId, serializeLedScreenSet(next))
+      const primaryEntryId = current.entries[0]?.id ?? null
+      handleEquipmentChange(
+        renameLedScreenEntryEquipmentItems({
+          existing: equipmentItems as Partial<OrderEquipmentItem>[],
+          offerBlockId,
+          entryId,
+          entryName: nextName,
+          primaryEntryId,
+        })
+      )
+      if (ledModal?.entryId === entryId) {
+        setLedModal((prev) => (prev ? { ...prev, entryName: nextName } : prev))
+      }
+    },
+    [
+      readLedScreenSetJson,
+      writeLedScreenSetJson,
+      handleEquipmentChange,
+      equipmentItems,
+      ledModal?.entryId,
+    ]
+  )
+
+  const handleDuplicateLedEntry = useCallback(
+    (offerBlockId: string | null, entryId: string) => {
+      const current = readLedScreenSetJson(offerBlockId)
+      const duplicated = duplicateLedScreenSetEntry(current, entryId)
+      if (!duplicated) return
+      writeLedScreenSetJson(offerBlockId, serializeLedScreenSet(duplicated.set))
+      const primaryEntryId = current.entries[0]?.id ?? null
+      handleEquipmentChange(
+        duplicateLedScreenEntryEquipmentItems({
+          existing: equipmentItems as Partial<OrderEquipmentItem>[],
+          offerBlockId,
+          sourceEntryId: entryId,
+          targetEntryId: duplicated.entry.id,
+          targetEntryName: duplicated.entry.name,
+          primaryEntryId,
+        })
+      )
+    },
+    [
+      readLedScreenSetJson,
+      writeLedScreenSetJson,
+      handleEquipmentChange,
+      equipmentItems,
+    ]
+  )
+
+  const handleApplyLedScreen = useCallback(
+    async (project: LedScreenProjectPayload) => {
+      if (!ledModal) return
+      const offerBlockId = ledModal.offerBlockId ?? null
+      const entryId = ledModal.entryId
+      const entryName = ledModal.entryName
+      let roleMaps: Awaited<ReturnType<typeof listStagePlanRoleMaps>> = []
+      try {
+        roleMaps = await listStagePlanRoleMaps()
+      } catch {
+        window.alert(
+          'Nie udało się wczytać mapowania LED. Otwórz zębatkę w edytorze i zapisz przepis (szafki LED).'
+        )
+        return
+      }
+      const currentSet = readLedScreenSetJson(offerBlockId)
+      const primaryEntryId = currentSet.entries[0]?.id ?? entryId
+      const result = applyLedScreenToEquipmentItems({
+        existing: equipmentItems as Partial<OrderEquipmentItem>[],
+        project,
+        catalog: equipmentCatalog,
+        roleMaps,
+        days: Math.max(1, orderDays),
+        offerBlockId,
+        entryId,
+        entryName,
+        primaryEntryId,
+      })
+      if (result.blockingIssues.length > 0) {
+        window.alert(
+          `Nie można dodać LED do zlecenia — popraw mapowanie (zębatka):\n` +
+            result.blockingIssues
+              .slice(0, 8)
+              .map((issue) => {
+                if (issue.kind === 'unmapped') return `• brak mapowania: ${issue.catalogKey}`
+                if (issue.kind === 'duplicate_equipment')
+                  return `• ten sam sprzęt dla: ${issue.catalogKeys.join(', ')}`
+                return `• mapowanie bez sprzętu: ${issue.catalogKey}`
+              })
+              .join('\n')
+        )
+        return
+      }
+      handleEquipmentChange(result.items)
+      const nextSet = upsertLedScreenSetEntry(currentSet, {
+        entryId,
+        name: entryName,
+        project,
+      })
+      writeLedScreenSetJson(offerBlockId, serializeLedScreenSet(nextSet))
+    },
+    [
+      ledModal,
+      equipmentItems,
+      equipmentCatalog,
+      orderDays,
+      readLedScreenSetJson,
+      writeLedScreenSetJson,
+      handleEquipmentChange,
+    ]
+  )
 
   const buildPayload = (data: Partial<Order>): CreateOrderDto | UpdateOrderDto => {
     const toIso = (value: unknown) => {
@@ -765,6 +1065,7 @@ export default function OrderFormPage() {
         title: clampOrderOfferBlockTitle(block?.title),
         sortOrder: toNumber(block?.sortOrder, idx),
         stagePlanJson: typeof block?.stagePlanJson === 'string' ? block.stagePlanJson : null,
+        ledScreenJson: typeof block?.ledScreenJson === 'string' ? block.ledScreenJson : null,
       }))
 
     const normalizeProductionItems = (list: any[] | undefined) =>
@@ -810,6 +1111,7 @@ export default function OrderFormPage() {
       isRecurring: !!data.isRecurring,
       recurringConfig: normalizeRecurringConfig(data.recurringConfig),
       stagePlanJson: typeof data.stagePlanJson === 'string' ? data.stagePlanJson : null,
+      ledScreenJson: typeof data.ledScreenJson === 'string' ? data.ledScreenJson : null,
       parentOrderId: data.parentOrderId || undefined,
       stages: normalizeStages((data?.stages ?? []) as any[]),
       offerBlocks: normalizeOfferBlocks(data.offerBlocks as any[]),
@@ -1228,7 +1530,20 @@ export default function OrderFormPage() {
                     onRenameStageScene={(blockId, sceneId, name) =>
                       handleRenameStageScene(blockId, sceneId, name)
                     }
-                    onOpenLedScreens={(blockId, blockTitle) => openLedScreensModal(blockId, blockTitle)}
+                    onDuplicateStageScene={(blockId, sceneId) =>
+                      handleDuplicateStageScene(blockId, sceneId)
+                    }
+                    onOpenLedScreens={(blockId, blockTitle, entryId) =>
+                      openLedScreensModal(blockId, blockTitle, entryId)
+                    }
+                    onAddLedEntry={(blockId, blockTitle) => handleAddLedEntry(blockId, blockTitle)}
+                    onRemoveLedEntry={(blockId, entryId) => handleRemoveLedEntry(blockId, entryId)}
+                    onRenameLedEntry={(blockId, entryId, name) =>
+                      handleRenameLedEntry(blockId, entryId, name)
+                    }
+                    onDuplicateLedEntry={(blockId, entryId) =>
+                      handleDuplicateLedEntry(blockId, entryId)
+                    }
                   />
                 </section>
 
@@ -1240,23 +1555,34 @@ export default function OrderFormPage() {
                           <FileText size={24} />
                           Wykaz sprzętu
                         </h2>
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => handleAddStageScene(null)}
-                            className="inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1.5 text-xs hover:bg-surface-2"
-                          >
-                            <LayoutGrid size={14} />
-                            Nowa scena z podestów
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => openLedScreensModal(null)}
-                            className="inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1.5 text-xs hover:bg-surface-2"
-                          >
-                            Ekrany LED
-                          </button>
-                        </div>
+                      </div>
+                      <div className="mb-3">
+                        <OrderPlanProjectsPanel
+                          stagePlanJson={
+                            typeof formData?.stagePlanJson === 'string' ? formData.stagePlanJson : null
+                          }
+                          ledScreenJson={
+                            typeof (formData as { ledScreenJson?: string | null })?.ledScreenJson ===
+                            'string'
+                              ? (formData as { ledScreenJson?: string | null }).ledScreenJson
+                              : null
+                          }
+                          offerBlockId={null}
+                          onOpenStage={(blockId, blockTitle, sceneId) =>
+                            openStagePlanModal(blockId, blockTitle, sceneId)
+                          }
+                          onAddStage={(blockId, blockTitle) => handleAddStageScene(blockId, blockTitle)}
+                          onRenameStage={handleRenameStageScene}
+                          onDuplicateStage={handleDuplicateStageScene}
+                          onRemoveStage={handleRemoveStageScene}
+                          onOpenLed={(blockId, blockTitle, entryId) =>
+                            openLedScreensModal(blockId, blockTitle, entryId)
+                          }
+                          onAddLed={handleAddLedEntry}
+                          onRenameLed={handleRenameLedEntry}
+                          onDuplicateLed={handleDuplicateLedEntry}
+                          onRemoveLed={handleRemoveLedEntry}
+                        />
                       </div>
                       <div className="lg:col-span-2">
                         <OrderEquipmentSection
@@ -1430,12 +1756,16 @@ export default function OrderFormPage() {
         open={ledModal !== null}
         orderId={isEditing ? id : null}
         offerBlockId={ledModal?.offerBlockId ?? null}
+        entryId={ledModal?.entryId ?? ''}
+        entryName={ledModal?.entryName ?? 'Ekran'}
+        initialProject={ledModalInitialProject}
         orderLabel={
           ledModal?.offerBlockId && ledModal.blockTitle
             ? `${stageOrderLabel ?? 'Zlecenie'} · ${ledModal.blockTitle}`
             : stageOrderLabel
         }
         onClose={() => setLedModal(null)}
+        onApply={handleApplyLedScreen}
       />
 
       <ConfirmationModal

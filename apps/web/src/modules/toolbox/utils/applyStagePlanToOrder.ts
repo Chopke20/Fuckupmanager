@@ -146,3 +146,95 @@ export function removeStagePlanSceneEquipmentItems(params: {
       })
   )
 }
+
+/** Po zmianie nazwy sceny — podmienia nazwę w opisach linii tej sceny. */
+export function renameStagePlanSceneEquipmentItems(params: {
+  existing: Partial<OrderEquipmentItem>[]
+  offerBlockId?: string | null
+  sceneId: string
+  sceneName: string
+  primarySceneId?: string | null
+}): Partial<OrderEquipmentItem>[] {
+  const nextName = params.sceneName.trim()
+  if (!nextName) return params.existing
+  const marker = STAGE_PLAN_LINE_MARKER
+  const idToken = `#${params.sceneId}`
+  return params.existing.map((item) => {
+    if (
+      !stagePlanLineMatchesScene(item, {
+        offerBlockId: params.offerBlockId,
+        sceneId: params.sceneId,
+        primarySceneId: params.primarySceneId,
+      })
+    ) {
+      return item
+    }
+    const desc = typeof item.description === 'string' ? item.description : ''
+    // `[plan sceny] #id StaraNazwa · …` → nowa nazwa do pierwszego „ · ”
+    const re = new RegExp(
+      `(${marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s+${idToken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s+)([^·]+)`
+    )
+    const updated = desc.includes(idToken)
+      ? desc.replace(re, `$1${nextName} `)
+      : desc.replace(
+          new RegExp(
+            `(${marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s+)([^·#]+)`
+          ),
+          `$1${idToken} ${nextName} `
+        )
+    return { ...item, description: updated }
+  })
+}
+
+/** Duplikuje linie sprzętu sceny z nowym #sceneId i nazwą. */
+export function duplicateStagePlanSceneEquipmentItems(params: {
+  existing: Partial<OrderEquipmentItem>[]
+  offerBlockId?: string | null
+  sourceSceneId: string
+  targetSceneId: string
+  targetSceneName: string
+  primarySceneId?: string | null
+}): Partial<OrderEquipmentItem>[] {
+  const now = Date.now()
+  const clones: Partial<OrderEquipmentItem>[] = []
+  for (const item of params.existing) {
+    if (
+      !stagePlanLineMatchesScene(item, {
+        offerBlockId: params.offerBlockId,
+        sceneId: params.sourceSceneId,
+        primarySceneId: params.primarySceneId,
+      })
+    ) {
+      continue
+    }
+    const desc = typeof item.description === 'string' ? item.description : ''
+    const marker = STAGE_PLAN_LINE_MARKER
+    const sourceToken = `#${params.sourceSceneId}`
+    const targetToken = `#${params.targetSceneId}`
+    let nextDesc = desc
+    if (desc.includes(sourceToken)) {
+      nextDesc = desc
+        .replace(sourceToken, targetToken)
+        .replace(
+          new RegExp(
+            `(${marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s+${targetToken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s+)([^·]+)`
+          ),
+          `$1${params.targetSceneName} `
+        )
+    } else if (desc.includes(marker)) {
+      nextDesc = desc.replace(
+        marker,
+        `${marker} ${targetToken} ${params.targetSceneName}`
+      )
+    }
+    clones.push({
+      ...item,
+      id: `temp-stage-dup-${now}-${clones.length}`,
+      description: nextDesc,
+      sortOrder: (params.existing.length || 0) + clones.length,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })
+  }
+  return [...params.existing, ...clones]
+}

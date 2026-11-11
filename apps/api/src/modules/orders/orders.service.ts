@@ -158,6 +158,7 @@ export class OrdersService {
             title,
             sortOrder,
             ...(block.stagePlanJson !== undefined && { stagePlanJson: block.stagePlanJson }),
+            ...(block.ledScreenJson !== undefined && { ledScreenJson: block.ledScreenJson }),
           },
         })
       } else {
@@ -168,6 +169,7 @@ export class OrdersService {
             title,
             sortOrder,
             stagePlanJson: block.stagePlanJson ?? null,
+            ledScreenJson: block.ledScreenJson ?? null,
           },
         })
       }
@@ -527,6 +529,7 @@ export class OrdersService {
         title: block.title,
         sortOrder: block.sortOrder ?? idx,
         stagePlanJson: block.stagePlanJson ?? undefined,
+        ledScreenJson: block.ledScreenJson ?? undefined,
       }
     })
 
@@ -594,6 +597,7 @@ export class OrdersService {
       isRecurring: false,
       recurringConfig: undefined,
       stagePlanJson: source.stagePlanJson ?? undefined,
+      ledScreenJson: source.ledScreenJson ?? undefined,
       parentOrderId: undefined,
       stages,
       offerBlocks,

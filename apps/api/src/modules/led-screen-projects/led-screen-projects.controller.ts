@@ -66,6 +66,7 @@ const upsertForOrderSchema = z.object({
   name: z.string().trim().min(1).max(200),
   projectJson: projectJsonSchema,
   offerBlockId: z.string().uuid().optional().nullable(),
+  screenSetId: z.string().trim().min(1).max(80).optional().nullable(),
 })
 
 function projectSelect() {
@@ -75,6 +76,7 @@ function projectSelect() {
     projectJson: true,
     orderId: true,
     offerBlockId: true,
+    screenSetId: true,
     createdAt: true,
     updatedAt: true,
     order: {
@@ -240,9 +242,18 @@ export async function getLedScreenProjectByOrder(req: Request, res: Response, ne
       typeof req.query.offerBlockId === 'string' && req.query.offerBlockId.trim()
         ? req.query.offerBlockId.trim()
         : null
+    const screenSetId =
+      typeof req.query.screenSetId === 'string' && req.query.screenSetId.trim()
+        ? req.query.screenSetId.trim()
+        : null
 
     const project = await prisma.ledScreenProject.findFirst({
-      where: { orderId, offerBlockId },
+      where: {
+        orderId,
+        offerBlockId,
+        ...(screenSetId ? { screenSetId } : {}),
+      },
+      orderBy: [{ updatedAt: 'desc' }],
       select: projectSelect(),
     })
     if (!project) {
@@ -260,6 +271,7 @@ export async function upsertLedScreenProjectForOrder(req: Request, res: Response
     const { orderId } = req.params
     const parsed = upsertForOrderSchema.parse(req.body)
     const offerBlockId = parsed.offerBlockId ?? null
+    const screenSetId = parsed.screenSetId?.trim() || null
 
     const order = await prisma.order.findFirst({
       where: { id: orderId, isDeleted: false },
@@ -285,7 +297,11 @@ export async function upsertLedScreenProjectForOrder(req: Request, res: Response
     }
 
     const existing = await prisma.ledScreenProject.findFirst({
-      where: { orderId, offerBlockId },
+      where: {
+        orderId,
+        offerBlockId,
+        ...(screenSetId ? { screenSetId } : { screenSetId: null }),
+      },
       select: { id: true },
     })
 
@@ -296,6 +312,7 @@ export async function upsertLedScreenProjectForOrder(req: Request, res: Response
             name: parsed.name,
             projectJson: parsed.projectJson,
             offerBlockId,
+            screenSetId,
           },
           select: projectSelect(),
         })
@@ -305,6 +322,7 @@ export async function upsertLedScreenProjectForOrder(req: Request, res: Response
             projectJson: parsed.projectJson,
             orderId,
             offerBlockId,
+            screenSetId,
           },
           select: projectSelect(),
         })

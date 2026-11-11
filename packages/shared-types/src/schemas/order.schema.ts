@@ -69,6 +69,7 @@ export const OrderOfferBlockSchema = z.object({
     .max(ORDER_OFFER_BLOCK_TITLE_MAX_LENGTH, `Tytuł bloku może mieć maksymalnie ${ORDER_OFFER_BLOCK_TITLE_MAX_LENGTH} znaków`),
   sortOrder: z.number().int().default(0),
   stagePlanJson: z.string().nullable().optional(),
+  ledScreenJson: z.string().nullable().optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -208,6 +209,7 @@ export const OrderSchema: z.ZodType<any> = z.lazy(() =>
     deletedAt: z.string().datetime().optional().nullable(),
     recurringConfig: z.string().optional(),
     stagePlanJson: z.string().nullable().optional(),
+    ledScreenJson: z.string().nullable().optional(),
     parentOrderId: z.string().uuid().optional(),
     parentOrder: OrderSchema.optional(),
     childOrders: z.array(OrderSchema).optional(),
@@ -247,6 +249,7 @@ export const CreateOrderSchema = z.object({
   isRecurring: z.boolean().default(false),
   recurringConfig: z.string().optional(),
   stagePlanJson: z.string().nullable().optional(),
+  ledScreenJson: z.string().nullable().optional(),
   parentOrderId: z.string().uuid().optional(),
   // Ten sam schemat co przy update – id etapu musi przejść przez Zod, inaczej stageIds w produkcji wskazują w pustkę
   stages: z.array(UpdateOrderStageItemSchema).optional(),

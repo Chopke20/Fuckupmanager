@@ -185,6 +185,7 @@ model Order {
   deletedAt       DateTime?
   recurringConfig String?
   stagePlanJson   String?  @db.Text
+  ledScreenJson   String?  @db.Text
   parentOrderId   String?
   parentOrder     Order?  @relation("RecurringOrders", fields: [parentOrderId], references: [id])
   childOrders     Order[] @relation("RecurringOrders")
@@ -215,6 +216,7 @@ model OrderOfferBlock {
   title         String
   sortOrder     Int      @default(0)
   stagePlanJson String?  @db.Text
+  ledScreenJson String?  @db.Text
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -597,12 +599,14 @@ model LedScreenProject {
   order        Order?           @relation(fields: [orderId], references: [id], onDelete: SetNull)
   offerBlockId String?
   offerBlock   OrderOfferBlock? @relation(fields: [offerBlockId], references: [id], onDelete: SetNull)
+  /// Id wpisu w zestawie LED bloku (wiele projektów na blok).
+  screenSetId  String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([updatedAt])
-  @@index([orderId, offerBlockId])
+  @@index([orderId, offerBlockId, screenSetId])
   @@map("led_screen_projects")
 }
 

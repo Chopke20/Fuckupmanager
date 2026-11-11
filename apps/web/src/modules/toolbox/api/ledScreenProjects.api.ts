@@ -19,6 +19,7 @@ export interface LedScreenProject {
   projectJson: string
   orderId: string | null
   offerBlockId: string | null
+  screenSetId?: string | null
   createdAt: string
   updatedAt: string
   order: LedScreenProjectOrderRef | null
@@ -68,11 +69,15 @@ export async function deleteLedScreenProject(id: string): Promise<void> {
 
 export async function getLedScreenProjectByOrder(
   orderId: string,
-  offerBlockId?: string | null
+  offerBlockId?: string | null,
+  screenSetId?: string | null
 ): Promise<LedScreenProject | null> {
   try {
     const res = await axios.get<Envelope<LedScreenProject>>(`${API_BASE}/by-order/${orderId}`, {
-      params: offerBlockId ? { offerBlockId } : undefined,
+      params: {
+        ...(offerBlockId ? { offerBlockId } : {}),
+        ...(screenSetId ? { screenSetId } : {}),
+      },
       withCredentials: true,
     })
     return res.data.data
@@ -89,6 +94,7 @@ export async function upsertLedScreenProjectForOrder(
     name: string
     project: LedScreenProjectPayload
     offerBlockId?: string | null
+    screenSetId?: string | null
   }
 ): Promise<LedScreenProject> {
   const res = await axios.put<Envelope<LedScreenProject>>(
@@ -97,6 +103,7 @@ export async function upsertLedScreenProjectForOrder(
       name: params.name,
       projectJson: serializeLedScreenProject(params.project),
       offerBlockId: params.offerBlockId ?? null,
+      screenSetId: params.screenSetId ?? null,
     },
     { withCredentials: true }
   )

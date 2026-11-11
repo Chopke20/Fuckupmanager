@@ -240,6 +240,29 @@ export function removeStagePlanScene(set: StagePlanSet, sceneId: string): StageP
   }
 }
 
+/** Kopia sceny z nowym id — plan i nazwa „(kopia)”. */
+export function duplicateStagePlanScene(
+  set: StagePlanSet,
+  sceneId: string
+): { set: StagePlanSet; scene: StagePlanScene } | null {
+  const source = set.scenes.find((s) => s.id === sceneId)
+  if (!source) return null
+  const baseName = source.name.replace(/\s*\(kopia(?:\s+\d+)?\)\s*$/i, '').trim() || source.name
+  const copyLabel = `${baseName} (kopia)`
+  const existingNames = new Set(set.scenes.map((s) => s.name))
+  let name = copyLabel
+  let n = 2
+  while (existingNames.has(name)) {
+    name = `${baseName} (kopia ${n})`
+    n += 1
+  }
+  // Przelicz plan od inputu, żeby BOM był świeży i nie dzielił referencji.
+  const planJson = serializeStagePlan(source.plan)
+  const plan = parseStagePlanJson(planJson) ?? source.plan
+  const scene = createStagePlanScene({ name, plan })
+  return { set: { ...set, scenes: [...set.scenes, scene] }, scene }
+}
+
 /** Pierwsza scena zestawu — linie legacy bez `#sceneId` należą do niej. */
 export function isPrimaryStagePlanScene(
   set: StagePlanSet,

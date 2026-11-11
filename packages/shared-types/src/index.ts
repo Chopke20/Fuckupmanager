@@ -217,6 +217,7 @@ export {
   createEmptyStagePlanSet,
   createStagePlanScene,
   defaultSceneName,
+  duplicateStagePlanScene,
   findStagePlanScene,
   formatStagePlanEquipmentDescription,
   isPrimaryStagePlanScene,
