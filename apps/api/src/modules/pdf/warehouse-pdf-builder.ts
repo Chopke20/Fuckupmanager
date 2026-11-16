@@ -68,6 +68,15 @@ export type WarehousePdfEquipmentRow = {
   skipPack?: boolean
   isRental?: boolean
   note?: string | null
+  /** Id bloku oferty; null = bez bloku; specjalne klucze: __custom__ */
+  offerBlockId?: string | null
+  blockTitle?: string | null
+}
+
+export type WarehousePdfOfferBlock = {
+  id: string
+  title: string
+  sortOrder?: number
 }
 
 export type BuildWarehousePdfHtmlParams = {
@@ -91,6 +100,7 @@ export type BuildWarehousePdfHtmlParams = {
     phone?: string | null
   } | null
   equipmentItems: WarehousePdfEquipmentRow[]
+  offerBlocks?: WarehousePdfOfferBlock[]
   projectContactKey?: string | null
   projectContact?: { name?: string | null; phone?: string | null; email?: string | null } | null
   accentColorHex?: string | null
@@ -159,37 +169,84 @@ export function buildWarehousePdfHtml(params: BuildWarehousePdfHtmlParams): stri
   }
   const descBody = descBodyParts.join('<br>\n')
 
-  const items = [...params.equipmentItems]
-    .filter((item) => !item.skipPack)
-    .sort((a, b) => {
-      const sa = a.sortOrder ?? 0
-      const sb = b.sortOrder ?? 0
-      if (sa !== sb) return sa - sb
-      return a.name.localeCompare(b.name, 'pl', { sensitivity: 'base' })
-    })
-  const tbody =
-    items.length === 0
-      ? `<tr><td colspan="5" class="left dim">Brak pozycji do załadunku</td></tr>`
-      : items
-          .map((item, idx) => {
-            const lp = String(idx + 1).padStart(2, '0')
-            const unit = item.unit?.trim() || 'szt.'
-            const rentalMark = item.isRental
-              ? `<span class="wh-rental" title="Rental">R</span>`
-              : ''
-            const noteHtml =
-              item.note?.trim()
-                ? `<div class="wh-item-note">${escapeHtml(item.note.trim())}</div>`
-                : ''
-            return `<tr>
+  const visibleItems = [...params.equipmentItems].filter((item) => !item.skipPack)
+  const sortWithin = (a: WarehousePdfEquipmentRow, b: WarehousePdfEquipmentRow) => {
+    const sa = a.sortOrder ?? 0
+    const sb = b.sortOrder ?? 0
+    if (sa !== sb) return sa - sb
+    return a.name.localeCompare(b.name, 'pl', { sensitivity: 'base' })
+  }
+
+  const blocks = [...(params.offerBlocks ?? [])].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+  const hasBlocks = blocks.length > 0
+
+  type Section = { key: string; title: string; items: WarehousePdfEquipmentRow[] }
+  const sections: Section[] = []
+
+  if (hasBlocks) {
+    for (const block of blocks) {
+      const items = visibleItems
+        .filter((it) => it.offerBlockId === block.id)
+        .sort(sortWithin)
+      if (items.length === 0) continue
+      sections.push({ key: block.id, title: block.title.trim() || 'Blok', items })
+    }
+    const blockIdSet = new Set(blocks.map((b) => b.id))
+    const ungrouped = visibleItems
+      .filter((it) => {
+        if (it.offerBlockId === '__custom__') return false
+        if (!it.offerBlockId) return true
+        return !blockIdSet.has(it.offerBlockId)
+      })
+      .sort(sortWithin)
+    if (ungrouped.length > 0) {
+      sections.push({ key: '__none__', title: 'Bez bloku', items: ungrouped })
+    }
+    const custom = visibleItems.filter((it) => it.offerBlockId === '__custom__').sort(sortWithin)
+    if (custom.length > 0) {
+      sections.push({ key: '__custom__', title: 'Dopisane ręcznie', items: custom })
+    }
+  } else {
+    const items = visibleItems.sort(sortWithin)
+    if (items.length > 0) {
+      sections.push({ key: '__all__', title: '', items })
+    }
+  }
+
+  const renderItemRow = (item: WarehousePdfEquipmentRow, idx: number) => {
+    const lp = String(idx + 1).padStart(2, '0')
+    const unit = item.unit?.trim() || 'szt.'
+    const rentalMark = item.isRental ? `<span class="wh-rental" title="Rental">R</span>` : ''
+    const noteHtml = item.note?.trim()
+      ? `<div class="wh-item-note">${escapeHtml(item.note.trim())}</div>`
+      : ''
+    return `<tr>
           <td class="chk-cell"><span class="chk-box"></span>${rentalMark}</td>
           <td class="lp center">${lp}</td>
           <td class="left">${escapeHtml(item.name)}${noteHtml}</td>
           <td class="center">${item.quantity}</td>
           <td class="center dim">${escapeHtml(unit)}</td>
         </tr>`
-          })
-          .join('\n')
+  }
+
+  let lpCounter = 0
+  const tbodyRows: string[] = []
+  if (sections.length === 0) {
+    tbodyRows.push(`<tr><td colspan="5" class="left dim">Brak pozycji do załadunku</td></tr>`)
+  } else {
+    for (const section of sections) {
+      if (hasBlocks && section.title) {
+        tbodyRows.push(
+          `<tr class="group-row"><td colspan="5">${escapeHtml(section.title)}</td></tr>`,
+        )
+      }
+      for (const item of section.items) {
+        lpCounter += 1
+        tbodyRows.push(renderItemRow(item, lpCounter - 1))
+      }
+    }
+  }
+  const tbody = tbodyRows.join('\n')
 
   const opiekun = params.projectContact ?? null
   const opiekunName = opiekun?.name?.trim() ? opiekun.name.trim() : ''

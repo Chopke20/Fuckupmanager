@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Download, Eye, FileText, Plus, Save, Trash2 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useOrder } from '../hooks/useOrders';
@@ -33,7 +33,14 @@ type WarehouseEquipmentRow = {
   quantity?: number;
   sortOrder?: number;
   isRental?: boolean;
+  offerBlockId?: string | null;
   equipment?: { unit?: string } | null;
+};
+
+type WarehouseOfferBlock = {
+  id: string;
+  title?: string;
+  sortOrder?: number;
 };
 
 function asBoolRecord(value: unknown): Record<string, boolean> {
@@ -128,10 +135,68 @@ export default function OrderWarehousePage() {
     return [...items].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
   }, [order?.equipmentItems]);
 
+  const offerBlocksSorted = useMemo(() => {
+    const blocks = ((order as { offerBlocks?: WarehouseOfferBlock[] } | undefined)?.offerBlocks ??
+      []) as WarehouseOfferBlock[];
+    return [...blocks].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+  }, [order]);
+
+  const hasOfferBlocks = offerBlocksSorted.length > 0;
+
   const customSorted = useMemo(() => {
     const items = draft?.customItems ?? [];
     return [...items].sort((a, b) => a.sortOrder - b.sortOrder);
   }, [draft?.customItems]);
+
+  type WarehouseSection = {
+    key: string;
+    title: string | null;
+    equipment: WarehouseEquipmentRow[];
+    custom: WarehouseCustomItem[];
+  };
+
+  const listSections = useMemo((): WarehouseSection[] => {
+    if (!hasOfferBlocks) {
+      return [
+        {
+          key: '__all__',
+          title: null,
+          equipment: equipmentSorted,
+          custom: customSorted,
+        },
+      ];
+    }
+
+    const blockIdSet = new Set(offerBlocksSorted.map((b) => b.id));
+    const sections: WarehouseSection[] = offerBlocksSorted.map((block) => ({
+      key: block.id,
+      title: (block.title || '').trim() || 'Blok',
+      equipment: equipmentSorted.filter((item) => item.offerBlockId === block.id),
+      custom: [],
+    }));
+
+    const ungrouped = equipmentSorted.filter((item) => {
+      if (!item.offerBlockId) return true;
+      return !blockIdSet.has(item.offerBlockId);
+    });
+    if (ungrouped.length > 0) {
+      sections.push({
+        key: '__none__',
+        title: 'Bez bloku',
+        equipment: ungrouped,
+        custom: [],
+      });
+    }
+    if (customSorted.length > 0) {
+      sections.push({
+        key: '__custom__',
+        title: 'Dopisane ręcznie',
+        equipment: [],
+        custom: customSorted,
+      });
+    }
+    return sections.filter((s) => s.equipment.length > 0 || s.custom.length > 0);
+  }, [hasOfferBlocks, offerBlocksSorted, equipmentSorted, customSorted]);
 
   const orderNumberDisplay = useMemo(() => {
     if (!order) return '—';
@@ -420,7 +485,9 @@ export default function OrderWarehousePage() {
           />
 
           <p className="text-xs text-muted-foreground">
-            Pozycje ze zlecenia + dopisane ręcznie. Zaznacz „Nie pakować”, „Rental” lub dopisz notatkę.
+            Pozycje ze zlecenia
+            {hasOfferBlocks ? ' pogrupowane wg bloków oferty' : ''}
+            {' + dopisane ręcznie. Zaznacz „Nie pakować”, „Rental” lub dopisz notatkę.'}
           </p>
 
           <div className="overflow-x-auto border border-border rounded">
@@ -447,150 +514,162 @@ export default function OrderWarehousePage() {
                     </td>
                   </tr>
                 ) : (
-                  <>
-                    {equipmentSorted.map((item) => {
-                      rowIndex += 1;
-                      const skip = !!draft.skipPack?.[item.id];
-                      const rental = !!draft.rental?.[item.id];
-                      const note = draft.itemNotes?.[item.id] ?? '';
-                      return (
-                        <tr
-                          key={item.id}
-                          className={`border-b border-border/60 last:border-0 ${skip ? 'opacity-55' : ''}`}
-                        >
-                          <td className="py-2 px-3 text-muted-foreground align-top">{rowIndex}</td>
-                          <td className={`py-2 px-3 align-top ${skip ? 'line-through text-muted-foreground' : ''}`}>
-                            {item.name}
-                          </td>
-                          <td className="py-2 px-3 align-top">{item.quantity ?? 1}</td>
-                          <td className="py-2 px-3 align-top">{item.equipment?.unit || 'szt.'}</td>
-                          <td className="py-2 px-2 text-center align-top">
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 accent-primary"
-                              checked={skip}
-                              onChange={(e) => updateItemFlag(item.id, 'skipPack', e.target.checked)}
-                              title="Nie pakować — pomiń na PDF"
-                              aria-label={`Nie pakować: ${item.name ?? item.id}`}
-                            />
-                          </td>
-                          <td className="py-2 px-2 text-center align-top">
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 accent-primary"
-                              checked={rental}
-                              onChange={(e) => updateItemFlag(item.id, 'rental', e.target.checked)}
-                              title="Rental"
-                              aria-label={`Rental: ${item.name ?? item.id}`}
-                            />
-                          </td>
-                          <td className="py-2 px-3 align-top">
-                            <input
-                              type="text"
-                              className="w-full min-w-[140px] px-2 py-1 text-xs bg-background border border-border rounded"
-                              value={note}
-                              maxLength={500}
-                              placeholder="np. już na sali"
-                              onChange={(e) => updateItemNote(item.id, e.target.value)}
-                              aria-label={`Notatka: ${item.name ?? item.id}`}
-                            />
-                          </td>
-                          <td className="py-2 px-2 align-top" />
-                        </tr>
-                      );
-                    })}
-                    {customSorted.map((item) => {
-                      rowIndex += 1;
-                      const skip = !!draft.skipPack?.[item.id];
-                      const rental = !!draft.rental?.[item.id];
-                      const note = draft.itemNotes?.[item.id] ?? '';
-                      return (
-                        <tr
-                          key={item.id}
-                          className={`border-b border-border/60 last:border-0 bg-surface-2/30 ${skip ? 'opacity-55' : ''}`}
-                        >
-                          <td className="py-2 px-3 text-muted-foreground align-top">{rowIndex}</td>
-                          <td className="py-2 px-3 align-top">
-                            <input
-                              type="text"
-                              className={`w-full min-w-[160px] px-2 py-1 text-xs bg-background border border-border rounded ${skip ? 'line-through text-muted-foreground' : ''}`}
-                              value={item.name}
-                              maxLength={200}
-                              placeholder="Nazwa pozycji ręcznej"
-                              onChange={(e) => updateCustomItem(item.id, { name: e.target.value })}
-                              aria-label={`Nazwa pozycji ręcznej ${rowIndex}`}
-                            />
-                          </td>
-                          <td className="py-2 px-3 align-top">
-                            <input
-                              type="number"
-                              min={1}
-                              className="w-16 px-2 py-1 text-xs bg-background border border-border rounded text-right"
-                              value={item.quantity}
-                              onChange={(e) =>
-                                updateCustomItem(item.id, {
-                                  quantity: Math.max(1, parseInt(e.target.value, 10) || 1),
-                                })
-                              }
-                              aria-label={`Ilość pozycji ręcznej ${rowIndex}`}
-                            />
-                          </td>
-                          <td className="py-2 px-3 align-top">
-                            <input
-                              type="text"
-                              className="w-16 px-2 py-1 text-xs bg-background border border-border rounded"
-                              value={item.unit}
-                              maxLength={40}
-                              onChange={(e) => updateCustomItem(item.id, { unit: e.target.value })}
-                              aria-label={`Jednostka pozycji ręcznej ${rowIndex}`}
-                            />
-                          </td>
-                          <td className="py-2 px-2 text-center align-top">
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 accent-primary"
-                              checked={skip}
-                              onChange={(e) => updateItemFlag(item.id, 'skipPack', e.target.checked)}
-                              title="Nie pakować — pomiń na PDF"
-                              aria-label={`Nie pakować: ${item.name || item.id}`}
-                            />
-                          </td>
-                          <td className="py-2 px-2 text-center align-top">
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 accent-primary"
-                              checked={rental}
-                              onChange={(e) => updateItemFlag(item.id, 'rental', e.target.checked)}
-                              title="Rental"
-                              aria-label={`Rental: ${item.name || item.id}`}
-                            />
-                          </td>
-                          <td className="py-2 px-3 align-top">
-                            <input
-                              type="text"
-                              className="w-full min-w-[140px] px-2 py-1 text-xs bg-background border border-border rounded"
-                              value={note}
-                              maxLength={500}
-                              placeholder="np. już na sali"
-                              onChange={(e) => updateItemNote(item.id, e.target.value)}
-                              aria-label={`Notatka: ${item.name || item.id}`}
-                            />
-                          </td>
-                          <td className="py-2 px-2 text-center align-top">
-                            <button
-                              type="button"
-                              onClick={() => removeCustomItem(item.id)}
-                              className="p-1 rounded text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
-                              title="Usuń pozycję ręczną"
-                              aria-label={`Usuń pozycję ręczną ${rowIndex}`}
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                  listSections.map((section) => (
+                    <Fragment key={section.key}>
+                      {section.title ? (
+                        <tr className="bg-surface-2 border-b border-border">
+                          <td
+                            colSpan={8}
+                            className="py-1.5 px-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+                          >
+                            {section.title}
                           </td>
                         </tr>
-                      );
-                    })}
-                  </>
+                      ) : null}
+                      {section.equipment.map((item) => {
+                        rowIndex += 1;
+                        const skip = !!draft.skipPack?.[item.id];
+                        const rental = !!draft.rental?.[item.id];
+                        const note = draft.itemNotes?.[item.id] ?? '';
+                        return (
+                          <tr
+                            key={item.id}
+                            className={`border-b border-border/60 last:border-0 ${skip ? 'opacity-55' : ''}`}
+                          >
+                            <td className="py-2 px-3 text-muted-foreground align-top">{rowIndex}</td>
+                            <td className={`py-2 px-3 align-top ${skip ? 'line-through text-muted-foreground' : ''}`}>
+                              {item.name}
+                            </td>
+                            <td className="py-2 px-3 align-top">{item.quantity ?? 1}</td>
+                            <td className="py-2 px-3 align-top">{item.equipment?.unit || 'szt.'}</td>
+                            <td className="py-2 px-2 text-center align-top">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 accent-primary"
+                                checked={skip}
+                                onChange={(e) => updateItemFlag(item.id, 'skipPack', e.target.checked)}
+                                title="Nie pakować — pomiń na PDF"
+                                aria-label={`Nie pakować: ${item.name ?? item.id}`}
+                              />
+                            </td>
+                            <td className="py-2 px-2 text-center align-top">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 accent-primary"
+                                checked={rental}
+                                onChange={(e) => updateItemFlag(item.id, 'rental', e.target.checked)}
+                                title="Rental"
+                                aria-label={`Rental: ${item.name ?? item.id}`}
+                              />
+                            </td>
+                            <td className="py-2 px-3 align-top">
+                              <input
+                                type="text"
+                                className="w-full min-w-[140px] px-2 py-1 text-xs bg-background border border-border rounded"
+                                value={note}
+                                maxLength={500}
+                                placeholder="np. już na sali"
+                                onChange={(e) => updateItemNote(item.id, e.target.value)}
+                                aria-label={`Notatka: ${item.name ?? item.id}`}
+                              />
+                            </td>
+                            <td className="py-2 px-2 align-top" />
+                          </tr>
+                        );
+                      })}
+                      {section.custom.map((item) => {
+                        rowIndex += 1;
+                        const skip = !!draft.skipPack?.[item.id];
+                        const rental = !!draft.rental?.[item.id];
+                        const note = draft.itemNotes?.[item.id] ?? '';
+                        return (
+                          <tr
+                            key={item.id}
+                            className={`border-b border-border/60 last:border-0 bg-surface-2/30 ${skip ? 'opacity-55' : ''}`}
+                          >
+                            <td className="py-2 px-3 text-muted-foreground align-top">{rowIndex}</td>
+                            <td className="py-2 px-3 align-top">
+                              <input
+                                type="text"
+                                className={`w-full min-w-[160px] px-2 py-1 text-xs bg-background border border-border rounded ${skip ? 'line-through text-muted-foreground' : ''}`}
+                                value={item.name}
+                                maxLength={200}
+                                placeholder="Nazwa pozycji ręcznej"
+                                onChange={(e) => updateCustomItem(item.id, { name: e.target.value })}
+                                aria-label={`Nazwa pozycji ręcznej ${rowIndex}`}
+                              />
+                            </td>
+                            <td className="py-2 px-3 align-top">
+                              <input
+                                type="number"
+                                min={1}
+                                className="w-16 px-2 py-1 text-xs bg-background border border-border rounded text-right"
+                                value={item.quantity}
+                                onChange={(e) =>
+                                  updateCustomItem(item.id, {
+                                    quantity: Math.max(1, parseInt(e.target.value, 10) || 1),
+                                  })
+                                }
+                                aria-label={`Ilość pozycji ręcznej ${rowIndex}`}
+                              />
+                            </td>
+                            <td className="py-2 px-3 align-top">
+                              <input
+                                type="text"
+                                className="w-16 px-2 py-1 text-xs bg-background border border-border rounded"
+                                value={item.unit}
+                                maxLength={40}
+                                onChange={(e) => updateCustomItem(item.id, { unit: e.target.value })}
+                                aria-label={`Jednostka pozycji ręcznej ${rowIndex}`}
+                              />
+                            </td>
+                            <td className="py-2 px-2 text-center align-top">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 accent-primary"
+                                checked={skip}
+                                onChange={(e) => updateItemFlag(item.id, 'skipPack', e.target.checked)}
+                                title="Nie pakować — pomiń na PDF"
+                                aria-label={`Nie pakować: ${item.name || item.id}`}
+                              />
+                            </td>
+                            <td className="py-2 px-2 text-center align-top">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 accent-primary"
+                                checked={rental}
+                                onChange={(e) => updateItemFlag(item.id, 'rental', e.target.checked)}
+                                title="Rental"
+                                aria-label={`Rental: ${item.name || item.id}`}
+                              />
+                            </td>
+                            <td className="py-2 px-3 align-top">
+                              <input
+                                type="text"
+                                className="w-full min-w-[140px] px-2 py-1 text-xs bg-background border border-border rounded"
+                                value={note}
+                                maxLength={500}
+                                placeholder="np. już na sali"
+                                onChange={(e) => updateItemNote(item.id, e.target.value)}
+                                aria-label={`Notatka: ${item.name || item.id}`}
+                              />
+                            </td>
+                            <td className="py-2 px-2 text-center align-top">
+                              <button
+                                type="button"
+                                onClick={() => removeCustomItem(item.id)}
+                                className="p-1 rounded text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
+                                title="Usuń pozycję ręczną"
+                                aria-label={`Usuń pozycję ręczną ${rowIndex}`}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </Fragment>
+                  ))
                 )}
               </tbody>
             </table>

@@ -919,6 +919,7 @@ export class PdfController {
         where: { id: orderId, isDeleted: false },
         include: {
           client: true,
+          offerBlocks: { orderBy: { sortOrder: 'asc' } },
           equipmentItems: {
             include: { equipment: true },
             orderBy: { sortOrder: 'asc' },
@@ -1092,12 +1093,22 @@ export class PdfController {
               phone: order.client.phone,
             }
           : null,
+        offerBlocks: (order.offerBlocks ?? []).map((b) => ({
+          id: b.id,
+          title: b.title,
+          sortOrder: b.sortOrder,
+        })),
         equipmentItems: [
           ...order.equipmentItems.map((e) => {
             const rentalFromDraft = Object.prototype.hasOwnProperty.call(rentalMarks, e.id)
               ? !!rentalMarks[e.id]
               : !!e.isRental
             const noteRaw = itemNotes[e.id]
+            const blockId = e.offerBlockId ?? null
+            const blockTitle =
+              blockId != null
+                ? (order.offerBlocks ?? []).find((b) => b.id === blockId)?.title ?? null
+                : null
             return {
               name: e.name,
               quantity: e.quantity,
@@ -1106,6 +1117,8 @@ export class PdfController {
               skipPack: !!skipPack[e.id],
               isRental: rentalFromDraft,
               note: typeof noteRaw === 'string' && noteRaw.trim() ? noteRaw.trim() : null,
+              offerBlockId: blockId,
+              blockTitle,
             }
           }),
           ...customItems.map((c, idx) => {
@@ -1118,6 +1131,8 @@ export class PdfController {
               skipPack: !!skipPack[c.id],
               isRental: !!rentalMarks[c.id],
               note: typeof noteRaw === 'string' && noteRaw.trim() ? noteRaw.trim() : null,
+              offerBlockId: '__custom__' as string,
+              blockTitle: 'Dopisane ręcznie',
             }
           }),
         ],
