@@ -6,7 +6,6 @@ import {
   LED_CABINET_PRESETS,
   calculateScreenFromSpec,
   createDefaultLedScreen,
-  formatMm,
   formatPx,
   matchCabinetPresetId,
   metersToCabinetGrid,
@@ -733,16 +732,44 @@ export default function LedScreensWorkspace({
             const cabH = result.screenHeightMm / result.rows
             const betterCol = d.betterSameColumns
             const betterRow = d.betterSameRows
+            const betterNear = d.betterNearby
             const rowDelta = betterCol ? betterCol.rows - result.rows : 0
             const colDelta = betterRow ? betterRow.columns - result.columns : 0
-            const heightDeltaM = Math.round((d.heightDeltaMm / 1000) * 1000) / 1000
-            const widthDeltaM = Math.round((d.widthDeltaMm / 1000) * 1000) / 1000
-            const signedCabinets = (n: number, unit: string) =>
-              `${n > 0 ? 'Dodaj' : 'Ujmij'} ${Math.abs(n)} ${unit}`
-            const signedMeters = (n: number, axis: string) =>
-              `${n > 0 ? 'Dodaj' : 'Ujmij'} ${Math.abs(n)} m ${axis}`
+            const nearColDelta = betterNear ? betterNear.columns - result.columns : 0
+            const nearRowDelta = betterNear ? betterNear.rows - result.rows : 0
+            const mFromCabinets = (n: number, cabMm: number) =>
+              Math.round(((n * cabMm) / 1000) * 1000) / 1000
+            const signedCabinets = (n: number, unitOne: string, unitMany: string) =>
+              `${n > 0 ? 'Dodaj' : 'Ujmij'} ${Math.abs(n)} ${
+                Math.abs(n) === 1 ? unitOne : unitMany
+              }`
+            const signedCabMeters = (n: number, cabMm: number, axis: string) => {
+              const m = mFromCabinets(n, cabMm)
+              return `${n > 0 ? 'Dodaj' : 'Ujmij'} ${Math.abs(m)} m ${axis}`
+            }
             const hintBtn =
               'w-full rounded border border-border px-2 py-1 text-left text-[11px] hover:border-primary/40'
+            const hasStepHint = !!(betterCol || betterRow || betterNear)
+
+            const nearbyLabel = () => {
+              if (!betterNear) return null
+              const parts: string[] = []
+              if (nearColDelta !== 0) {
+                parts.push(
+                  sizeMode === 'cabinets'
+                    ? signedCabinets(nearColDelta, 'kolumnę', 'kolumny')
+                    : signedCabMeters(nearColDelta, cabW, 'szer.')
+                )
+              }
+              if (nearRowDelta !== 0) {
+                parts.push(
+                  sizeMode === 'cabinets'
+                    ? signedCabinets(nearRowDelta, 'wiersz', 'wiersze')
+                    : signedCabMeters(nearRowDelta, cabH, 'wys.')
+                )
+              }
+              return `${parts.join(' · ')} → ${betterNear.columns}×${betterNear.rows} (${betterNear.percent.toFixed(1)} %)`
+            }
 
             return (
               <div className="space-y-1 rounded border border-warning/30 bg-warning/5 p-2 text-xs">
@@ -752,114 +779,69 @@ export default function LedScreensWorkspace({
                   emphasize
                 />
 
-                {sizeMode === 'cabinets' ? (
-                  <>
-                    {betterCol && rowDelta !== 0 ? (
-                      <button
-                        type="button"
-                        className={hintBtn}
-                        onClick={() => applyBetter(betterCol.columns, betterCol.rows)}
-                      >
-                        {signedCabinets(rowDelta, rowDelta === 1 || rowDelta === -1 ? 'wiersz' : 'wiersze')}{' '}
-                        → {betterCol.columns}×{betterCol.rows} ({betterCol.percent.toFixed(1)} %)
-                      </button>
-                    ) : null}
-                    {betterRow && colDelta !== 0 ? (
-                      <button
-                        type="button"
-                        className={hintBtn}
-                        onClick={() => applyBetter(betterRow.columns, betterRow.rows)}
-                      >
-                        {signedCabinets(colDelta, colDelta === 1 || colDelta === -1 ? 'kolumnę' : 'kolumny')}{' '}
-                        → {betterRow.columns}×{betterRow.rows} ({betterRow.percent.toFixed(1)} %)
-                      </button>
-                    ) : null}
-                    {!betterCol && !betterRow ? (
-                      <p className="text-[11px] text-muted-foreground">
-                        Idealnie przy tej siatce: {signedMeters(heightDeltaM, 'wys.')} albo{' '}
-                        {signedMeters(widthDeltaM, 'szer.')} — poza krokiem kabinetu.
-                      </p>
-                    ) : null}
-                  </>
+                {sizeMode === 'cabinets' && betterCol && rowDelta !== 0 ? (
+                  <button
+                    type="button"
+                    className={hintBtn}
+                    onClick={() => applyBetter(betterCol.columns, betterCol.rows)}
+                  >
+                    {signedCabinets(rowDelta, 'wiersz', 'wiersze')} → {betterCol.columns}×
+                    {betterCol.rows} ({betterCol.percent.toFixed(1)} %)
+                  </button>
                 ) : null}
 
-                {sizeMode === 'meters' ? (
-                  <>
-                    <p className="text-[11px] text-muted-foreground">
-                      Do docelowej proporcji:{' '}
-                      {Math.abs(heightDeltaM) <= Math.abs(widthDeltaM)
-                        ? signedMeters(heightDeltaM, 'wysokości')
-                        : signedMeters(widthDeltaM, 'szerokości')}
-                      {Math.abs(heightDeltaM) > 0.001 && Math.abs(widthDeltaM) > 0.001 ? (
-                        <>
-                          {' '}
-                          (albo{' '}
-                          {Math.abs(heightDeltaM) <= Math.abs(widthDeltaM)
-                            ? signedMeters(widthDeltaM, 'szer.')
-                            : signedMeters(heightDeltaM, 'wys.')}
-                          )
-                        </>
-                      ) : null}
-                    </p>
-                    {betterCol && rowDelta !== 0 ? (
-                      <button
-                        type="button"
-                        className={hintBtn}
-                        onClick={() => applyBetter(betterCol.columns, betterCol.rows)}
-                      >
-                        {signedMeters((rowDelta * cabH) / 1000, 'wys.')} → {betterCol.columns}×
-                        {betterCol.rows}
-                      </button>
-                    ) : null}
-                    {betterRow && colDelta !== 0 ? (
-                      <button
-                        type="button"
-                        className={hintBtn}
-                        onClick={() => applyBetter(betterRow.columns, betterRow.rows)}
-                      >
-                        {signedMeters((colDelta * cabW) / 1000, 'szer.')} → {betterRow.columns}×
-                        {betterRow.rows}
-                      </button>
-                    ) : null}
-                  </>
+                {sizeMode === 'cabinets' && betterRow && colDelta !== 0 ? (
+                  <button
+                    type="button"
+                    className={hintBtn}
+                    onClick={() => applyBetter(betterRow.columns, betterRow.rows)}
+                  >
+                    {signedCabinets(colDelta, 'kolumnę', 'kolumny')} → {betterRow.columns}×
+                    {betterRow.rows} ({betterRow.percent.toFixed(1)} %)
+                  </button>
                 ) : null}
 
-                {sizeMode === 'widthAspect' ? (
-                  <>
-                    <p className="text-[11px] text-muted-foreground">
-                      Przy tej szerokości: {signedMeters(heightDeltaM, 'wysokości')} (
-                      {formatMm(d.heightDeltaMm)})
-                    </p>
-                    {betterCol && rowDelta !== 0 ? (
-                      <button
-                        type="button"
-                        className={hintBtn}
-                        onClick={() => applyBetter(betterCol.columns, betterCol.rows)}
-                      >
-                        Snap: {signedMeters((rowDelta * cabH) / 1000, 'wys.')} → {betterCol.columns}×
-                        {betterCol.rows}
-                      </button>
-                    ) : null}
-                  </>
+                {(sizeMode === 'meters' || sizeMode === 'widthAspect') &&
+                betterCol &&
+                rowDelta !== 0 ? (
+                  <button
+                    type="button"
+                    className={hintBtn}
+                    onClick={() => applyBetter(betterCol.columns, betterCol.rows)}
+                  >
+                    {signedCabMeters(rowDelta, cabH, 'wys.')} → {betterCol.columns}×
+                    {betterCol.rows}
+                  </button>
                 ) : null}
 
-                {sizeMode === 'heightAspect' ? (
-                  <>
-                    <p className="text-[11px] text-muted-foreground">
-                      Przy tej wysokości: {signedMeters(widthDeltaM, 'szerokości')} (
-                      {formatMm(d.widthDeltaMm)})
-                    </p>
-                    {betterRow && colDelta !== 0 ? (
-                      <button
-                        type="button"
-                        className={hintBtn}
-                        onClick={() => applyBetter(betterRow.columns, betterRow.rows)}
-                      >
-                        Snap: {signedMeters((colDelta * cabW) / 1000, 'szer.')} → {betterRow.columns}×
-                        {betterRow.rows}
-                      </button>
-                    ) : null}
-                  </>
+                {(sizeMode === 'meters' || sizeMode === 'heightAspect') &&
+                betterRow &&
+                colDelta !== 0 ? (
+                  <button
+                    type="button"
+                    className={hintBtn}
+                    onClick={() => applyBetter(betterRow.columns, betterRow.rows)}
+                  >
+                    {signedCabMeters(colDelta, cabW, 'szer.')} → {betterRow.columns}×
+                    {betterRow.rows}
+                  </button>
+                ) : null}
+
+                {betterNear && (nearColDelta !== 0 || nearRowDelta !== 0) ? (
+                  <button
+                    type="button"
+                    className={hintBtn}
+                    onClick={() => applyBetter(betterNear.columns, betterNear.rows)}
+                  >
+                    {nearbyLabel()}
+                  </button>
+                ) : null}
+
+                {!hasStepHint ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    Przy kabinecie {cabW}×{cabH} mm bliżej proporcji nie da się zejść o pełny krok
+                    siatki — zmień docelową proporcję albo rozmiar kabinetu.
+                  </p>
                 ) : null}
               </div>
             )

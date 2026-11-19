@@ -116,6 +116,28 @@ describe('calculateLedScreen', () => {
     expect(r.deviation.heightDeltaMm).toBe(500)
   })
 
+  it('12×7 przy 16:9 proponuje realny krok kabinetu (nie ułamki metrów)', () => {
+    const r = calculateLedScreen({
+      cabinetWidthMm: 500,
+      cabinetHeightMm: 500,
+      pitchMm: 2.6,
+      columns: 12,
+      rows: 7,
+      targetRatio: 16 / 9,
+    })
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.deviation.percent).toBeGreaterThan(0.5)
+    // Sam wiersz/kolumna nie poprawia — potrzeba sąsiedztwa 2D
+    expect(r.deviation.betterSameColumns).toBeNull()
+    expect(r.deviation.betterSameRows).toBeNull()
+    expect(r.deviation.betterNearby).not.toBeNull()
+    expect(r.deviation.betterNearby!.percent).toBeLessThan(r.deviation.percent)
+    // Pełne kabinety
+    expect(Number.isInteger(r.deviation.betterNearby!.columns)).toBe(true)
+    expect(Number.isInteger(r.deviation.betterNearby!.rows)).toBe(true)
+  })
+
   it('odrzuca brak pitchu', () => {
     const r = calculateLedScreen({
       cabinetWidthMm: 500,

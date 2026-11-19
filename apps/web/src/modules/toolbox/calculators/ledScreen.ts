@@ -66,20 +66,33 @@ export interface LedScreenInput {
   targetRatio: number
 }
 
+export interface LedGridSuggestion {
+  columns: number
+  rows: number
+  percent: number
+}
+
 export interface LedAspectDeviation {
   /** Faktyczna proporcja szer./wys. */
   actualRatio: number
   targetRatio: number
   /** |actual − target| / target · 100 */
   percent: number
-  /** Ile mm dodać (+) / uciąć (−) na wysokości, żeby przy tej szerokości trafić w cel. */
+  /**
+   * Idealny ciągły rozjazd w mm (informacyjnie / testy).
+   * UI ma pokazywać wyłącznie kroki kabinetu — nie te wartości.
+   */
   heightDeltaMm: number
-  /** Ile mm dodać (+) / uciąć (−) na szerokości przy tej wysokości. */
   widthDeltaMm: number
-  /** Najbliższy układ przy tej samej liczbie kolumn, bliżej proporcji. */
-  betterSameColumns: { columns: number; rows: number; percent: number } | null
-  /** Najbliższy układ przy tej samej liczbie wierszy. */
-  betterSameRows: { columns: number; rows: number; percent: number } | null
+  /** Najbliższy układ przy tej samej liczbie kolumn (pełne wiersze kabinetu). */
+  betterSameColumns: LedGridSuggestion | null
+  /** Najbliższy układ przy tej samej liczbie wierszy (pełne kolumny). */
+  betterSameRows: LedGridSuggestion | null
+  /**
+   * Najbliższy lepszy układ w sąsiedztwie 2D (gdy sama kolumna/wiersz nie poprawia).
+   * Zawsze pełne kabinety.
+   */
+  betterNearby: LedGridSuggestion | null
 }
 
 export interface LedScreenResult {
@@ -184,7 +197,7 @@ function findBetterSameColumns(
   cabW: number,
   cabH: number,
   targetRatio: number
-): { columns: number; rows: number; percent: number } | null {
+): LedGridSuggestion | null {
   const current = scoreLayout(columns, rows, cabW, cabH, targetRatio)
   let bestRows = rows
   let bestScore = current
@@ -208,7 +221,7 @@ function findBetterSameRows(
   cabW: number,
   cabH: number,
   targetRatio: number
-): { columns: number; rows: number; percent: number } | null {
+): LedGridSuggestion | null {
   const current = scoreLayout(columns, rows, cabW, cabH, targetRatio)
   let bestCols = columns
   let bestScore = current
@@ -224,6 +237,43 @@ function findBetterSameRows(
   }
   if (bestCols === columns) return null
   return { columns: bestCols, rows, percent: round2(bestScore) }
+}
+
+/** Lepsza siatka w sąsiedztwie — tylko pełne kabinety; remis → mniejszy ruch Manhattan. */
+function findBetterNearby(
+  columns: number,
+  rows: number,
+  cabW: number,
+  cabH: number,
+  targetRatio: number,
+  radius = 8
+): LedGridSuggestion | null {
+  const current = scoreLayout(columns, rows, cabW, cabH, targetRatio)
+  let best: LedGridSuggestion | null = null
+  let bestDist = Number.POSITIVE_INFINITY
+
+  const cLo = Math.max(1, columns - radius)
+  const cHi = columns + radius
+  const rLo = Math.max(1, rows - radius)
+  const rHi = rows + radius
+
+  for (let c = cLo; c <= cHi; c += 1) {
+    for (let r = rLo; r <= rHi; r += 1) {
+      if (c === columns && r === rows) continue
+      const s = scoreLayout(c, r, cabW, cabH, targetRatio)
+      if (!(s + 1e-9 < current)) continue
+      const dist = Math.abs(c - columns) + Math.abs(r - rows)
+      if (
+        !best ||
+        s + 1e-9 < best.percent ||
+        (Math.abs(s - best.percent) < 1e-9 && dist < bestDist)
+      ) {
+        best = { columns: c, rows: r, percent: round2(s) }
+        bestDist = dist
+      }
+    }
+  }
+  return best
 }
 
 export function calculateLedScreen(input: LedScreenInput): LedScreenCalcResult {
@@ -259,14 +309,40 @@ export function calculateLedScreen(input: LedScreenInput): LedScreenCalcResult {
   const idealHeightMm = screenWidthMm / targetRatio
   const idealWidthMm = screenHeightMm * targetRatio
 
+  const betterSameColumns = findBetterSameColumns(
+    cols,
+    rws,
+    cabinetWidthMm,
+    cabinetHeightMm,
+    targetRatio
+  )
+  const betterSameRows = findBetterSameRows(
+    cols,
+    rws,
+    cabinetWidthMm,
+    cabinetHeightMm,
+    targetRatio
+  )
+  const nearby = findBetterNearby(cols, rws, cabinetWidthMm, cabinetHeightMm, targetRatio)
+  const sameAs1d =
+    !!nearby &&
+    ((!!betterSameColumns &&
+      nearby.columns === betterSameColumns.columns &&
+      nearby.rows === betterSameColumns.rows) ||
+      (!!betterSameRows &&
+        nearby.columns === betterSameRows.columns &&
+        nearby.rows === betterSameRows.rows))
+  const betterNearby = nearby && !sameAs1d ? nearby : null
+
   const deviation: LedAspectDeviation = {
     actualRatio,
     targetRatio,
     percent: round2(aspectPercent(actualRatio, targetRatio)),
     heightDeltaMm: round2(idealHeightMm - screenHeightMm),
     widthDeltaMm: round2(idealWidthMm - screenWidthMm),
-    betterSameColumns: findBetterSameColumns(cols, rws, cabinetWidthMm, cabinetHeightMm, targetRatio),
-    betterSameRows: findBetterSameRows(cols, rws, cabinetWidthMm, cabinetHeightMm, targetRatio),
+    betterSameColumns,
+    betterSameRows,
+    betterNearby,
   }
 
   return {
