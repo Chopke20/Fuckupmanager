@@ -2,10 +2,13 @@ import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { Copy, Download, Plus, Settings2, Trash2 } from 'lucide-react'
 import {
   LED_ASPECT_PRESETS,
+  LED_CABINET_CUSTOM_PRESET_ID,
   LED_CABINET_PRESETS,
   calculateScreenFromSpec,
   createDefaultLedScreen,
+  formatMm,
   formatPx,
+  matchCabinetPresetId,
   metersToCabinetGrid,
   otherSideFromAspect,
   parseAspectRatio,
@@ -116,7 +119,7 @@ export default function LedScreensWorkspace({
   const [sizeMode, setSizeMode] = useState<SizeMode>('cabinets')
   const [aspectId, setAspectId] = useState<LedAspectPresetId>('16:9')
   const [customAspectRaw, setCustomAspectRaw] = useState('16:9')
-  const [activePreset, setActivePreset] = useState<string | null>('500x500-p2.6')
+  const [activePreset, setActivePreset] = useState<string>('500x500-p2.6')
   const [exportBusy, setExportBusy] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
@@ -153,7 +156,9 @@ export default function LedScreensWorkspace({
     setLabelRaw(active.label)
     setAspectId(closestAspectId(active.targetRatio))
     setCustomAspectRaw(String(active.targetRatio))
-    setActivePreset(null)
+    setActivePreset(
+      matchCabinetPresetId(active.cabinetWidthMm, active.cabinetHeightMm, active.pitchMm)
+    )
     setSizeMode('cabinets')
     const wM = (active.columns * active.cabinetWidthMm) / 1000
     const hM = (active.rows * active.cabinetHeightMm) / 1000
@@ -309,6 +314,10 @@ export default function LedScreensWorkspace({
     setPitchRaw(String(preset.pitchMm))
   }
 
+  const enableCustomCabinet = () => {
+    setActivePreset(LED_CABINET_CUSTOM_PRESET_ID)
+  }
+
   const addScreen = () => {
     const n = project.screens.length + 1
     const screen = createDefaultLedScreen({
@@ -350,9 +359,14 @@ export default function LedScreensWorkspace({
   }
 
   const applyBetter = (cols: number, rws: number) => {
-    setSizeMode('cabinets')
+    const cabW = cabinetWidthMm > 0 ? cabinetWidthMm : active?.cabinetWidthMm ?? 500
+    const cabH = cabinetHeightMm > 0 ? cabinetHeightMm : active?.cabinetHeightMm ?? 500
+    const wM = Math.round(((cols * cabW) / 1000) * 1000) / 1000
+    const hM = Math.round(((rws * cabH) / 1000) * 1000) / 1000
     setColsRaw(String(cols))
     setRowsRaw(String(rws))
+    setTargetWRaw(String(wM))
+    setTargetHRaw(String(hM))
   }
 
   const onExport = async (mode: LedPixelMapExportMode) => {
@@ -460,59 +474,68 @@ export default function LedScreensWorkspace({
               {preset.label}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={enableCustomCabinet}
+            className={`${segmentBtn(activePreset === LED_CABINET_CUSTOM_PRESET_ID)} border-l border-border`}
+          >
+            Własne
+          </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-1.5">
-        <div>
-          <label className={fieldLabel} htmlFor="cab-w">
-            Kab. szer. mm
-          </label>
-          <input
-            id="cab-w"
-            type="text"
-            inputMode="decimal"
-            className={fieldInput}
-            value={cabWRaw}
-            onChange={(e) => {
-              setActivePreset(null)
-              setCabWRaw(e.target.value)
-            }}
-          />
+      {activePreset === LED_CABINET_CUSTOM_PRESET_ID ? (
+        <div className="grid grid-cols-3 gap-1.5">
+          <div>
+            <label className={fieldLabel} htmlFor="cab-w">
+              Kab. szer. mm
+            </label>
+            <input
+              id="cab-w"
+              type="text"
+              inputMode="decimal"
+              className={fieldInput}
+              value={cabWRaw}
+              onChange={(e) => {
+                setActivePreset(LED_CABINET_CUSTOM_PRESET_ID)
+                setCabWRaw(e.target.value)
+              }}
+            />
+          </div>
+          <div>
+            <label className={fieldLabel} htmlFor="cab-h">
+              Kab. wys. mm
+            </label>
+            <input
+              id="cab-h"
+              type="text"
+              inputMode="decimal"
+              className={fieldInput}
+              value={cabHRaw}
+              onChange={(e) => {
+                setActivePreset(LED_CABINET_CUSTOM_PRESET_ID)
+                setCabHRaw(e.target.value)
+              }}
+            />
+          </div>
+          <div>
+            <label className={fieldLabel} htmlFor="pitch">
+              Pitch P mm
+            </label>
+            <input
+              id="pitch"
+              type="text"
+              inputMode="decimal"
+              className={fieldInput}
+              value={pitchRaw}
+              onChange={(e) => {
+                setActivePreset(LED_CABINET_CUSTOM_PRESET_ID)
+                setPitchRaw(e.target.value)
+              }}
+            />
+          </div>
         </div>
-        <div>
-          <label className={fieldLabel} htmlFor="cab-h">
-            Kab. wys. mm
-          </label>
-          <input
-            id="cab-h"
-            type="text"
-            inputMode="decimal"
-            className={fieldInput}
-            value={cabHRaw}
-            onChange={(e) => {
-              setActivePreset(null)
-              setCabHRaw(e.target.value)
-            }}
-          />
-        </div>
-        <div>
-          <label className={fieldLabel} htmlFor="pitch">
-            Pitch P mm
-          </label>
-          <input
-            id="pitch"
-            type="text"
-            inputMode="decimal"
-            className={fieldInput}
-            value={pitchRaw}
-            onChange={(e) => {
-              setActivePreset(null)
-              setPitchRaw(e.target.value)
-            }}
-          />
-        </div>
-      </div>
+      ) : null}
 
       <div>
         <div className="mb-0.5 flex items-baseline justify-between">
@@ -703,30 +726,145 @@ export default function LedScreensWorkspace({
         </div>
       </div>
 
-      {result.ok && result.deviation.percent > 0.5 ? (
-        <div className="space-y-1 rounded border border-warning/30 bg-warning/5 p-2 text-xs">
-          <Row
-            label="Δ proporcji"
-            value={`${result.deviation.percent.toFixed(2)} %`}
-            emphasize
-          />
-          {result.deviation.betterSameColumns ? (
-            <button
-              type="button"
-              onClick={() =>
-                applyBetter(
-                  result.deviation.betterSameColumns!.columns,
-                  result.deviation.betterSameColumns!.rows
-                )
-              }
-              className="w-full rounded border border-border px-2 py-1 text-left text-[11px] hover:border-primary/40"
-            >
-              Bliżej przy {result.deviation.betterSameColumns.columns}×
-              {result.deviation.betterSameColumns.rows}
-            </button>
-          ) : null}
-        </div>
-      ) : null}
+      {result.ok && result.deviation.percent > 0.5
+        ? (() => {
+            const d = result.deviation
+            const cabW = result.screenWidthMm / result.columns
+            const cabH = result.screenHeightMm / result.rows
+            const betterCol = d.betterSameColumns
+            const betterRow = d.betterSameRows
+            const rowDelta = betterCol ? betterCol.rows - result.rows : 0
+            const colDelta = betterRow ? betterRow.columns - result.columns : 0
+            const heightDeltaM = Math.round((d.heightDeltaMm / 1000) * 1000) / 1000
+            const widthDeltaM = Math.round((d.widthDeltaMm / 1000) * 1000) / 1000
+            const signedCabinets = (n: number, unit: string) =>
+              `${n > 0 ? 'Dodaj' : 'Ujmij'} ${Math.abs(n)} ${unit}`
+            const signedMeters = (n: number, axis: string) =>
+              `${n > 0 ? 'Dodaj' : 'Ujmij'} ${Math.abs(n)} m ${axis}`
+            const hintBtn =
+              'w-full rounded border border-border px-2 py-1 text-left text-[11px] hover:border-primary/40'
+
+            return (
+              <div className="space-y-1 rounded border border-warning/30 bg-warning/5 p-2 text-xs">
+                <Row
+                  label="Δ proporcji"
+                  value={`${d.percent.toFixed(2)} %`}
+                  emphasize
+                />
+
+                {sizeMode === 'cabinets' ? (
+                  <>
+                    {betterCol && rowDelta !== 0 ? (
+                      <button
+                        type="button"
+                        className={hintBtn}
+                        onClick={() => applyBetter(betterCol.columns, betterCol.rows)}
+                      >
+                        {signedCabinets(rowDelta, rowDelta === 1 || rowDelta === -1 ? 'wiersz' : 'wiersze')}{' '}
+                        → {betterCol.columns}×{betterCol.rows} ({betterCol.percent.toFixed(1)} %)
+                      </button>
+                    ) : null}
+                    {betterRow && colDelta !== 0 ? (
+                      <button
+                        type="button"
+                        className={hintBtn}
+                        onClick={() => applyBetter(betterRow.columns, betterRow.rows)}
+                      >
+                        {signedCabinets(colDelta, colDelta === 1 || colDelta === -1 ? 'kolumnę' : 'kolumny')}{' '}
+                        → {betterRow.columns}×{betterRow.rows} ({betterRow.percent.toFixed(1)} %)
+                      </button>
+                    ) : null}
+                    {!betterCol && !betterRow ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        Idealnie przy tej siatce: {signedMeters(heightDeltaM, 'wys.')} albo{' '}
+                        {signedMeters(widthDeltaM, 'szer.')} — poza krokiem kabinetu.
+                      </p>
+                    ) : null}
+                  </>
+                ) : null}
+
+                {sizeMode === 'meters' ? (
+                  <>
+                    <p className="text-[11px] text-muted-foreground">
+                      Do docelowej proporcji:{' '}
+                      {Math.abs(heightDeltaM) <= Math.abs(widthDeltaM)
+                        ? signedMeters(heightDeltaM, 'wysokości')
+                        : signedMeters(widthDeltaM, 'szerokości')}
+                      {Math.abs(heightDeltaM) > 0.001 && Math.abs(widthDeltaM) > 0.001 ? (
+                        <>
+                          {' '}
+                          (albo{' '}
+                          {Math.abs(heightDeltaM) <= Math.abs(widthDeltaM)
+                            ? signedMeters(widthDeltaM, 'szer.')
+                            : signedMeters(heightDeltaM, 'wys.')}
+                          )
+                        </>
+                      ) : null}
+                    </p>
+                    {betterCol && rowDelta !== 0 ? (
+                      <button
+                        type="button"
+                        className={hintBtn}
+                        onClick={() => applyBetter(betterCol.columns, betterCol.rows)}
+                      >
+                        {signedMeters((rowDelta * cabH) / 1000, 'wys.')} → {betterCol.columns}×
+                        {betterCol.rows}
+                      </button>
+                    ) : null}
+                    {betterRow && colDelta !== 0 ? (
+                      <button
+                        type="button"
+                        className={hintBtn}
+                        onClick={() => applyBetter(betterRow.columns, betterRow.rows)}
+                      >
+                        {signedMeters((colDelta * cabW) / 1000, 'szer.')} → {betterRow.columns}×
+                        {betterRow.rows}
+                      </button>
+                    ) : null}
+                  </>
+                ) : null}
+
+                {sizeMode === 'widthAspect' ? (
+                  <>
+                    <p className="text-[11px] text-muted-foreground">
+                      Przy tej szerokości: {signedMeters(heightDeltaM, 'wysokości')} (
+                      {formatMm(d.heightDeltaMm)})
+                    </p>
+                    {betterCol && rowDelta !== 0 ? (
+                      <button
+                        type="button"
+                        className={hintBtn}
+                        onClick={() => applyBetter(betterCol.columns, betterCol.rows)}
+                      >
+                        Snap: {signedMeters((rowDelta * cabH) / 1000, 'wys.')} → {betterCol.columns}×
+                        {betterCol.rows}
+                      </button>
+                    ) : null}
+                  </>
+                ) : null}
+
+                {sizeMode === 'heightAspect' ? (
+                  <>
+                    <p className="text-[11px] text-muted-foreground">
+                      Przy tej wysokości: {signedMeters(widthDeltaM, 'szerokości')} (
+                      {formatMm(d.widthDeltaMm)})
+                    </p>
+                    {betterRow && colDelta !== 0 ? (
+                      <button
+                        type="button"
+                        className={hintBtn}
+                        onClick={() => applyBetter(betterRow.columns, betterRow.rows)}
+                      >
+                        Snap: {signedMeters((colDelta * cabW) / 1000, 'szer.')} → {betterRow.columns}×
+                        {betterRow.rows}
+                      </button>
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
+            )
+          })()
+        : null}
     </form>
   )
 

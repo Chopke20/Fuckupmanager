@@ -4,6 +4,8 @@ import {
   calculateLedScreen,
   emptyLedScreenProject,
   formatAspectLabel,
+  LED_CABINET_CUSTOM_PRESET_ID,
+  matchCabinetPresetId,
   metersToCabinetGrid,
   otherSideFromAspect,
   parseAspectRatio,
@@ -11,6 +13,16 @@ import {
   serializeLedScreenProject,
   snapCabinetsToMm,
 } from './ledScreen'
+
+describe('matchCabinetPresetId', () => {
+  it('rozpoznaje znany preset', () => {
+    expect(matchCabinetPresetId(500, 500, 2.6)).toBe('500x500-p2.6')
+  })
+
+  it('zwraca custom dla własnych wymiarów', () => {
+    expect(matchCabinetPresetId(600, 500, 2.6)).toBe(LED_CABINET_CUSTOM_PRESET_ID)
+  })
+})
 
 describe('cabinetPixels', () => {
   it('500 mm / P2.6 ≈ 192 px', () => {

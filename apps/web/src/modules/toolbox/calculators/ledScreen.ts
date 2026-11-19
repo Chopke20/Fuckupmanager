@@ -28,7 +28,7 @@ export interface LedCabinetPreset {
   pitchMm: number
 }
 
-/** Popularne szafy — tylko skróty; wszystko da się nadpisać ręcznie. */
+/** Popularne szafy — tylko skróty; własne wymiary po wyborze „Własne”. */
 export const LED_CABINET_PRESETS: LedCabinetPreset[] = [
   { id: '500x500-p2.6', label: '500×500 P2.6', widthMm: 500, heightMm: 500, pitchMm: 2.6 },
   { id: '500x500-p2.9', label: '500×500 P2.9', widthMm: 500, heightMm: 500, pitchMm: 2.97 },
@@ -37,6 +37,23 @@ export const LED_CABINET_PRESETS: LedCabinetPreset[] = [
   { id: '500x1000-p2.9', label: '500×1000 P2.9', widthMm: 500, heightMm: 1000, pitchMm: 2.97 },
   { id: '640x480-p2.5', label: '640×480 P2.5', widthMm: 640, heightMm: 480, pitchMm: 2.5 },
 ]
+
+export const LED_CABINET_CUSTOM_PRESET_ID = 'custom' as const
+
+/** Dopasuj preset kabinetu albo `'custom'`. */
+export function matchCabinetPresetId(
+  widthMm: number,
+  heightMm: number,
+  pitchMm: number
+): string {
+  const found = LED_CABINET_PRESETS.find(
+    (p) =>
+      p.widthMm === widthMm &&
+      p.heightMm === heightMm &&
+      Math.abs(p.pitchMm - pitchMm) < 0.02
+  )
+  return found?.id ?? LED_CABINET_CUSTOM_PRESET_ID
+}
 
 export interface LedScreenInput {
   cabinetWidthMm: number
