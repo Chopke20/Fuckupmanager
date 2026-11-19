@@ -1,12 +1,15 @@
-import { Plus, Search, Trash2, ChevronRight, Copy } from 'lucide-react'
+import { Plus, Search, Trash2, ChevronLeft, ChevronRight, Copy } from 'lucide-react'
 import { useOrders, useDeleteOrder, useUpdateOrder, useDuplicateOrder } from '../hooks/useOrders'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { SortableTh } from '../../../shared/components/SortableTh'
 import { ORDER_STATUSES, Order, calculateOrderNetValue } from '@lama-stage/shared-types'
 import { formatOrderNumber } from '../utils/orderNumberFormat'
+
+/** Liczba wierszy na stronę — wyszukiwanie/filtr idą na serwer po całej bazie. */
+const PAGE_SIZE = 25
 
 const statusColors: Record<typeof ORDER_STATUSES[number], string> = {
   DRAFT: 'bg-gray-500/20 text-gray-500',
@@ -32,11 +35,19 @@ export default function OrdersPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const statusFromUrl = searchParams.get('status')
+  const pageFromUrl = Number.parseInt(searchParams.get('page') || '1', 10)
   const [searchTerm, setSearchTerm] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [page, setPage] = useState(() => (Number.isFinite(pageFromUrl) && pageFromUrl >= 1 ? pageFromUrl : 1))
   const [openStatusOrderId, setOpenStatusOrderId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<Order['status'] | 'all'>(() =>
     statusFromUrl && VALID_STATUSES.includes(statusFromUrl as any) ? (statusFromUrl as Order['status']) : 'all'
   )
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 300)
+    return () => clearTimeout(t)
+  }, [searchTerm])
 
   useEffect(() => {
     if (statusFromUrl && VALID_STATUSES.includes(statusFromUrl as any) && statusFilter !== statusFromUrl) {
@@ -44,20 +55,35 @@ export default function OrdersPage() {
     }
   }, [statusFromUrl])
 
+  const filtersReadyRef = useRef(false)
+  useEffect(() => {
+    if (!filtersReadyRef.current) {
+      filtersReadyRef.current = true
+      return
+    }
+    setPage(1)
+  }, [debouncedSearch, statusFilter])
+
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams)
+    if (statusFilter === 'all') next.delete('status')
+    else next.set('status', statusFilter)
+    if (page <= 1) next.delete('page')
+    else next.set('page', String(page))
+    setSearchParams(next, { replace: true })
+    // sync URL with pager/filter — nie zależeć od całej referencji searchParams
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, statusFilter])
+
   const handleStatusFilterChange = (value: Order['status'] | 'all') => {
     setStatusFilter(value)
-    if (value === 'all') {
-      searchParams.delete('status')
-    } else {
-      searchParams.set('status', value)
-    }
-    setSearchParams(searchParams, { replace: true })
+    setPage(1)
   }
 
-  const { data: paginatedOrders, isLoading, error } = useOrders({
-    page: 1,
-    limit: 500,
-    search: searchTerm,
+  const { data: paginatedOrders, isLoading, error, isFetching } = useOrders({
+    page,
+    limit: PAGE_SIZE,
+    search: debouncedSearch || undefined,
     status: statusFilter,
   })
   const deleteMutation = useDeleteOrder()
@@ -66,6 +92,17 @@ export default function OrdersPage() {
 
   const ordersRaw = paginatedOrders?.data ?? []
   const meta = paginatedOrders?.meta
+  const total = meta?.total ?? 0
+  const lastPage = Math.max(1, meta?.lastPage ?? 1)
+  const currentPage = Math.min(Math.max(1, meta?.page ?? page), lastPage)
+  const rangeFrom = total === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1
+  const rangeTo = total === 0 ? 0 : Math.min(currentPage * PAGE_SIZE, total)
+
+  useEffect(() => {
+    if (meta?.lastPage != null && page > meta.lastPage) {
+      setPage(Math.max(1, meta.lastPage))
+    }
+  }, [meta?.lastPage, page])
 
   const [sortBy, setSortBy] = useState<string>('orderNumber')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
@@ -183,12 +220,17 @@ export default function OrdersPage() {
         <button
           onClick={() => {
             setSearchTerm('')
+            setDebouncedSearch('')
             handleStatusFilterChange('all')
+            setPage(1)
           }}
           className="px-2.5 py-1.5 border border-border rounded text-sm hover:bg-surface-2 transition-colors"
         >
           Wyczyść
         </button>
+        {isFetching && !(isLoading && ordersRaw.length === 0) ? (
+          <span className="text-xs text-muted-foreground">Odświeżanie…</span>
+        ) : null}
       </div>
 
       <div className="border border-border rounded overflow-hidden">
@@ -312,15 +354,36 @@ export default function OrdersPage() {
                 })}
               </tbody>
             </table>
-            <div className="p-3 border-t border-border">
+            <div className="p-3 border-t border-border flex flex-wrap items-center justify-between gap-3">
               <span className="text-xs text-muted-foreground">
-                {meta?.total != null
-                  ? `Wyświetlono ${orders.length} z ${meta.total} zleceń`
-                  : `${orders.length} zleceń`}
-                {meta?.total != null && meta.total > orders.length
-                  ? ' (maks. 500 — zawęź wyszukiwanie lub filtr statusu)'
-                  : ''}
+                {total > 0
+                  ? `Wyświetlono ${rangeFrom}–${rangeTo} z ${total} zleceń`
+                  : '0 zleceń'}
+                {debouncedSearch ? ' · wyszukiwanie po całej bazie' : ''}
               </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={currentPage <= 1 || isFetching}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs border border-border rounded hover:bg-surface-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ChevronLeft size={14} />
+                  Poprzednia
+                </button>
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  Strona {currentPage} / {lastPage}
+                </span>
+                <button
+                  type="button"
+                  disabled={currentPage >= lastPage || isFetching}
+                  onClick={() => setPage((p) => Math.min(lastPage, p + 1))}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs border border-border rounded hover:bg-surface-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Następna
+                  <ChevronRight size={14} />
+                </button>
+              </div>
             </div>
           </div>
         ) : (

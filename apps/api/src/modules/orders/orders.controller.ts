@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { CreateOrderSchema, UpdateOrderSchema } from '@lama-stage/shared-types';
+import { CreateOrderSchema, PaginationSchema, UpdateOrderSchema } from '@lama-stage/shared-types';
 import { ordersService } from './orders.service';
 import { AppError, EquipmentUnavailableError } from '../../shared/errors/AppError';
 import { calculateEquipmentAvailability } from './equipment-availability.service';
@@ -7,8 +7,21 @@ import { prisma } from '../../prisma/client';
 
 export const getAllOrders = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const page = req.query.page != null ? Number(req.query.page) : 1;
-    const limit = req.query.limit != null ? Number(req.query.limit) : 10;
+    const parsedPagination = PaginationSchema.safeParse({
+      page: req.query.page,
+      limit: req.query.limit,
+    });
+    if (!parsedPagination.success) {
+      return res.status(400).json({
+        error: {
+          message: 'Nieprawidłowe parametry paginacji',
+          code: 'VALIDATION_ERROR',
+          details: parsedPagination.error.flatten(),
+        },
+        requestId: (req as any).requestId,
+      });
+    }
+    const { page, limit } = parsedPagination.data;
     const status = typeof req.query.status === 'string' ? req.query.status : undefined;
     const search = typeof req.query.search === 'string' ? req.query.search : undefined;
     const deletedOnly = req.query.deletedOnly === 'true' || req.query.deletedOnly === '1';
