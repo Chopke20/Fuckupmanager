@@ -732,11 +732,9 @@ export default function LedScreensWorkspace({
             const cabH = result.screenHeightMm / result.rows
             const betterCol = d.betterSameColumns
             const betterRow = d.betterSameRows
-            const betterNear = d.betterNearby
+            const nearby = d.betterNearby
             const rowDelta = betterCol ? betterCol.rows - result.rows : 0
             const colDelta = betterRow ? betterRow.columns - result.columns : 0
-            const nearColDelta = betterNear ? betterNear.columns - result.columns : 0
-            const nearRowDelta = betterNear ? betterNear.rows - result.rows : 0
             const mFromCabinets = (n: number, cabMm: number) =>
               Math.round(((n * cabMm) / 1000) * 1000) / 1000
             const signedCabinets = (n: number, unitOne: string, unitMany: string) =>
@@ -749,26 +747,27 @@ export default function LedScreensWorkspace({
             }
             const hintBtn =
               'w-full rounded border border-border px-2 py-1 text-left text-[11px] hover:border-primary/40'
-            const hasStepHint = !!(betterCol || betterRow || betterNear)
+            const hasStepHint = !!(betterCol || betterRow || nearby.length > 0)
 
-            const nearbyLabel = () => {
-              if (!betterNear) return null
+            const gridHintLabel = (sug: { columns: number; rows: number; percent: number }) => {
+              const dCol = sug.columns - result.columns
+              const dRow = sug.rows - result.rows
               const parts: string[] = []
-              if (nearColDelta !== 0) {
+              if (dCol !== 0) {
                 parts.push(
                   sizeMode === 'cabinets'
-                    ? signedCabinets(nearColDelta, 'kolumnę', 'kolumny')
-                    : signedCabMeters(nearColDelta, cabW, 'szer.')
+                    ? signedCabinets(dCol, 'kolumnę', 'kolumny')
+                    : signedCabMeters(dCol, cabW, 'szer.')
                 )
               }
-              if (nearRowDelta !== 0) {
+              if (dRow !== 0) {
                 parts.push(
                   sizeMode === 'cabinets'
-                    ? signedCabinets(nearRowDelta, 'wiersz', 'wiersze')
-                    : signedCabMeters(nearRowDelta, cabH, 'wys.')
+                    ? signedCabinets(dRow, 'wiersz', 'wiersze')
+                    : signedCabMeters(dRow, cabH, 'wys.')
                 )
               }
-              return `${parts.join(' · ')} → ${betterNear.columns}×${betterNear.rows} (${betterNear.percent.toFixed(1)} %)`
+              return `${parts.join(' · ')} → ${sug.columns}×${sug.rows} (${sug.percent.toFixed(1)} %)`
             }
 
             return (
@@ -827,15 +826,16 @@ export default function LedScreensWorkspace({
                   </button>
                 ) : null}
 
-                {betterNear && (nearColDelta !== 0 || nearRowDelta !== 0) ? (
+                {nearby.map((sug) => (
                   <button
+                    key={`${sug.columns}x${sug.rows}`}
                     type="button"
                     className={hintBtn}
-                    onClick={() => applyBetter(betterNear.columns, betterNear.rows)}
+                    onClick={() => applyBetter(sug.columns, sug.rows)}
                   >
-                    {nearbyLabel()}
+                    {gridHintLabel(sug)}
                   </button>
-                ) : null}
+                ))}
 
                 {!hasStepHint ? (
                   <p className="text-[11px] text-muted-foreground">

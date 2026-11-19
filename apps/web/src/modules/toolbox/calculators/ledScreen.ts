@@ -89,10 +89,10 @@ export interface LedAspectDeviation {
   /** Najbliższy układ przy tej samej liczbie wierszy (pełne kolumny). */
   betterSameRows: LedGridSuggestion | null
   /**
-   * Najbliższy lepszy układ w sąsiedztwie 2D (gdy sama kolumna/wiersz nie poprawia).
-   * Zawsze pełne kabinety.
+   * Lepsze układy w sąsiedztwie 2D (pełne kabinety), posortowane od najbliższego 0%.
+   * Do ~3 propozycji — różne siatki, nie ułamki metrów.
    */
-  betterNearby: LedGridSuggestion | null
+  betterNearby: LedGridSuggestion[]
 }
 
 export interface LedScreenResult {
@@ -239,18 +239,21 @@ function findBetterSameRows(
   return { columns: bestCols, rows, percent: round2(bestScore) }
 }
 
-/** Lepsza siatka w sąsiedztwie — tylko pełne kabinety; remis → mniejszy ruch Manhattan. */
-function findBetterNearby(
+/**
+ * Lepsze siatki w sąsiedztwie — tylko pełne kabinety.
+ * Zwraca do `limit` propozycji: najpierw najbliżej 0%, potem różnorodność ruchu.
+ */
+function findBetterNearbyList(
   columns: number,
   rows: number,
   cabW: number,
   cabH: number,
   targetRatio: number,
-  radius = 8
-): LedGridSuggestion | null {
+  radius = 8,
+  limit = 3
+): LedGridSuggestion[] {
   const current = scoreLayout(columns, rows, cabW, cabH, targetRatio)
-  let best: LedGridSuggestion | null = null
-  let bestDist = Number.POSITIVE_INFINITY
+  const candidates: Array<LedGridSuggestion & { dist: number }> = []
 
   const cLo = Math.max(1, columns - radius)
   const cHi = columns + radius
@@ -262,18 +265,43 @@ function findBetterNearby(
       if (c === columns && r === rows) continue
       const s = scoreLayout(c, r, cabW, cabH, targetRatio)
       if (!(s + 1e-9 < current)) continue
-      const dist = Math.abs(c - columns) + Math.abs(r - rows)
-      if (
-        !best ||
-        s + 1e-9 < best.percent ||
-        (Math.abs(s - best.percent) < 1e-9 && dist < bestDist)
-      ) {
-        best = { columns: c, rows: r, percent: round2(s) }
-        bestDist = dist
-      }
+      candidates.push({
+        columns: c,
+        rows: r,
+        percent: round2(s),
+        dist: Math.abs(c - columns) + Math.abs(r - rows),
+      })
     }
   }
-  return best
+
+  candidates.sort((a, b) => a.percent - b.percent || a.dist - b.dist || a.columns - b.columns)
+
+  const picked: LedGridSuggestion[] = []
+  for (const cand of candidates) {
+    if (picked.length >= limit) break
+    const duplicate = picked.some((p) => p.columns === cand.columns && p.rows === cand.rows)
+    if (duplicate) continue
+    // Różnorodność: unikaj prawie tej samej delty % przy identycznym kierunku ruchu
+    const redundant = picked.some((p) => {
+      const sameDir =
+        Math.sign(p.columns - columns) === Math.sign(cand.columns - columns) &&
+        Math.sign(p.rows - rows) === Math.sign(cand.rows - rows)
+      return sameDir && Math.abs(p.percent - cand.percent) < 0.35
+    })
+    if (redundant && picked.length > 0) continue
+    picked.push({ columns: cand.columns, rows: cand.rows, percent: cand.percent })
+  }
+
+  // Jeśli filtr różnorodności zostawił za mało — dopełnij najlepszymi
+  if (picked.length < limit) {
+    for (const cand of candidates) {
+      if (picked.length >= limit) break
+      if (picked.some((p) => p.columns === cand.columns && p.rows === cand.rows)) continue
+      picked.push({ columns: cand.columns, rows: cand.rows, percent: cand.percent })
+    }
+  }
+
+  return picked
 }
 
 export function calculateLedScreen(input: LedScreenInput): LedScreenCalcResult {
@@ -323,16 +351,22 @@ export function calculateLedScreen(input: LedScreenInput): LedScreenCalcResult {
     cabinetHeightMm,
     targetRatio
   )
-  const nearby = findBetterNearby(cols, rws, cabinetWidthMm, cabinetHeightMm, targetRatio)
-  const sameAs1d =
-    !!nearby &&
-    ((!!betterSameColumns &&
-      nearby.columns === betterSameColumns.columns &&
-      nearby.rows === betterSameColumns.rows) ||
-      (!!betterSameRows &&
-        nearby.columns === betterSameRows.columns &&
-        nearby.rows === betterSameRows.rows))
-  const betterNearby = nearby && !sameAs1d ? nearby : null
+  const nearbyList = findBetterNearbyList(
+    cols,
+    rws,
+    cabinetWidthMm,
+    cabinetHeightMm,
+    targetRatio
+  )
+  const betterNearby = nearbyList.filter(
+    (n) =>
+      !(
+        betterSameColumns &&
+        n.columns === betterSameColumns.columns &&
+        n.rows === betterSameColumns.rows
+      ) &&
+      !(betterSameRows && n.columns === betterSameRows.columns && n.rows === betterSameRows.rows)
+  )
 
   const deviation: LedAspectDeviation = {
     actualRatio,

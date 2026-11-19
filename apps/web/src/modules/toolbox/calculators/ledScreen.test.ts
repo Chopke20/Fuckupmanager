@@ -116,7 +116,7 @@ describe('calculateLedScreen', () => {
     expect(r.deviation.heightDeltaMm).toBe(500)
   })
 
-  it('12×7 przy 16:9 proponuje realny krok kabinetu (nie ułamki metrów)', () => {
+  it('12×7 przy 16:9 proponuje kilka realnych siatek bliżej 0%', () => {
     const r = calculateLedScreen({
       cabinetWidthMm: 500,
       cabinetHeightMm: 500,
@@ -128,14 +128,19 @@ describe('calculateLedScreen', () => {
     expect(r.ok).toBe(true)
     if (!r.ok) return
     expect(r.deviation.percent).toBeGreaterThan(0.5)
-    // Sam wiersz/kolumna nie poprawia — potrzeba sąsiedztwa 2D
     expect(r.deviation.betterSameColumns).toBeNull()
     expect(r.deviation.betterSameRows).toBeNull()
-    expect(r.deviation.betterNearby).not.toBeNull()
-    expect(r.deviation.betterNearby!.percent).toBeLessThan(r.deviation.percent)
-    // Pełne kabinety
-    expect(Number.isInteger(r.deviation.betterNearby!.columns)).toBe(true)
-    expect(Number.isInteger(r.deviation.betterNearby!.rows)).toBe(true)
+    expect(r.deviation.betterNearby.length).toBeGreaterThanOrEqual(2)
+    expect(r.deviation.betterNearby.length).toBeLessThanOrEqual(3)
+    for (const sug of r.deviation.betterNearby) {
+      expect(sug.percent).toBeLessThan(r.deviation.percent)
+      expect(Number.isInteger(sug.columns)).toBe(true)
+      expect(Number.isInteger(sug.rows)).toBe(true)
+    }
+    // Najlepsza pierwsza
+    expect(r.deviation.betterNearby[0]!.percent).toBeLessThanOrEqual(
+      r.deviation.betterNearby[1]!.percent
+    )
   })
 
   it('odrzuca brak pitchu', () => {
