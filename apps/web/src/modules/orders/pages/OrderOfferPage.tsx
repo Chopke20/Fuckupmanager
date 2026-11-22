@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback, Fragment } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, FileText, Eye, Download, Shield, Trash2, FileSpreadsheet, Link2, Copy, Ban } from 'lucide-react';
+import { ArrowLeft, FileText, Eye, Download, Shield, Trash2, FileSpreadsheet, Link2, Copy, Ban, Plus } from 'lucide-react';
 import { parseStagePlanSetJson, type IssuerProfilePublic } from '@lama-stage/shared-types';
 import { useOrder, orderKeys } from '../hooks/useOrders';
 import { orderApi, OrderDocumentExportMeta } from '../api/order.api';
@@ -126,6 +126,7 @@ export default function OrderOfferPage() {
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [loadingGenerate, setLoadingGenerate] = useState(false);
   const [loadingExcel, setLoadingExcel] = useState(false);
+  const [generateMenuOpen, setGenerateMenuOpen] = useState(false);
   const [exportBusyId, setExportBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -198,6 +199,25 @@ export default function OrderOfferPage() {
     stagePlanSceneCount > 0
       ? `Dołącza plan sceny (${stagePlanSceneCount}) do PDF oferty`
       : 'Brak złożonej sceny — złóż scenę i zapisz zlecenie';
+
+  useEffect(() => {
+    if (!generateMenuOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest('[data-generate-menu-root="true"]')) return;
+      setGenerateMenuOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setGenerateMenuOpen(false);
+    };
+    window.addEventListener('mousedown', onPointerDown);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('mousedown', onPointerDown);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [generateMenuOpen]);
 
   useEffect(() => {
     if (!id) return;
@@ -756,18 +776,6 @@ export default function OrderOfferPage() {
             <Eye size={16} />
             {loadingPreview ? '…' : 'Podgląd PDF'}
           </button>
-          <button
-            type="button"
-            onClick={() => previewOfferPdf(true)}
-            disabled={
-              loadingPreview || loadingGenerate || loadingExcel || stagePlanSceneCount === 0
-            }
-            title={stagePlanAttachTitle}
-            className="px-3 py-1.5 text-sm border border-border rounded hover:bg-surface-2 flex items-center gap-1.5 disabled:opacity-50"
-          >
-            <Eye size={16} />
-            {loadingPreview ? '…' : 'z planem sceny'}
-          </button>
           {OFFER_EXCEL_EXPORT_VISIBLE ? (
             <button
               type="button"
@@ -780,27 +788,52 @@ export default function OrderOfferPage() {
               {loadingExcel ? 'Excel…' : 'Eksport Excel'}
             </button>
           ) : null}
-          <button
-            type="button"
-            onClick={() => generateOfferPdf(false)}
-            disabled={loadingPreview || loadingGenerate || loadingExcel}
-            className="px-3 py-1.5 text-sm border-2 border-primary text-primary rounded font-medium hover:bg-primary/10 flex items-center gap-1.5 disabled:opacity-50"
-          >
-            <FileText size={16} />
-            {loadingGenerate ? 'Generowanie…' : 'Generuj PDF (numer)'}
-          </button>
-          <button
-            type="button"
-            onClick={() => generateOfferPdf(true)}
-            disabled={
-              loadingPreview || loadingGenerate || loadingExcel || stagePlanSceneCount === 0
-            }
-            title={stagePlanAttachTitle}
-            className="px-3 py-1.5 text-sm border border-border rounded hover:bg-surface-2 flex items-center gap-1.5 disabled:opacity-50"
-          >
-            <FileText size={16} />
-            {loadingGenerate ? 'Generowanie…' : 'z planem sceny'}
-          </button>
+          <div className="relative flex" data-generate-menu-root="true">
+            <button
+              type="button"
+              onClick={() => {
+                setGenerateMenuOpen(false);
+                void generateOfferPdf(false);
+              }}
+              disabled={loadingPreview || loadingGenerate || loadingExcel}
+              title="Generuj ofertę PDF i nadaj numer (OFR-…)"
+              className="px-3 py-1.5 text-sm border-2 border-primary border-r-0 text-primary rounded-l font-medium hover:bg-primary/10 flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <FileText size={16} />
+              {loadingGenerate ? 'Generowanie…' : 'Generuj ofertę'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setGenerateMenuOpen((open) => !open)}
+              disabled={loadingPreview || loadingGenerate || loadingExcel}
+              aria-expanded={generateMenuOpen}
+              aria-haspopup="menu"
+              title="Więcej wariantów generowania"
+              className="px-2 py-1.5 text-sm border-2 border-primary text-primary rounded-r font-medium hover:bg-primary/10 flex items-center disabled:opacity-50"
+            >
+              <Plus size={16} />
+            </button>
+            {generateMenuOpen ? (
+              <div
+                role="menu"
+                className="absolute right-0 top-full mt-1 z-30 min-w-[13.5rem] rounded-md border border-border bg-surface shadow-lg py-1"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={stagePlanSceneCount === 0}
+                  title={stagePlanAttachTitle}
+                  onClick={() => {
+                    setGenerateMenuOpen(false);
+                    void generateOfferPdf(true);
+                  }}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-surface-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  oferta + plan sceny
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -1326,7 +1359,7 @@ export default function OrderOfferPage() {
         {loadingExports ? (
           <div className="text-sm text-muted-foreground">Ładowanie historii eksportów...</div>
         ) : exports.length === 0 ? (
-          <div className="text-sm text-muted-foreground">Brak zapisanych snapshotów — użyj „Generuj PDF (numer)”.</div>
+          <div className="text-sm text-muted-foreground">Brak zapisanych snapshotów — użyj „Generuj ofertę”.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
