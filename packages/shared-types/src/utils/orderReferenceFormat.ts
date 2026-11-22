@@ -13,6 +13,7 @@ const DOCUMENT_TYPE_PREFIX: Record<DocumentType, string> = {
   WAREHOUSE: 'WHS',
   BRIEF: 'BRF',
   STAGE_PLAN: 'SCN',
+  LED_PLAN: 'LED',
   SHARED_OFFER: 'TOI',
 };
 

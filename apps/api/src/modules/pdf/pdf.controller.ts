@@ -4,11 +4,20 @@ import { prisma } from '../../prisma/client'
 import puppeteer from 'puppeteer'
 import { ZodError } from 'zod'
 import { AppError } from '../../shared/errors/AppError'
-import { OrderOfferSnapshotSchema, parseStagePlanJson, parseStagePlanSetJson, type OfferDocumentDraft, type OrderOfferSnapshot, type SharedOfferPartnerLine } from '@lama-stage/shared-types'
+import {
+  OrderOfferSnapshotSchema,
+  parseLedScreenSetJson,
+  parseStagePlanJson,
+  parseStagePlanSetJson,
+  type OfferDocumentDraft,
+  type OrderOfferSnapshot,
+  type SharedOfferPartnerLine,
+} from '@lama-stage/shared-types'
 import { buildOfferHtmlV5, type OrderLike } from './offer-v5-builder'
 import { buildOfferExcel, offerExcelFilename } from './offer-excel-builder'
 import { buildWarehousePdfHtml } from './warehouse-pdf-builder'
-import { buildStagePlanPdfHtml } from './stage-plan-pdf-builder'
+import { buildStagePlanPdfHtml, type StagePlanPdfGroup } from './stage-plan-pdf-builder'
+import { buildLedPlanPdfHtml, type LedPlanPdfGroup } from './led-plan-pdf-builder'
 import { buildPlannerPdfHtml } from './planner-pdf-builder'
 import { boardPayloadSchema } from '../planner-boards/planner-boards.controller'
 import {
@@ -1196,34 +1205,113 @@ export class PdfController {
         typeof req.query.blockId === 'string' && req.query.blockId.trim()
           ? req.query.blockId.trim()
           : null
+      const sceneId =
+        typeof req.query.sceneId === 'string' && req.query.sceneId.trim()
+          ? req.query.sceneId.trim()
+          : null
+      const scopeRaw =
+        typeof req.query.scope === 'string' && req.query.scope.trim()
+          ? req.query.scope.trim()
+          : null
+      // Kompatybilność: stare ?blockId= bez scope = block
+      const scope: 'order' | 'block' | 'scene' =
+        scopeRaw === 'block' || scopeRaw === 'scene' || scopeRaw === 'order'
+          ? scopeRaw
+          : blockId
+            ? sceneId
+              ? 'scene'
+              : 'block'
+            : 'order'
 
       const order = await prisma.order.findFirst({
         where: { id: orderId, isDeleted: false },
-        include: { client: true },
+        include: { client: true, offerBlocks: { orderBy: { sortOrder: 'asc' } } },
       })
       if (!order) return res.status(404).json({ error: 'Zlecenie nie znalezione' })
 
-      let planJson = order.stagePlanJson
+      const groups: StagePlanPdfGroup[] = []
       let orderName = order.name
-      if (blockId) {
-        const block = await prisma.orderOfferBlock.findFirst({
-          where: { id: blockId, orderId },
-        })
-        if (!block?.stagePlanJson) {
-          return res.status(400).json({
-            error: 'Brak zapisanego planu sceny w tym bloku oferty.',
+
+      if (scope === 'order') {
+        const mainSet = parseStagePlanSetJson(order.stagePlanJson)
+        if (mainSet.scenes.length > 0) {
+          groups.push({
+            groupTitle: 'Plan zlecenia (główny wykaz)',
+            scenes: mainSet.scenes.map((s) => ({ name: s.name, plan: s.plan })),
           })
         }
-        planJson = block.stagePlanJson
-        orderName = `${order.name} — ${block.title}`
+        for (const block of order.offerBlocks) {
+          const set = parseStagePlanSetJson(block.stagePlanJson)
+          if (set.scenes.length === 0) continue
+          groups.push({
+            groupTitle: `Blok: ${block.title}`,
+            scenes: set.scenes.map((s) => ({ name: s.name, plan: s.plan })),
+          })
+        }
+      } else {
+        if (scope === 'block' || scope === 'scene') {
+          if (!blockId) {
+            // Główny wykaz
+            const set = parseStagePlanSetJson(order.stagePlanJson)
+            let scenes = set.scenes.map((s) => ({ name: s.name, plan: s.plan, id: s.id }))
+            if (scope === 'scene') {
+              if (!sceneId) {
+                return res.status(400).json({ error: 'Brak sceneId dla scope=scene.' })
+              }
+              scenes = scenes.filter((s) => s.id === sceneId)
+              if (scenes.length === 0) {
+                return res.status(400).json({ error: 'Nie znaleziono sceny w głównym wykazie.' })
+              }
+            }
+            if (scenes.length === 0) {
+              return res.status(400).json({
+                error: 'Brak zapisanego planu sceny w głównym wykazie — złóż scenę w zleceniu.',
+              })
+            }
+            groups.push({
+              groupTitle: 'Plan zlecenia (główny wykaz)',
+              scenes: scenes.map(({ name, plan }) => ({ name, plan })),
+            })
+          } else {
+            const block = order.offerBlocks.find((b) => b.id === blockId)
+            if (!block) {
+              return res.status(400).json({ error: 'Nie znaleziono bloku oferty.' })
+            }
+            if (!block.stagePlanJson) {
+              return res.status(400).json({
+                error: 'Brak zapisanego planu sceny w tym bloku oferty.',
+              })
+            }
+            const set = parseStagePlanSetJson(block.stagePlanJson)
+            let scenes = set.scenes.map((s) => ({ name: s.name, plan: s.plan, id: s.id }))
+            if (scope === 'scene') {
+              if (!sceneId) {
+                return res.status(400).json({ error: 'Brak sceneId dla scope=scene.' })
+              }
+              scenes = scenes.filter((s) => s.id === sceneId)
+              if (scenes.length === 0) {
+                return res.status(400).json({ error: 'Nie znaleziono sceny w tym bloku.' })
+              }
+            }
+            if (scenes.length === 0) {
+              return res.status(400).json({
+                error: 'Brak zapisanego planu sceny w tym bloku oferty.',
+              })
+            }
+            orderName = `${order.name} — ${block.title}`
+            groups.push({
+              groupTitle: `Blok: ${block.title}`,
+              scenes: scenes.map(({ name, plan }) => ({ name, plan })),
+            })
+          }
+        }
       }
 
-      const planSet = parseStagePlanSetJson(planJson)
-      if (planSet.scenes.length === 0) {
+      const flatScenes = groups.flatMap((g) => g.scenes)
+      if (flatScenes.length === 0) {
         return res.status(400).json({ error: 'Brak zapisanego planu sceny — złóż scenę w zleceniu.' })
       }
-      const scenes = planSet.scenes.map((s) => ({ name: s.name, plan: s.plan }))
-      const plan = scenes[0]!.plan
+      const plan = flatScenes[0]!.plan
 
       const orderYear = order.orderYear ?? new Date(order.createdAt).getFullYear()
       const orderNumber = order.orderNumber
@@ -1270,8 +1358,12 @@ export class PdfController {
                 dateFrom: order.dateFrom,
                 dateTo: order.dateTo,
                 venue: order.venue,
+                scope,
+                blockId,
+                sceneId,
                 plan,
-                scenes,
+                scenes: flatScenes,
+                groups,
               }),
             },
           })
@@ -1289,7 +1381,7 @@ export class PdfController {
         dateFrom: order.dateFrom,
         dateTo: order.dateTo,
         issuedAt: generatedAt,
-        scenes,
+        groups,
       })
       const pdfBuffer = await this.renderPdf(html)
       const filename = `Plan-sceny-${documentNumberDisplay}.pdf`
@@ -1302,6 +1394,184 @@ export class PdfController {
     } catch (error) {
       console.error('Błąd generowania PDF planu sceny:', error)
       res.status(500).json({ error: 'Błąd generowania PDF planu sceny' })
+    }
+  }
+
+  async generateLedPlanPdf(req: Request, res: Response) {
+    try {
+      const { orderId } = req.params
+      if (!orderId) return res.status(400).json({ error: 'Brak ID zlecenia' })
+
+      const blockId =
+        typeof req.query.blockId === 'string' && req.query.blockId.trim()
+          ? req.query.blockId.trim()
+          : null
+      const entryId =
+        typeof req.query.entryId === 'string' && req.query.entryId.trim()
+          ? req.query.entryId.trim()
+          : null
+      const scopeRaw =
+        typeof req.query.scope === 'string' && req.query.scope.trim()
+          ? req.query.scope.trim()
+          : null
+      const scope: 'order' | 'block' | 'entry' =
+        scopeRaw === 'block' || scopeRaw === 'entry' || scopeRaw === 'order'
+          ? scopeRaw
+          : blockId
+            ? entryId
+              ? 'entry'
+              : 'block'
+            : 'order'
+
+      const order = await prisma.order.findFirst({
+        where: { id: orderId, isDeleted: false },
+        include: { client: true, offerBlocks: { orderBy: { sortOrder: 'asc' } } },
+      })
+      if (!order) return res.status(404).json({ error: 'Zlecenie nie znalezione' })
+
+      const groups: LedPlanPdfGroup[] = []
+      let orderName = order.name
+
+      const pushSet = (
+        raw: string | null | undefined,
+        groupTitle: string,
+        filterEntryId?: string | null
+      ) => {
+        const set = parseLedScreenSetJson(raw)
+        let entries = set.entries
+        if (filterEntryId) {
+          entries = entries.filter((e) => e.id === filterEntryId)
+        }
+        if (entries.length === 0) return false
+        groups.push({
+          groupTitle,
+          entries: entries.map((e) => ({ name: e.name, project: e.project })),
+        })
+        return true
+      }
+
+      if (scope === 'order') {
+        pushSet(order.ledScreenJson, 'Plan zlecenia (główny wykaz)')
+        for (const block of order.offerBlocks) {
+          pushSet(block.ledScreenJson, `Blok: ${block.title}`)
+        }
+      } else if (!blockId) {
+        const ok = pushSet(
+          order.ledScreenJson,
+          'Plan zlecenia (główny wykaz)',
+          scope === 'entry' ? entryId : null
+        )
+        if (!ok) {
+          return res.status(400).json({
+            error:
+              scope === 'entry'
+                ? 'Nie znaleziono ekranu LED w głównym wykazie.'
+                : 'Brak zapisanego planu LED w głównym wykazie.',
+          })
+        }
+      } else {
+        const block = order.offerBlocks.find((b) => b.id === blockId)
+        if (!block) return res.status(400).json({ error: 'Nie znaleziono bloku oferty.' })
+        orderName = `${order.name} — ${block.title}`
+        const ok = pushSet(
+          block.ledScreenJson,
+          `Blok: ${block.title}`,
+          scope === 'entry' ? entryId : null
+        )
+        if (!ok) {
+          return res.status(400).json({
+            error:
+              scope === 'entry'
+                ? 'Nie znaleziono ekranu LED w tym bloku.'
+                : 'Brak zapisanego planu LED w tym bloku oferty.',
+          })
+        }
+      }
+
+      const flat = groups.flatMap((g) => g.entries)
+      if (flat.length === 0) {
+        return res.status(400).json({ error: 'Brak zapisanego planu LED — dodaj ekran w zleceniu.' })
+      }
+
+      const orderYear = order.orderYear ?? new Date(order.createdAt).getFullYear()
+      const orderNumber = order.orderNumber
+      if (orderNumber == null || orderYear == null) {
+        return res.status(400).json({ error: 'Zlecenie nie ma nadanego numeru.' })
+      }
+
+      const inline =
+        req.query.inline === '1' || req.query.preview === '1' || req.query.preview === 'true'
+      const generatedAt = new Date().toISOString()
+
+      let documentNumberDisplay: string
+      if (inline) {
+        const exportCount = await prisma.orderDocumentExport.count({
+          where: { orderId, documentType: 'LED_PLAN' },
+        })
+        documentNumberDisplay = buildDocumentNumber({
+          documentType: 'LED_PLAN',
+          orderNumber,
+          orderYear,
+          version: exportCount + 1,
+        })
+      } else {
+        const created = await prisma.$transaction(async (tx) => {
+          const existingCount = await tx.orderDocumentExport.count({
+            where: { orderId, documentType: 'LED_PLAN' },
+          })
+          const version = existingCount + 1
+          const documentNumber = buildDocumentNumber({
+            documentType: 'LED_PLAN',
+            orderNumber,
+            orderYear,
+            version,
+          })
+          return tx.orderDocumentExport.create({
+            data: {
+              orderId,
+              documentType: 'LED_PLAN',
+              documentNumber,
+              snapshot: JSON.stringify({
+                orderId,
+                documentType: 'LED_PLAN',
+                generatedAt,
+                dateFrom: order.dateFrom,
+                dateTo: order.dateTo,
+                venue: order.venue,
+                scope,
+                blockId,
+                entryId,
+                groups,
+              }),
+            },
+          })
+        })
+        documentNumberDisplay = created.documentNumber
+        res.setHeader('X-Led-Plan-Export-Created', '1')
+      }
+
+      const html = buildLedPlanPdfHtml({
+        documentNumberDisplay,
+        orderName,
+        orderNumber,
+        orderYear,
+        venue: order.venue,
+        dateFrom: order.dateFrom,
+        dateTo: order.dateTo,
+        issuedAt: generatedAt,
+        groups,
+      })
+      const pdfBuffer = await this.renderPdf(html)
+      const filename = `Plan-LED-${documentNumberDisplay}.pdf`
+      res.setHeader('Content-Type', 'application/pdf')
+      res.setHeader(
+        'Content-Disposition',
+        inline ? 'inline; filename="Plan-LED-podglad.pdf"' : `attachment; filename="${filename}"`,
+      )
+      res.send(pdfBuffer)
+    } catch (error) {
+      console.error('Błąd generowania PDF planu LED:', error)
+      res.status(500).json({ error: 'Błąd generowania PDF planu LED' })
     }
   }
 

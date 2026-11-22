@@ -404,7 +404,7 @@ model OrderDocumentExport {
   orderId        String
   order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-  documentType   String   // OFFER | PROPOSAL | WAREHOUSE | BRIEF | STAGE_PLAN
+  documentType   String   // OFFER | PROPOSAL | WAREHOUSE | BRIEF | STAGE_PLAN | LED_PLAN
   documentNumber String
   exportedAt     DateTime @default(now())
   snapshot       String   // JSON payload with document data snapshot
@@ -478,7 +478,7 @@ model OrderDocumentDraft {
   orderId      String
   order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-  documentType String   // OFFER | PROPOSAL | WAREHOUSE | BRIEF | STAGE_PLAN
+  documentType String   // OFFER | PROPOSAL | WAREHOUSE | BRIEF | STAGE_PLAN | LED_PLAN
   payload      String   // JSON payload with editable draft data
 
   createdAt    DateTime @default(now())

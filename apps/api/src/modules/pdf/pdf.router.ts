@@ -12,5 +12,6 @@ router.post('/offer/export/:exportId', pdfController.exportOfferFromSnapshot.bin
 router.post('/offer/export/:exportId/excel', pdfController.exportOfferExcelFromSnapshot.bind(pdfController))
 router.get('/warehouse/:orderId/generate', pdfController.generateWarehousePdf.bind(pdfController))
 router.get('/stage-plan/:orderId/generate', pdfController.generateStagePlanPdf.bind(pdfController))
+router.get('/led-plan/:orderId/generate', pdfController.generateLedPlanPdf.bind(pdfController))
 
 export default router

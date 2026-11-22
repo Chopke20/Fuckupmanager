@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useLocation, useSearchParams, useBlocker } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Save, FileText, Calendar, DollarSign, Repeat, X, AlertCircle, LayoutGrid } from 'lucide-react';
+import { ArrowLeft, Save, FileText, Calendar, DollarSign, Repeat, X, AlertCircle, LayoutGrid, Monitor } from 'lucide-react';
 import { FormProvider, useForm } from 'react-hook-form';
 import { useOrder, useCreateOrder, useUpdateOrder } from '../hooks/useOrders';
 import { api } from '../../../shared/api/client';
@@ -223,6 +223,7 @@ export default function OrderFormPage() {
   const updateOrderMutation = useUpdateOrder();
   const [activeSection, setActiveSection] = useState('header');
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [documentNavPath, setDocumentNavPath] = useState<string | null>(null);
   const [dismissedHints, setDismissedHints] = useState<Set<string>>(new Set());
   const [unsavedModalOpen, setUnsavedModalOpen] = useState(false);
   const [planActionError, setPlanActionError] = useState<string | null>(null);
@@ -1115,7 +1116,15 @@ export default function OrderFormPage() {
     async (targetPath: string) => {
       if (!id) return;
       setSubmitError(null);
-      if (!formState.isDirty) {
+      setDocumentNavPath(targetPath);
+      // Plany techniczne zawsze zapisujemy przed otwarciem — unikamy martwego PDF
+      // gdy dirty state jest spóźniony względem setValue po „Dodaj do zlecenia”.
+      const forceSave =
+        targetPath.includes('/stage-plan') ||
+        targetPath.includes('/led-plan') ||
+        formState.isDirty;
+      if (!forceSave) {
+        setDocumentNavPath(null);
         navigate(targetPath);
         return;
       }
@@ -1123,6 +1132,8 @@ export default function OrderFormPage() {
       const validationError = validateOrderPayload(payload, getValues('equipmentItems') as Partial<OrderEquipmentItem>[] | undefined);
       if (validationError) {
         setSubmitError(validationError);
+        setDocumentNavPath(null);
+        document.getElementById('documents')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         return;
       }
       try {
@@ -1135,6 +1146,8 @@ export default function OrderFormPage() {
           const firstFieldError = Object.values(validationDetails.fieldErrors).flat().find(Boolean);
           if (typeof firstFieldError === 'string') {
             setSubmitError(firstFieldError);
+            setDocumentNavPath(null);
+            document.getElementById('documents')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             return;
           }
         }
@@ -1150,6 +1163,9 @@ export default function OrderFormPage() {
               ? raw.message
               : 'Nie udało się zapisać zlecenia przed otwarciem dokumentu.';
         setSubmitError(msg);
+        document.getElementById('documents')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } finally {
+        setDocumentNavPath(null);
       }
     },
     [id, formState.isDirty, getValues, navigate, reset, updateOrderMutation]
@@ -1679,10 +1695,14 @@ export default function OrderFormPage() {
                     <FileText size={24} />
                     Dokumenty
                   </h2>
+                  {documentNavPath ? (
+                    <p className="mb-2 text-xs text-muted-foreground">Zapisuję zlecenie przed otwarciem dokumentu…</p>
+                  ) : null}
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      disabled={!isEditing || !id || updateOrderMutation.isPending}
+                      disabled={!id || !!documentNavPath || updateOrderMutation.isPending}
+                      title={!id ? 'Najpierw utwórz zlecenie' : documentNavPath ? 'Zapisuję…' : 'Otwórz ofertę'}
                       onClick={() => id && void saveAndNavigateToDocument(`/orders/${id}/offer`)}
                       className="px-3 py-2 text-sm border-2 border-primary text-primary rounded font-medium hover:bg-primary/10 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -1691,7 +1711,8 @@ export default function OrderFormPage() {
                     </button>
                     <button
                       type="button"
-                      disabled={!isEditing || !id || updateOrderMutation.isPending}
+                      disabled={!id || !!documentNavPath || updateOrderMutation.isPending}
+                      title={!id ? 'Najpierw utwórz zlecenie' : documentNavPath ? 'Zapisuję…' : 'Otwórz proposal'}
                       onClick={() => id && void saveAndNavigateToDocument(`/orders/${id}/proposal`)}
                       className="px-3 py-2 text-sm border-2 border-primary text-primary rounded font-medium hover:bg-primary/10 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -1700,7 +1721,8 @@ export default function OrderFormPage() {
                     </button>
                     <button
                       type="button"
-                      disabled={!isEditing || !id || updateOrderMutation.isPending}
+                      disabled={!id || !!documentNavPath || updateOrderMutation.isPending}
+                      title={!id ? 'Najpierw utwórz zlecenie' : documentNavPath ? 'Zapisuję…' : 'Otwórz magazyn'}
                       onClick={() => id && void saveAndNavigateToDocument(`/orders/${id}/warehouse`)}
                       className="px-3 py-2 text-sm border-2 border-primary text-primary rounded font-medium hover:bg-primary/10 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -1714,12 +1736,35 @@ export default function OrderFormPage() {
                     </button>
                     <button
                       type="button"
-                      disabled={!isEditing || !id || updateOrderMutation.isPending}
+                      disabled={!id || !!documentNavPath || updateOrderMutation.isPending}
+                      title={
+                        !id
+                          ? 'Najpierw utwórz zlecenie'
+                          : documentNavPath?.includes('/stage-plan')
+                            ? 'Zapisuję…'
+                            : 'Zapisz (jeśli trzeba) i otwórz plan sceny'
+                      }
                       onClick={() => id && void saveAndNavigateToDocument(`/orders/${id}/stage-plan`)}
                       className="px-3 py-2 text-sm border-2 border-primary text-primary rounded font-medium hover:bg-primary/10 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <LayoutGrid size={18} />
-                      Plan sceny
+                      {documentNavPath?.includes('/stage-plan') ? 'Zapisuję…' : 'Plan sceny'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!id || !!documentNavPath || updateOrderMutation.isPending}
+                      title={
+                        !id
+                          ? 'Najpierw utwórz zlecenie'
+                          : documentNavPath?.includes('/led-plan')
+                            ? 'Zapisuję…'
+                            : 'Zapisz (jeśli trzeba) i otwórz plan LED'
+                      }
+                      onClick={() => id && void saveAndNavigateToDocument(`/orders/${id}/led-plan`)}
+                      className="px-3 py-2 text-sm border-2 border-primary text-primary rounded font-medium hover:bg-primary/10 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Monitor size={18} />
+                      {documentNavPath?.includes('/led-plan') ? 'Zapisuję…' : 'Plan LED'}
                     </button>
                   </div>
                 </section>

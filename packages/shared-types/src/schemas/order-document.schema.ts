@@ -8,7 +8,15 @@ import {
 import { ClientSchema } from './client.schema';
 import { CurrencySchema, ProjectContactKeySchema, VatRateOfferSchema } from './order.schema';
 
-export const DOCUMENT_TYPES = ['OFFER', 'PROPOSAL', 'WAREHOUSE', 'BRIEF', 'STAGE_PLAN', 'SHARED_OFFER'] as const;
+export const DOCUMENT_TYPES = [
+  'OFFER',
+  'PROPOSAL',
+  'WAREHOUSE',
+  'BRIEF',
+  'STAGE_PLAN',
+  'LED_PLAN',
+  'SHARED_OFFER',
+] as const;
 export const DocumentTypeSchema = z.enum(DOCUMENT_TYPES);
 
 export const OrderOfferSnapshotSchema = z.object({

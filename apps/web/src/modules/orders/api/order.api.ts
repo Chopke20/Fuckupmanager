@@ -85,19 +85,55 @@ export function getOrderWarehousePdfPreviewUrl(orderId: string): string {
   return `/api/pdf/warehouse/${orderId}/generate?preview=1`;
 }
 
-export async function downloadOrderStagePlanPdf(
-  orderId: string,
+export type StagePlanPdfParams = {
+  scope?: 'order' | 'block' | 'scene'
   blockId?: string | null
+  sceneId?: string | null
+}
+
+export type LedPlanPdfParams = {
+  scope?: 'order' | 'block' | 'entry'
+  blockId?: string | null
+  entryId?: string | null
+}
+
+function stagePlanPdfQuery(params?: StagePlanPdfParams | string | null): Record<string, string> {
+  // Kompatybilność: stary argument `blockId: string`
+  if (typeof params === 'string') {
+    return { blockId: params, scope: 'block' }
+  }
+  const out: Record<string, string> = {}
+  const scope = params?.scope ?? (params?.blockId ? 'block' : 'order')
+  out.scope = scope
+  if (params?.blockId) out.blockId = params.blockId
+  if (params?.sceneId) out.sceneId = params.sceneId
+  return out
+}
+
+function ledPlanPdfQuery(params?: LedPlanPdfParams): Record<string, string> {
+  const out: Record<string, string> = {}
+  const scope = params?.scope ?? (params?.blockId ? 'block' : 'order')
+  out.scope = scope
+  if (params?.blockId) out.blockId = params.blockId
+  if (params?.entryId) out.entryId = params.entryId
+  return out
+}
+
+async function downloadPdfBlob(
+  url: string,
+  params: Record<string, string>,
+  fallbackName: string,
+  fallbackError: string
 ): Promise<void> {
-  const res = await axios.get(`/api/pdf/stage-plan/${orderId}/generate`, {
+  const res = await axios.get(url, {
     responseType: 'blob',
     withCredentials: true,
-    params: blockId ? { blockId } : undefined,
+    params,
   })
   const blob = res.data as Blob
   if (blob.type === 'application/json') {
     const text = await blob.text()
-    let msg = 'Nie udało się wygenerować PDF planu sceny.'
+    let msg = fallbackError
     try {
       const j = JSON.parse(text) as { error?: string }
       if (typeof j.error === 'string') msg = j.error
@@ -106,24 +142,56 @@ export async function downloadOrderStagePlanPdf(
     }
     throw new Error(msg)
   }
-  const name = filenameFromContentDisposition(res.headers['content-disposition'], `Plan-sceny-${orderId}.pdf`)
-  const url = URL.createObjectURL(blob)
+  const name = filenameFromContentDisposition(res.headers['content-disposition'], fallbackName)
+  const objectUrl = URL.createObjectURL(blob)
   const a = document.createElement('a')
-  a.href = url
+  a.href = objectUrl
   a.download = name
   a.rel = 'noopener'
   document.body.appendChild(a)
   a.click()
   a.remove()
-  URL.revokeObjectURL(url)
+  URL.revokeObjectURL(objectUrl)
+}
+
+export async function downloadOrderStagePlanPdf(
+  orderId: string,
+  params?: StagePlanPdfParams | string | null
+): Promise<void> {
+  await downloadPdfBlob(
+    `/api/pdf/stage-plan/${orderId}/generate`,
+    stagePlanPdfQuery(params),
+    `Plan-sceny-${orderId}.pdf`,
+    'Nie udało się wygenerować PDF planu sceny.'
+  )
 }
 
 export function getOrderStagePlanPdfPreviewUrl(
   orderId: string,
-  blockId?: string | null
+  params?: StagePlanPdfParams | string | null
 ): string {
-  const query = blockId ? `?preview=1&blockId=${encodeURIComponent(blockId)}` : '?preview=1'
-  return `/api/pdf/stage-plan/${orderId}/generate${query}`
+  const query = new URLSearchParams({ preview: '1', ...stagePlanPdfQuery(params) })
+  return `/api/pdf/stage-plan/${orderId}/generate?${query.toString()}`
+}
+
+export async function downloadOrderLedPlanPdf(
+  orderId: string,
+  params?: LedPlanPdfParams
+): Promise<void> {
+  await downloadPdfBlob(
+    `/api/pdf/led-plan/${orderId}/generate`,
+    ledPlanPdfQuery(params),
+    `Plan-LED-${orderId}.pdf`,
+    'Nie udało się wygenerować PDF planu LED.'
+  )
+}
+
+export function getOrderLedPlanPdfPreviewUrl(
+  orderId: string,
+  params?: LedPlanPdfParams
+): string {
+  const query = new URLSearchParams({ preview: '1', ...ledPlanPdfQuery(params) })
+  return `/api/pdf/led-plan/${orderId}/generate?${query.toString()}`
 }
 
 export interface OrderDocumentExportMeta {

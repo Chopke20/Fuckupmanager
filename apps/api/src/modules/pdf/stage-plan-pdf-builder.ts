@@ -68,6 +68,9 @@ function renderSceneSection(sceneName: string | null, plan: StagePlan): string {
     </section>`
 }
 
+export type StagePlanPdfScene = { name: string; plan: StagePlan }
+export type StagePlanPdfGroup = { groupTitle: string | null; scenes: StagePlanPdfScene[] }
+
 export function buildStagePlanPdfHtml(params: {
   documentNumberDisplay: string
   orderName: string
@@ -80,15 +83,20 @@ export function buildStagePlanPdfHtml(params: {
   /** Pojedyncza scena (wsteczna zgodność). */
   plan?: StagePlan
   /** Wiele scen w bloku — gdy podane, ma pierwszeństwo przed `plan`. */
-  scenes?: Array<{ name: string; plan: StagePlan }>
+  scenes?: StagePlanPdfScene[]
+  /** Grupy (całe zlecenie: główny wykaz + bloki). Ma pierwszeństwo przed `scenes`. */
+  groups?: StagePlanPdfGroup[]
 }): string {
-  const scenes =
-    params.scenes && params.scenes.length > 0
-      ? params.scenes
-      : params.plan
-        ? [{ name: '', plan: params.plan }]
-        : []
-  if (scenes.length === 0) {
+  const groups: StagePlanPdfGroup[] =
+    params.groups && params.groups.length > 0
+      ? params.groups.filter((g) => g.scenes.length > 0)
+      : params.scenes && params.scenes.length > 0
+        ? [{ groupTitle: null, scenes: params.scenes }]
+        : params.plan
+          ? [{ groupTitle: null, scenes: [{ name: '', plan: params.plan }] }]
+          : []
+  const flatScenes = groups.flatMap((g) => g.scenes)
+  if (flatScenes.length === 0) {
     throw new Error('Brak planu sceny do PDF')
   }
   const orderRef =
@@ -97,12 +105,24 @@ export function buildStagePlanPdfHtml(params: {
       : '—'
   const issued = fmtPlDate(params.issuedAt) ?? ''
   const eventDate = formatEventDateRange(params.dateFrom, params.dateTo)
-  const showSceneTitles = scenes.length > 1
-  const body = scenes
-    .map((scene) =>
-      renderSceneSection(showSceneTitles ? scene.name || 'Scena' : null, scene.plan)
-    )
-    .join('<div class="scene-break"></div>')
+  const multiGroup = groups.length > 1 || groups.some((g) => !!g.groupTitle)
+  const sections: string[] = []
+  for (const group of groups) {
+    const showSceneTitles = multiGroup || group.scenes.length > 1
+    for (let i = 0; i < group.scenes.length; i += 1) {
+      const scene = group.scenes[i]!
+      const titleParts = [
+        group.groupTitle,
+        showSceneTitles ? scene.name || 'Scena' : null,
+      ].filter(Boolean)
+      const heading = titleParts.length > 0 ? titleParts.join(' · ') : null
+      if (sections.length > 0) {
+        sections.push('<div class="scene-break"></div>')
+      }
+      sections.push(renderSceneSection(heading, scene.plan))
+    }
+  }
+  const body = sections.join('')
 
   return `<!DOCTYPE html>
 <html lang="pl">
@@ -132,7 +152,7 @@ export function buildStagePlanPdfHtml(params: {
 </head>
 <body>
   <div class="page">
-    <h1>Plan sceny${scenes.length > 1 ? ` (${scenes.length})` : ''}</h1>
+    <h1>Plan sceny${flatScenes.length > 1 ? ` (${flatScenes.length})` : ''}</h1>
     <div class="meta">
       ${escapeHtml(params.documentNumberDisplay)}
       &nbsp;·&nbsp; ${escapeHtml(params.orderName)}

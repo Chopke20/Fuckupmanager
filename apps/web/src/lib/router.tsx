@@ -12,6 +12,7 @@ import SharedOfferEditorPage from '../modules/orders/pages/SharedOfferEditorPage
 import OrderWarehousePage from '../modules/orders/pages/OrderWarehousePage'
 import OrderBriefPage from '../modules/orders/pages/OrderBriefPage'
 import OrderStagePlanPage from '../modules/orders/pages/OrderStagePlanPage'
+import OrderLedPlanPage from '../modules/orders/pages/OrderLedPlanPage'
 import ClientsPage from '../modules/clients/pages/ClientsPage'
 import EquipmentPage from '../modules/equipment/pages/EquipmentPage'
 import ResourcesPage from '../modules/resources/pages/ResourcesPage'
@@ -68,6 +69,7 @@ export const appRouter = createBrowserRouter([
   { path: '/orders/:id/warehouse', element: <ProtectedLayout><OrderWarehousePage /></ProtectedLayout> },
   { path: '/orders/:id/brief', element: <ProtectedLayout><OrderBriefPage /></ProtectedLayout> },
   { path: '/orders/:id/stage-plan', element: <ProtectedLayout><OrderStagePlanPage /></ProtectedLayout> },
+  { path: '/orders/:id/led-plan', element: <ProtectedLayout><OrderLedPlanPage /></ProtectedLayout> },
   { path: '/clients', element: <ProtectedLayout><ClientsPage /></ProtectedLayout> },
   { path: '/equipment', element: <ProtectedLayout><EquipmentPage /></ProtectedLayout> },
   { path: '/resources', element: <ProtectedLayout><ResourcesPage /></ProtectedLayout> },
