@@ -84,6 +84,11 @@ export const OfferDocumentDraftSchema = z.object({
    * PDF używa `Order.description` jak dotychczas.
    */
   clientOfferDescription: z.string().max(12000).optional(),
+  /**
+   * Gdy true — PDF oferty zawiera na końcu załączony plan sceny (wszystkie złożone sceny zlecenia).
+   * Generacja wymaga ≥1 sceny w zapisanym zleceniu.
+   */
+  attachStagePlan: z.boolean().optional(),
 });
 
 /** Pozycja dopisana ręcznie na liście załadunku (nie pochodzi ze sprzętu zlecenia) */

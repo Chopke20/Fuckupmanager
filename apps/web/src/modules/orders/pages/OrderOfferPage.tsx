@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useCallback, Fragment } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, FileText, Eye, Download, Shield, Trash2, FileSpreadsheet, Link2, Copy, Ban } from 'lucide-react';
-import type { IssuerProfilePublic } from '@lama-stage/shared-types';
+import { parseStagePlanSetJson, type IssuerProfilePublic } from '@lama-stage/shared-types';
 import { useOrder, orderKeys } from '../hooks/useOrders';
 import { orderApi, OrderDocumentExportMeta } from '../api/order.api';
 import { pdfApi, financeApi } from '../api/pdf.api';
@@ -64,6 +64,8 @@ type OfferDraft = {
   issuedAt?: string;
   /** Tekst w PDF dla klienta; brak klucza = dotychczasowy fallback na opis ze zlecenia. */
   clientOfferDescription?: string;
+  /** Gdy true — PDF oferty zawiera na końcu plan sceny zlecenia. */
+  attachStagePlan?: boolean;
   issuer: {
     profileKey: string;
     companyName: string;
@@ -180,6 +182,26 @@ export default function OrderOfferPage() {
     const raw = (appSettingsQuery.data as any)?.enableToinenMusicMode;
     return raw === true;
   }, [appSettingsQuery.data]);
+
+  const stagePlanSceneCount = useMemo(() => {
+    if (!order) return 0;
+    let count = parseStagePlanSetJson(
+      typeof order.stagePlanJson === 'string' ? order.stagePlanJson : null
+    ).scenes.length;
+    for (const block of order.offerBlocks ?? []) {
+      count += parseStagePlanSetJson(
+        typeof block.stagePlanJson === 'string' ? block.stagePlanJson : null
+      ).scenes.length;
+    }
+    return count;
+  }, [order]);
+
+  useEffect(() => {
+    if (stagePlanSceneCount > 0) return;
+    setDraft((prev) =>
+      prev?.attachStagePlan ? { ...prev, attachStagePlan: false } : prev
+    );
+  }, [stagePlanSceneCount]);
 
   useEffect(() => {
     if (!id) return;
@@ -1253,6 +1275,29 @@ export default function OrderOfferPage() {
                 </p>
               </div>
             )}
+            <label
+              className={`text-sm md:col-span-5 flex items-start gap-2 pt-2 border-t border-border/60 mt-1 ${
+                stagePlanSceneCount === 0 ? 'opacity-60' : ''
+              }`}
+            >
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={Boolean(draft.attachStagePlan)}
+                disabled={stagePlanSceneCount === 0}
+                onChange={(e) =>
+                  setDraft((prev) => (prev ? { ...prev, attachStagePlan: e.target.checked } : prev))
+                }
+              />
+              <span>
+                <span className="block">Załącz plan sceny</span>
+                <span className="block text-xs text-muted-foreground font-normal">
+                  {stagePlanSceneCount > 0
+                    ? `PDF oferty zakończy się planem sceny (${stagePlanSceneCount}).`
+                    : 'Brak złożonej sceny w zleceniu — złóż scenę i zapisz zlecenie.'}
+                </span>
+              </span>
+            </label>
             {enableToinenMusicMode ? (
               <label className="text-sm md:col-span-5 flex items-center gap-2 pt-2 border-t border-border/60 mt-1">
                 <input

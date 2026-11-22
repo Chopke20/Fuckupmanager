@@ -18,6 +18,11 @@ import { buildOfferExcel, offerExcelFilename } from './offer-excel-builder'
 import { buildWarehousePdfHtml } from './warehouse-pdf-builder'
 import { buildStagePlanPdfHtml, type StagePlanPdfGroup } from './stage-plan-pdf-builder'
 import { buildLedPlanPdfHtml, type LedPlanPdfGroup } from './led-plan-pdf-builder'
+import {
+  appendStagePlanHtmlToOffer,
+  countOrderStagePlanScenes,
+  draftWantsAttachStagePlan,
+} from './offer-stage-plan-attach'
 import { buildPlannerPdfHtml } from './planner-pdf-builder'
 import { boardPayloadSchema } from '../planner-boards/planner-boards.controller'
 import {
@@ -369,13 +374,28 @@ export class PdfController {
         generatedAt,
         documentNumber: offerNumberDisplay,
       })
-      const html = buildOfferHtmlV5(orderOfferSnapshotToPdfOrderLike(snapshot), offerNumberDisplay, {
+      let html = buildOfferHtmlV5(orderOfferSnapshotToPdfOrderLike(snapshot), offerNumberDisplay, {
         issuedAt: generatedAt,
         projectContact,
         accentColorHex: branding.accentColorHex,
         logoUrl: branding.logoUrl,
         issuerDetailsVariant: offerIssuerDetailsVariant,
       })
+      if (draftWantsAttachStagePlan(draftPayload)) {
+        const attached = appendStagePlanHtmlToOffer({
+          offerHtml: html,
+          order,
+          documentNumberDisplay: offerNumberDisplay,
+          issuedAt: generatedAt,
+        })
+        if (attached.sceneCount === 0) {
+          return res.status(400).json({
+            error:
+              'Zaznaczono „Załącz plan sceny”, ale w zleceniu nie ma złożonej sceny. Złóż scenę i zapisz zlecenie.',
+          })
+        }
+        html = attached.html
+      }
       const pdfBuffer = await this.renderPdf(html)
       res.setHeader('Content-Type', 'application/pdf')
       res.setHeader('Content-Disposition', 'inline; filename="Oferta-podglad.pdf"')
@@ -477,6 +497,12 @@ export class PdfController {
       }
 
       let draftPayload = await loadOfferDraftPayload(prisma, orderId, order)
+      if (draftWantsAttachStagePlan(draftPayload) && countOrderStagePlanScenes(order) === 0) {
+        return res.status(400).json({
+          error:
+            'Zaznaczono „Załącz plan sceny”, ale w zleceniu nie ma złożonej sceny. Złóż scenę i zapisz zlecenie.',
+        })
+      }
       const generatedAt = new Date().toISOString()
       const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
       let branding = await this.resolvePdfBranding(appSettings)
@@ -597,13 +623,21 @@ export class PdfController {
       res.setHeader('X-Offer-Export-Created', exportCreated ? '1' : '0')
       res.setHeader('X-Offer-Number-Reused', reuseSameNumber ? '1' : '0')
 
-      const html = buildOfferHtmlV5(orderOfferSnapshotToPdfOrderLike(snapshot), finalOfferNumber, {
+      let html = buildOfferHtmlV5(orderOfferSnapshotToPdfOrderLike(snapshot), finalOfferNumber, {
         issuedAt: generatedAt,
         projectContact,
         accentColorHex: branding.accentColorHex,
         logoUrl: branding.logoUrl,
         issuerDetailsVariant: offerIssuerDetailsVariant,
       })
+      if (draftWantsAttachStagePlan(draftPayload)) {
+        html = appendStagePlanHtmlToOffer({
+          offerHtml: html,
+          order,
+          documentNumberDisplay: finalOfferNumber,
+          issuedAt: generatedAt,
+        }).html
+      }
       const pdfBuffer = await this.renderPdf(html)
 
       const filename = `Oferta-${finalOfferNumber}.pdf`
@@ -802,7 +836,7 @@ export class PdfController {
       }
     }
 
-    const html = parsed.success
+    let html = parsed.success
       ? buildOfferHtmlV5(orderOfferSnapshotToPdfOrderLike(parsed.data), exportRecord.documentNumber, {
           issuedAt,
           projectContact,
@@ -817,6 +851,20 @@ export class PdfController {
           logoUrl: branding.logoUrl,
           issuerDetailsVariant,
         })
+    if (draftWantsAttachStagePlan(draftFromSnapshot ?? raw.documentDraft)) {
+      const orderForAttach = await loadOrderForPdf(exportRecord.orderId)
+      if (orderForAttach) {
+        const attached = appendStagePlanHtmlToOffer({
+          offerHtml: html,
+          order: orderForAttach,
+          documentNumberDisplay: exportRecord.documentNumber,
+          issuedAt: issuedAt ?? new Date().toISOString(),
+        })
+        if (attached.sceneCount > 0) {
+          html = attached.html
+        }
+      }
+    }
     const pdfBuffer = await this.renderPdf(html)
     return { buffer: pdfBuffer, filename: `Oferta-${exportRecord.documentNumber}.pdf` }
   }
