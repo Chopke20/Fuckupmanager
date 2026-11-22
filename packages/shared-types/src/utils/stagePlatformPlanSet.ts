@@ -274,8 +274,7 @@ export function isPrimaryStagePlanScene(
 
 /**
  * Opis pozycji sprzętu z planem sceny (z markerem i #sceneId do syncu).
- * Część czytelna: `Nazwa · 6×4 m` albo samo `6×4 m` gdy brak nazwy.
- * `legHeightCm` zostaje w API dla kompatybilności — nie trafia do opisu.
+ * Część czytelna: `Nazwa · 6×4 m, nogi 60 cm` albo `6×4 m, nogi 60 cm` gdy brak nazwy.
  */
 export function formatStagePlanEquipmentDescription(params: {
   sceneId: string
@@ -285,7 +284,7 @@ export function formatStagePlanEquipmentDescription(params: {
   legHeightCm: number
   exactSuffix?: string
 }): string {
-  const dim = `${formatMeters(params.widthM)}×${formatMeters(params.depthM)} m`
+  const dim = `${formatMeters(params.widthM)}×${formatMeters(params.depthM)} m, nogi ${params.legHeightCm} cm`
   const name = params.sceneName.trim()
   const human = name ? `${name} · ${dim}` : dim
   const exact = params.exactSuffix ?? ''
@@ -293,8 +292,8 @@ export function formatStagePlanEquipmentDescription(params: {
 }
 
 /**
- * Opis dla klienta (PDF / Excel): bez `[plan sceny]`, `#id` i „nogi … cm”.
- * Np. `Scena 1 · 3×3 m` albo `3×3 m`.
+ * Opis dla klienta (PDF / Excel): bez `[plan sceny]` i `#id`.
+ * Np. `Scena 1 · 3×3 m, nogi 40 cm` albo `3×3 m, nogi 40 cm`.
  */
 export function clientFacingStagePlanEquipmentDescription(
   description: string | null | undefined
@@ -308,8 +307,6 @@ export function clientFacingStagePlanEquipmentDescription(
   rest = rest
     .replace(new RegExp(`^${STAGE_PLAN_SCENE_ID_PREFIX}[A-Za-z0-9_-]+\\s*`), '')
     .trim()
-  // Stare opisy: „3×3 m, nogi 40 cm” → „3×3 m”
-  rest = rest.replace(/,\s*nogi\s+\d+(?:[.,]\d+)?\s*cm/gi, '').trim()
   return rest
 }
 
