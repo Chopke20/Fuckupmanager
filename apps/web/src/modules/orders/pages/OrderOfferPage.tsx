@@ -64,8 +64,6 @@ type OfferDraft = {
   issuedAt?: string;
   /** Tekst w PDF dla klienta; brak klucza = dotychczasowy fallback na opis ze zlecenia. */
   clientOfferDescription?: string;
-  /** Gdy true — PDF oferty zawiera na końcu plan sceny zlecenia. */
-  attachStagePlan?: boolean;
   issuer: {
     profileKey: string;
     companyName: string;
@@ -196,19 +194,21 @@ export default function OrderOfferPage() {
     return count;
   }, [order]);
 
-  useEffect(() => {
-    if (stagePlanSceneCount > 0) return;
-    setDraft((prev) =>
-      prev?.attachStagePlan ? { ...prev, attachStagePlan: false } : prev
-    );
-  }, [stagePlanSceneCount]);
+  const stagePlanAttachTitle =
+    stagePlanSceneCount > 0
+      ? `Dołącza plan sceny (${stagePlanSceneCount}) do PDF oferty`
+      : 'Brak złożonej sceny — złóż scenę i zapisz zlecenie';
 
   useEffect(() => {
     if (!id) return;
     setLoadingDraft(true);
     orderApi
-      .getDocumentDraft<OfferDraft>(id, 'OFFER')
-      .then((res) => setDraft(res.payload))
+      .getDocumentDraft<OfferDraft & { attachStagePlan?: boolean }>(id, 'OFFER')
+      .then((res) => {
+        // Flaga attachStagePlan jest tylko per-request (przyciski PDF), nie ustawieniem draftu.
+        const { attachStagePlan: _ignored, ...payload } = res.payload
+        setDraft(payload)
+      })
       .catch(() => setError('Nie udało się pobrać draftu oferty.'))
       .finally(() => setLoadingDraft(false));
   }, [id]);
@@ -543,7 +543,7 @@ export default function OrderOfferPage() {
 
   const issuedAtDisplay = draft?.issuedAt ? new Date(draft.issuedAt).toLocaleDateString('pl-PL') : new Date().toLocaleDateString('pl-PL');
 
-  const previewOfferPdf = async () => {
+  const previewOfferPdf = async (attachStagePlan = false) => {
     if (!id || !draft) return;
     if (draft.currency === 'EUR' && (draft.exchangeRateEur == null || draft.exchangeRateEur <= 0)) {
       setError('Dla waluty EUR podaj dodatni kurs EUR przed otwarciem PDF.');
@@ -555,7 +555,7 @@ export default function OrderOfferPage() {
     try {
       const saved = await orderApi.updateDocumentDraft<OfferDraft>(id, 'OFFER', draft);
       setDraft(saved.payload);
-      const res = await pdfApi.previewOffer(id);
+      const res = await pdfApi.previewOffer(id, { attachStagePlan });
       const blob = res.data;
       const url = URL.createObjectURL(blob);
       window.open(url, '_blank', 'noopener,noreferrer');
@@ -584,7 +584,7 @@ export default function OrderOfferPage() {
     }
   };
 
-  const generateOfferPdf = async () => {
+  const generateOfferPdf = async (attachStagePlan = false) => {
     if (!id || !draft) return;
     if (draft.currency === 'EUR' && (draft.exchangeRateEur == null || draft.exchangeRateEur <= 0)) {
       setError('Dla waluty EUR podaj dodatni kurs EUR przed generowaniem PDF.');
@@ -596,7 +596,7 @@ export default function OrderOfferPage() {
     try {
       const saved = await orderApi.updateDocumentDraft<OfferDraft>(id, 'OFFER', draft);
       setDraft(saved.payload);
-      const res = await pdfApi.generateOffer(id);
+      const res = await pdfApi.generateOffer(id, { attachStagePlan });
       const reused = res.headers['x-offer-number-reused'] === '1';
       if (reused) {
         setInfo(
@@ -749,12 +749,24 @@ export default function OrderOfferPage() {
         <div className="flex flex-wrap gap-2 justify-end">
           <button
             type="button"
-            onClick={previewOfferPdf}
+            onClick={() => previewOfferPdf(false)}
             disabled={loadingPreview || loadingGenerate || loadingExcel}
             className="px-3 py-1.5 text-sm border border-border rounded hover:bg-surface-2 flex items-center gap-1.5 disabled:opacity-50"
           >
             <Eye size={16} />
             {loadingPreview ? '…' : 'Podgląd PDF'}
+          </button>
+          <button
+            type="button"
+            onClick={() => previewOfferPdf(true)}
+            disabled={
+              loadingPreview || loadingGenerate || loadingExcel || stagePlanSceneCount === 0
+            }
+            title={stagePlanAttachTitle}
+            className="px-3 py-1.5 text-sm border border-border rounded hover:bg-surface-2 flex items-center gap-1.5 disabled:opacity-50"
+          >
+            <Eye size={16} />
+            {loadingPreview ? '…' : 'z planem sceny'}
           </button>
           {OFFER_EXCEL_EXPORT_VISIBLE ? (
             <button
@@ -770,12 +782,24 @@ export default function OrderOfferPage() {
           ) : null}
           <button
             type="button"
-            onClick={generateOfferPdf}
+            onClick={() => generateOfferPdf(false)}
             disabled={loadingPreview || loadingGenerate || loadingExcel}
             className="px-3 py-1.5 text-sm border-2 border-primary text-primary rounded font-medium hover:bg-primary/10 flex items-center gap-1.5 disabled:opacity-50"
           >
             <FileText size={16} />
             {loadingGenerate ? 'Generowanie…' : 'Generuj PDF (numer)'}
+          </button>
+          <button
+            type="button"
+            onClick={() => generateOfferPdf(true)}
+            disabled={
+              loadingPreview || loadingGenerate || loadingExcel || stagePlanSceneCount === 0
+            }
+            title={stagePlanAttachTitle}
+            className="px-3 py-1.5 text-sm border border-border rounded hover:bg-surface-2 flex items-center gap-1.5 disabled:opacity-50"
+          >
+            <FileText size={16} />
+            {loadingGenerate ? 'Generowanie…' : 'z planem sceny'}
           </button>
         </div>
       </div>
@@ -1275,29 +1299,6 @@ export default function OrderOfferPage() {
                 </p>
               </div>
             )}
-            <label
-              className={`text-sm md:col-span-5 flex items-start gap-2 pt-2 border-t border-border/60 mt-1 ${
-                stagePlanSceneCount === 0 ? 'opacity-60' : ''
-              }`}
-            >
-              <input
-                type="checkbox"
-                className="mt-0.5"
-                checked={Boolean(draft.attachStagePlan)}
-                disabled={stagePlanSceneCount === 0}
-                onChange={(e) =>
-                  setDraft((prev) => (prev ? { ...prev, attachStagePlan: e.target.checked } : prev))
-                }
-              />
-              <span>
-                <span className="block">Załącz plan sceny</span>
-                <span className="block text-xs text-muted-foreground font-normal">
-                  {stagePlanSceneCount > 0
-                    ? `PDF oferty zakończy się planem sceny (${stagePlanSceneCount}).`
-                    : 'Brak złożonej sceny w zleceniu — złóż scenę i zapisz zlecenie.'}
-                </span>
-              </span>
-            </label>
             {enableToinenMusicMode ? (
               <label className="text-sm md:col-span-5 flex items-center gap-2 pt-2 border-t border-border/60 mt-1">
                 <input

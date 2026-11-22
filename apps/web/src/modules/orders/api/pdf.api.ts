@@ -3,15 +3,17 @@ import axios from 'axios';
 const PDF_BASE = '/api/pdf';
 
 export const pdfApi = {
-  previewOffer: (orderId: string) =>
+  previewOffer: (orderId: string, opts?: { attachStagePlan?: boolean }) =>
     axios.post<Blob>(`${PDF_BASE}/offer/${orderId}/preview`, null, {
+      params: opts?.attachStagePlan ? { attachStagePlan: '1' } : undefined,
       responseType: 'blob',
       headers: { Accept: 'application/pdf' },
     }),
 
   /** Zapis snapshotu + nadanie numeru (jeśli treść się zmieniła), pobranie PDF. */
-  generateOffer: (orderId: string) =>
+  generateOffer: (orderId: string, opts?: { attachStagePlan?: boolean }) =>
     axios.post<Blob>(`${PDF_BASE}/offer/${orderId}/generate`, null, {
+      params: opts?.attachStagePlan ? { attachStagePlan: '1' } : undefined,
       responseType: 'blob',
       headers: { Accept: 'application/pdf' },
     }),

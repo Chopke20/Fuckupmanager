@@ -23,6 +23,12 @@ import {
   countOrderStagePlanScenes,
   draftWantsAttachStagePlan,
 } from './offer-stage-plan-attach'
+
+function requestWantsAttachStagePlan(req: Request, draft: unknown): boolean {
+  const q = req.query?.attachStagePlan
+  const fromQuery = q === '1' || q === 'true'
+  return fromQuery || draftWantsAttachStagePlan(draft)
+}
 import { buildPlannerPdfHtml } from './planner-pdf-builder'
 import { boardPayloadSchema } from '../planner-boards/planner-boards.controller'
 import {
@@ -344,6 +350,16 @@ export class PdfController {
         return res.status(400).json({ error: 'Zlecenie nie ma przypisanego klienta — brak danych do oferty' })
       }
       let draftPayload = await loadOfferDraftPayload(prisma, orderId, order)
+      const attachStagePlan = requestWantsAttachStagePlan(req, draftPayload)
+      if (attachStagePlan && countOrderStagePlanScenes(order) === 0) {
+        return res.status(400).json({
+          error:
+            'Wybrano PDF z planem sceny, ale w zleceniu nie ma złożonej sceny. Złóż scenę i zapisz zlecenie.',
+        })
+      }
+      if (attachStagePlan) {
+        draftPayload = { ...draftPayload, attachStagePlan: true }
+      }
       const nextVer = (order.offerVersion ?? 0) + 1
       const offerNumberDisplay = getOfferNumberDisplay(order, nextVer)
       const generatedAt = new Date().toISOString()
@@ -381,20 +397,13 @@ export class PdfController {
         logoUrl: branding.logoUrl,
         issuerDetailsVariant: offerIssuerDetailsVariant,
       })
-      if (draftWantsAttachStagePlan(draftPayload)) {
-        const attached = appendStagePlanHtmlToOffer({
+      if (attachStagePlan) {
+        html = appendStagePlanHtmlToOffer({
           offerHtml: html,
           order,
           documentNumberDisplay: offerNumberDisplay,
           issuedAt: generatedAt,
-        })
-        if (attached.sceneCount === 0) {
-          return res.status(400).json({
-            error:
-              'Zaznaczono „Załącz plan sceny”, ale w zleceniu nie ma złożonej sceny. Złóż scenę i zapisz zlecenie.',
-          })
-        }
-        html = attached.html
+        }).html
       }
       const pdfBuffer = await this.renderPdf(html)
       res.setHeader('Content-Type', 'application/pdf')
@@ -497,11 +506,15 @@ export class PdfController {
       }
 
       let draftPayload = await loadOfferDraftPayload(prisma, orderId, order)
-      if (draftWantsAttachStagePlan(draftPayload) && countOrderStagePlanScenes(order) === 0) {
+      const attachStagePlan = requestWantsAttachStagePlan(req, draftPayload)
+      if (attachStagePlan && countOrderStagePlanScenes(order) === 0) {
         return res.status(400).json({
           error:
-            'Zaznaczono „Załącz plan sceny”, ale w zleceniu nie ma złożonej sceny. Złóż scenę i zapisz zlecenie.',
+            'Wybrano PDF z planem sceny, ale w zleceniu nie ma złożonej sceny. Złóż scenę i zapisz zlecenie.',
         })
+      }
+      if (attachStagePlan) {
+        draftPayload = { ...draftPayload, attachStagePlan: true }
       }
       const generatedAt = new Date().toISOString()
       const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } }).catch(() => null)
@@ -595,6 +608,9 @@ export class PdfController {
             throw new Error('ORDER_CLIENT_MISSING_AFTER_UPDATE')
           }
           let draftInTx = await loadOfferDraftPayload(tx, orderId, fresh)
+          if (attachStagePlan) {
+            draftInTx = { ...draftInTx, attachStagePlan: true }
+          }
           // Important: apply special modes inside TX as well, because we re-load the draft from DB here.
           // Otherwise, preview can look correct while "Generate" persists a snapshot with default issuer/footer.
           ;({ draftPayload: draftInTx } = this.applyToinenMusicModeIfEnabled(
@@ -630,7 +646,7 @@ export class PdfController {
         logoUrl: branding.logoUrl,
         issuerDetailsVariant: offerIssuerDetailsVariant,
       })
-      if (draftWantsAttachStagePlan(draftPayload)) {
+      if (attachStagePlan) {
         html = appendStagePlanHtmlToOffer({
           offerHtml: html,
           order,
