@@ -40,6 +40,47 @@ export function countOrderStagePlanScenes(order: OrderLikeForStageAttach): numbe
   return collectOrderStagePlanGroups(order).reduce((n, g) => n + g.scenes.length, 0)
 }
 
+/**
+ * Style planu sceny scoped pod `.stage-plan-attach`, żeby nie nadpisywać
+ * marginesów / body / table oferty (offer-v5).
+ */
+const STAGE_PLAN_ATTACH_SCOPED_CSS = `
+.stage-plan-attach {
+  font-family: Arial, Helvetica, sans-serif;
+  color: #111;
+  font-size: 10pt;
+}
+.stage-plan-attach .page { padding: 16mm 18mm; }
+.stage-plan-attach h1 { font-size: 16pt; margin: 0 0 4px; }
+.stage-plan-attach h2 { font-size: 12pt; margin: 0 0 8px; }
+.stage-plan-attach .meta { color: #666; font-size: 9pt; margin-bottom: 6px; }
+.stage-plan-attach .event-date { font-size: 12pt; font-weight: 700; color: #111; margin: 0 0 14px; }
+.stage-plan-attach .event-date span { font-weight: 400; color: #444; }
+.stage-plan-attach table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+.stage-plan-attach th,
+.stage-plan-attach td { border-bottom: 1px solid #ddd; padding: 6px 4px; text-align: left; }
+.stage-plan-attach th {
+  font-size: 8pt;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: #666;
+}
+.stage-plan-attach ul { margin: 10px 0 0; padding-left: 18px; color: #444; font-size: 9pt; }
+.stage-plan-attach .plan { margin: 12px 0; border: 1px solid #ddd; padding: 8px; }
+.stage-plan-attach .legend { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 9pt; margin-top: 8px; }
+.stage-plan-attach .legend-item { display: flex; gap: 6px; }
+.stage-plan-attach .legend-label {
+  color: #666;
+  text-transform: uppercase;
+  font-size: 7.5pt;
+  letter-spacing: .06em;
+  align-self: center;
+}
+.stage-plan-attach .warnings { color: #a83232; }
+.stage-plan-attach .scene-break { page-break-before: always; margin-top: 18px; }
+.stage-plan-attach-break { page-break-before: always; break-before: page; }
+`
+
 /** Dokleja HTML planu sceny do oferty (nowa strona, ten sam PDF). */
 export function appendStagePlanHtmlToOffer(params: {
   offerHtml: string
@@ -66,16 +107,13 @@ export function appendStagePlanHtmlToOffer(params: {
   })
 
   const bodyMatch = stageHtml.match(/<body[^>]*>([\s\S]*)<\/body>/i)
-  const styleMatch = stageHtml.match(/<style>([\s\S]*?)<\/style>/i)
   const stageBody = bodyMatch?.[1] ?? ''
-  const stageStyle = styleMatch?.[1] ?? ''
   const injection = `
 <style>
-${stageStyle}
-.stage-plan-attach-break { page-break-before: always; break-before: page; }
+${STAGE_PLAN_ATTACH_SCOPED_CSS}
 </style>
 <div class="stage-plan-attach-break" aria-label="Załączony plan sceny"></div>
-${stageBody}
+<div class="stage-plan-attach">${stageBody}</div>
 `
 
   if (/<\/body>/i.test(params.offerHtml)) {

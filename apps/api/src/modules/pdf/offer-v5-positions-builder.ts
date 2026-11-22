@@ -1,4 +1,7 @@
-import { truncateOrderLineDescriptionForPdf } from '@lama-stage/shared-types'
+import {
+  clientFacingStagePlanEquipmentDescription,
+  truncateOrderLineDescriptionForPdf,
+} from '@lama-stage/shared-types'
 import type { OrderLike } from './offer-v5-builder'
 
 type VisibleEquipment = NonNullable<OrderLike['equipmentItems']>[number] & { offerBlockId?: string | null }
@@ -31,7 +34,9 @@ function escapeHtml(s: string): string {
 
 function renderOfferLineNameCell(name: string, description?: string | null): string {
   const safeName = escapeHtml(name)
-  const desc = truncateOrderLineDescriptionForPdf(description)
+  const desc = truncateOrderLineDescriptionForPdf(
+    clientFacingStagePlanEquipmentDescription(description)
+  )
   if (!desc) return safeName
   return `${safeName} <span class="line-desc">— ${escapeHtml(desc)}</span>`
 }

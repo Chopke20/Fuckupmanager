@@ -5,6 +5,7 @@
  * - ilości, dni, ceny i rabaty jako komórki edytowalne
  * - netto / VAT / brutto i podsumowanie jako formuły (przeliczają się po edycji)
  */
+import { clientFacingStagePlanEquipmentDescription } from '@lama-stage/shared-types'
 import type { OrderLike } from './offer-v5-builder'
 import { SheetGrid, XlStyle, buildXlsxBuffer, cellRef, type DefinedName } from './minimal-xlsx'
 
@@ -337,7 +338,11 @@ export async function buildOfferExcel(params: BuildOfferExcelParams): Promise<Bu
     sheet.set(r, COL.blok, { t: 's', v: args.blok })
     sheet.set(r, COL.grupa, { t: 's', v: args.grupa, s: XlStyle.wrap })
     sheet.set(r, COL.nazwa, { t: 's', v: args.name, s: XlStyle.wrap })
-    sheet.set(r, COL.opis, { t: 's', v: (args.description ?? '').trim(), s: XlStyle.wrap })
+    sheet.set(r, COL.opis, {
+      t: 's',
+      v: clientFacingStagePlanEquipmentDescription(args.description),
+      s: XlStyle.wrap,
+    })
     sheet.set(r, COL.ilosc, { t: 'n', v: args.qty, s: XlStyle.input })
     sheet.set(r, COL.dni, { t: 'n', v: args.days, s: XlStyle.input })
     sheet.set(r, COL.cena, { t: 'n', v: args.price, s: XlStyle.moneyInput })

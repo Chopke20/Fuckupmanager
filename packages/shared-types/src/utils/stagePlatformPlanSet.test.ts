@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createDefaultStagePlan, fillRectWithDecks, buildStagePlan, emptyStagePlanInput, serializeStagePlan, STAGE_PLAN_LINE_MARKER } from './stagePlatformPlan'
 import {
   addStagePlanScene,
+  clientFacingStagePlanEquipmentDescription,
   createEmptyStagePlanSet,
   formatStagePlanEquipmentDescription,
   isPrimaryStagePlanScene,
@@ -64,8 +65,34 @@ describe('stagePlatformPlanSet', () => {
       exactSuffix: ' · 1,5 mb',
     })
     expect(desc.startsWith(STAGE_PLAN_LINE_MARKER)).toBe(true)
+    expect(desc).toContain('Scena 2 · 3×2 m')
+    expect(desc).not.toContain('nogi')
     expect(parseStagePlanSceneIdFromDescription(desc)).toBe('scABC')
     expect(parseStagePlanSceneIdFromDescription(`${STAGE_PLAN_LINE_MARKER} 6×4 m, nogi 60 cm`)).toBeNull()
+  })
+
+  it('format bez nazwy sceny to sam wymiar; client-facing ukrywa marker i #id', () => {
+    const withName = formatStagePlanEquipmentDescription({
+      sceneId: 'sc1',
+      sceneName: 'Scena 1',
+      widthM: 3,
+      depthM: 3,
+      legHeightCm: 40,
+    })
+    expect(clientFacingStagePlanEquipmentDescription(withName)).toBe('Scena 1 · 3×3 m')
+    const noName = formatStagePlanEquipmentDescription({
+      sceneId: 'sc1',
+      sceneName: '  ',
+      widthM: 3,
+      depthM: 3,
+      legHeightCm: 40,
+    })
+    expect(clientFacingStagePlanEquipmentDescription(noName)).toBe('3×3 m')
+    expect(
+      clientFacingStagePlanEquipmentDescription(
+        `${STAGE_PLAN_LINE_MARKER} #old Scena 1 · 3×3 m, nogi 40 cm`
+      )
+    ).toBe('Scena 1 · 3×3 m')
   })
 
   it('pierwsza scena jest primary (dla legacy linii)', () => {

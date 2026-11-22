@@ -23,7 +23,10 @@
  */
 import fs from 'fs'
 import path from 'path'
-import { truncateOrderLineDescriptionForPdf } from '@lama-stage/shared-types'
+import {
+  clientFacingStagePlanEquipmentDescription,
+  truncateOrderLineDescriptionForPdf,
+} from '@lama-stage/shared-types'
 import { buildOfferPositionsSection } from './offer-v5-positions-builder'
 
 const COMPANY = {
@@ -67,7 +70,9 @@ function escapeHtmlWithBreaks(s: string): string {
 /** Nazwa pozycji w tabeli oferty; opcjonalny skrócony opis po myślniku (kursywa, jaśniejszy). */
 function renderOfferLineNameCell(name: string, description?: string | null): string {
   const safeName = escapeHtml(name)
-  const desc = truncateOrderLineDescriptionForPdf(description)
+  const desc = truncateOrderLineDescriptionForPdf(
+    clientFacingStagePlanEquipmentDescription(description)
+  )
   if (!desc) return safeName
   return `${safeName} <span class="line-desc">— ${escapeHtml(desc)}</span>`
 }

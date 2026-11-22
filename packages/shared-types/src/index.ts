@@ -221,6 +221,7 @@ export {
   defaultSceneName,
   duplicateStagePlanScene,
   findStagePlanScene,
+  clientFacingStagePlanEquipmentDescription,
   formatStagePlanEquipmentDescription,
   isPrimaryStagePlanScene,
   isStagePlanSet,
