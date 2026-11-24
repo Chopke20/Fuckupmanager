@@ -553,7 +553,7 @@ export default function StagePlatformVisualizer({
           )}
         </div>
 
-        <div className="relative min-h-0 flex-1 overflow-hidden rounded-md border border-border bg-background">
+        <div className="relative min-h-[280px] flex-1 overflow-hidden rounded-md border border-border bg-background">
           <StagePlanCanvas
             editor={editor}
             tool={tool}

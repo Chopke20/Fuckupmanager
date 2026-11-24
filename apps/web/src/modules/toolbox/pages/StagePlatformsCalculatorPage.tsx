@@ -19,8 +19,8 @@ export default function StagePlatformsCalculatorPage() {
   )
 
   return (
-    <div className="space-y-6">
-      <div>
+    <div className="flex min-h-[calc(100dvh-5.5rem)] flex-col gap-4">
+      <div className="shrink-0">
         <Link
           to="/toolbox"
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
@@ -40,12 +40,16 @@ export default function StagePlatformsCalculatorPage() {
         <p className="text-sm text-muted-foreground">Wczytywanie projektu…</p>
       ) : (
         <>
-          <StagePlanProjectBar session={session} currentPlan={currentPlan} />
-          <StagePlatformVisualizer
-            key={session.project?.id ?? 'loading'}
-            initialPlan={session.initialPlan}
-            onPlanChange={handlePlanChange}
-          />
+          <div className="shrink-0">
+            <StagePlanProjectBar session={session} currentPlan={currentPlan} />
+          </div>
+          <div className="min-h-[28rem] flex-1">
+            <StagePlatformVisualizer
+              key={session.project?.id ?? 'loading'}
+              initialPlan={session.initialPlan}
+              onPlanChange={handlePlanChange}
+            />
+          </div>
         </>
       )}
     </div>

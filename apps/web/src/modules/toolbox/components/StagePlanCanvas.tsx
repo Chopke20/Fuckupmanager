@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   createStageDeck,
   createStageStair,
@@ -82,15 +82,38 @@ export default function StagePlanCanvas({
 }) {
   const { plan } = editor
   const palette = STAGE_PALETTES.dark
+  const containerRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
   const dragRef = useRef<DragState | null>(null)
   const frozenViewport = useRef<StageViewport | null>(null)
   const [dragging, setDragging] = useState(false)
   const [hoveredDeckId, setHoveredDeckId] = useState<string | null>(null)
+  const [containerSize, setContainerSize] = useState({ w: CANVAS_WIDTH_PX, h: 420 })
+
+  useEffect(() => {
+    if (!fillContainer || !containerRef.current) return
+    const el = containerRef.current
+    const sync = () => {
+      const rect = el.getBoundingClientRect()
+      if (rect.width > 0 && rect.height > 0) {
+        setContainerSize({ w: rect.width, h: rect.height })
+      }
+    }
+    sync()
+    const ro = new ResizeObserver(sync)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [fillContainer])
 
   const computedViewport = useMemo(
-    () => stagePlanViewport(plan, { widthPx: CANVAS_WIDTH_PX }),
-    [plan]
+    () =>
+      fillContainer
+        ? stagePlanViewport(plan, {
+            widthPx: containerSize.w,
+            heightPx: containerSize.h,
+          })
+        : stagePlanViewport(plan, { widthPx: CANVAS_WIDTH_PX }),
+    [plan, fillContainer, containerSize.w, containerSize.h]
   )
   // Kadr przestaje się dopasowywać w trakcie przeciągania — inaczej rysunek
   // uciekałby pod kursorem, gdy blat wychodzi poza dotychczasowy obszar.
@@ -398,6 +421,7 @@ export default function StagePlanCanvas({
 
   return (
     <div
+      ref={containerRef}
       tabIndex={0}
       onKeyDown={handleKeyDown}
       className={
@@ -412,7 +436,8 @@ export default function StagePlanCanvas({
         viewBox={`0 0 ${viewport.widthPx} ${viewport.heightPx}`}
         width="100%"
         height={fillContainer ? '100%' : undefined}
-        preserveAspectRatio="xMidYMid meet"
+        // Przy fill-container viewBox = piksele kontenera — bez letterboxu CSS.
+        preserveAspectRatio={fillContainer ? 'none' : 'xMidYMid meet'}
         style={{
           display: 'block',
           height: fillContainer ? '100%' : 'auto',

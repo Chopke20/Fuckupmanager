@@ -139,10 +139,10 @@ interface Rect {
  */
 export function stagePlanViewport(
   plan: StagePlan,
-  opts?: { widthPx?: number; pad?: number; minSpanM?: number }
+  opts?: { widthPx?: number; heightPx?: number; pad?: number; minSpanM?: number }
 ): StageViewport {
   const pad = opts?.pad ?? 34
-  const widthPx = opts?.widthPx ?? 640
+  const widthPx = Math.max(1, opts?.widthPx ?? 640)
   const labelHeightPx = 20
   const minSpan = opts?.minSpanM ?? 4
 
@@ -181,8 +181,31 @@ export function stagePlanViewport(
   if (maxX - minX < minSpan) maxX = minX + minSpan
   if (maxY - minY < minSpan) maxY = minY + minSpan
 
-  const scale = (widthPx - pad * 2) / (maxX - minX)
-  const heightPx = pad * 2 + (maxY - minY) * scale + labelHeightPx
+  const spanX = maxX - minX
+  const spanY = maxY - minY
+
+  // Gdy podano heightPx (płótno fill-container), skaluj tak, żeby scena
+  // wypełniła dostępny prostokąt — inaczej CSS meet zostawia mikroskopijny kadr.
+  let scale: number
+  let heightPx: number
+  let padX: number
+  let padY: number
+
+  if (opts?.heightPx != null && opts.heightPx > 0) {
+    heightPx = Math.max(1, opts.heightPx)
+    const availW = Math.max(1, widthPx - pad * 2)
+    const availH = Math.max(1, heightPx - pad * 2 - labelHeightPx)
+    scale = Math.min(availW / spanX, availH / spanY)
+    const contentW = spanX * scale
+    const contentH = spanY * scale
+    padX = (widthPx - contentW) / 2
+    padY = (heightPx - labelHeightPx - contentH) / 2
+  } else {
+    scale = (widthPx - pad * 2) / spanX
+    heightPx = pad * 2 + spanY * scale + labelHeightPx
+    padX = pad
+    padY = pad
+  }
 
   return {
     widthPx,
@@ -194,10 +217,10 @@ export function stagePlanViewport(
     minY,
     maxX,
     maxY,
-    toX: (m: number) => pad + (m - minX) * scale,
-    toY: (m: number) => pad + (maxY - m) * scale,
-    fromX: (px: number) => (px - pad) / scale + minX,
-    fromY: (px: number) => maxY - (px - pad) / scale,
+    toX: (m: number) => padX + (m - minX) * scale,
+    toY: (m: number) => padY + (maxY - m) * scale,
+    fromX: (px: number) => (px - padX) / scale + minX,
+    fromY: (px: number) => maxY - (px - padY) / scale,
   }
 }
 
