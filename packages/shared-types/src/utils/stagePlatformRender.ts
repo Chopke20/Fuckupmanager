@@ -141,9 +141,9 @@ export function stagePlanViewport(
   plan: StagePlan,
   opts?: { widthPx?: number; heightPx?: number; pad?: number; minSpanM?: number }
 ): StageViewport {
-  const pad = opts?.pad ?? 34
+  const pad = opts?.pad ?? 28
   const widthPx = Math.max(1, opts?.widthPx ?? 640)
-  const labelHeightPx = 20
+  const labelHeightPx = 18
   const minSpan = opts?.minSpanM ?? 4
 
   let minX = 0

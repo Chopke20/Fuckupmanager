@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import {
   createStageDeck,
   createStageStair,
@@ -82,41 +82,19 @@ export default function StagePlanCanvas({
 }) {
   const { plan } = editor
   const palette = STAGE_PALETTES.dark
-  const containerRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
   const dragRef = useRef<DragState | null>(null)
   const frozenViewport = useRef<StageViewport | null>(null)
   const [dragging, setDragging] = useState(false)
   const [hoveredDeckId, setHoveredDeckId] = useState<string | null>(null)
-  const [containerSize, setContainerSize] = useState({ w: CANVAS_WIDTH_PX, h: 420 })
 
-  useEffect(() => {
-    if (!fillContainer || !containerRef.current) return
-    const el = containerRef.current
-    const sync = () => {
-      const rect = el.getBoundingClientRect()
-      if (rect.width > 0 && rect.height > 0) {
-        setContainerSize({ w: rect.width, h: rect.height })
-      }
-    }
-    sync()
-    const ro = new ResizeObserver(sync)
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [fillContainer])
-
+  // Skala od szerokości (jak przed fillContainer) — scena wypełnia kolumnę.
+  // Zamrożenie kadru w trakcie drag zapobiega skakaniu layoutu; nie trzeba
+  // wpychać SVG w absolute+meet, bo to właśnie dawało mikroskopijny rzut.
   const computedViewport = useMemo(
-    () =>
-      fillContainer
-        ? stagePlanViewport(plan, {
-            widthPx: containerSize.w,
-            heightPx: containerSize.h,
-          })
-        : stagePlanViewport(plan, { widthPx: CANVAS_WIDTH_PX }),
-    [plan, fillContainer, containerSize.w, containerSize.h]
+    () => stagePlanViewport(plan, { widthPx: CANVAS_WIDTH_PX }),
+    [plan]
   )
-  // Kadr przestaje się dopasowywać w trakcie przeciągania — inaczej rysunek
-  // uciekałby pod kursorem, gdy blat wychodzi poza dotychczasowy obszar.
   const viewport = dragging && frozenViewport.current ? frozenViewport.current : computedViewport
   const edgeToolActive = tool === 'cladding' || tool === 'railings' || tool === 'stairs'
   const addingDeck =
@@ -421,12 +399,11 @@ export default function StagePlanCanvas({
 
   return (
     <div
-      ref={containerRef}
       tabIndex={0}
       onKeyDown={handleKeyDown}
       className={
         fillContainer
-          ? 'absolute inset-0 outline-none focus:border-primary/60'
+          ? 'h-full min-h-0 overflow-auto outline-none focus:border-primary/60'
           : 'rounded border border-border bg-background outline-none focus:border-primary/60'
       }
       aria-label="Rzut sceny — edytor podestów"
@@ -435,14 +412,8 @@ export default function StagePlanCanvas({
         ref={svgRef}
         viewBox={`0 0 ${viewport.widthPx} ${viewport.heightPx}`}
         width="100%"
-        height={fillContainer ? '100%' : undefined}
-        // Przy fill-container viewBox = piksele kontenera — bez letterboxu CSS.
-        preserveAspectRatio={fillContainer ? 'none' : 'xMidYMid meet'}
-        style={{
-          display: 'block',
-          height: fillContainer ? '100%' : 'auto',
-          touchAction: 'none',
-        }}
+        preserveAspectRatio="xMidYMid meet"
+        style={{ display: 'block', height: 'auto', touchAction: 'none' }}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
