@@ -140,12 +140,19 @@ function PlannerDayBlock({
 
   const stopDrag: React.PointerEventHandler = (e) => e.stopPropagation()
   const editing = selected || peekOpen
+  /** Małe bloki: tylko tytuł (+ czas gdy jest miejsce), bez sekcji — czytelność. */
+  const isTiny = !peekOpen && height < 36
+  const isCompact = !peekOpen && height < 64
+  const showSections = peekOpen || (!isCompact && !isTiny)
+  const showTime = peekOpen || !isTiny
 
   return (
     <div
       ref={rootRef}
       data-planner-block
-      className={`absolute rounded-md border px-1.5 py-1 text-xs text-white shadow-sm transition-[width,transform,box-shadow,max-height] duration-150 ease-out ${
+      className={`absolute rounded-md border px-1.5 text-xs text-white shadow-sm transition-[width,transform,box-shadow,max-height] duration-150 ease-out ${
+        isTiny ? 'py-0.5' : 'py-1'
+      } ${
         peekOpen
           ? 'z-30 overflow-auto shadow-2xl ring-2 ring-white/90'
           : dragging
@@ -181,13 +188,30 @@ function PlannerDayBlock({
         openPeek()
       }}
     >
+      {/* Rozwiń — zawsze w prawym górnym rogu */}
+      <button
+        type="button"
+        className="absolute right-0.5 top-0.5 z-[4] inline-flex h-5 w-5 items-center justify-center rounded bg-black/45 text-white hover:bg-black/65"
+        title={peekOpen ? 'Zwiń' : 'Rozwiń'}
+        aria-label={peekOpen ? 'Zwiń' : 'Rozwiń'}
+        onPointerDown={stopDrag}
+        onClick={(e) => {
+          e.stopPropagation()
+          if (peekOpen) setPeekOpen(false)
+          else openPeek()
+        }}
+      >
+        {peekOpen ? <Minimize2 size={11} /> : <Maximize2 size={11} />}
+      </button>
+
       <div
         ref={contentRef}
-        className={`flex flex-col gap-0.5 pb-3 ${peekOpen ? '' : 'h-full min-h-0'}`}
+        className={`flex flex-col gap-0.5 pr-5 ${peekOpen ? 'pb-3' : isTiny ? 'pb-0' : 'pb-2'} ${
+          peekOpen ? '' : 'h-full min-h-0'
+        }`}
       >
-        {/* Nagłówek zawsze widoczny — overflow tylko na sekcjach poniżej */}
-        <div className="shrink-0 pt-0.5">
-          {editing ? (
+        <div className="min-w-0 shrink-0">
+          {editing && !isCompact ? (
             <input
               className="box-border h-[1.15rem] w-full truncate border-0 bg-transparent p-0 text-[13px] font-bold leading-none text-white outline-none placeholder:text-white/60"
               value={block.title}
@@ -196,14 +220,27 @@ function PlannerDayBlock({
               onPointerDown={stopDrag}
             />
           ) : (
-            <div className="truncate text-[13px] font-bold leading-none">{block.title}</div>
+            <div
+              className={`truncate font-bold leading-none ${
+                isTiny ? 'text-[11px]' : 'text-[13px]'
+              }`}
+              title={block.title}
+            >
+              {block.title}
+            </div>
           )}
-          <div className="mt-0.5 truncate text-[10px] font-medium leading-none text-white/75">
-            {minutesToLabel(block.startMin)}–{minutesToLabel(block.endMin)}
-          </div>
+          {showTime ? (
+            <div
+              className={`mt-0.5 truncate font-medium leading-none text-white/75 ${
+                isCompact ? 'text-[9px]' : 'text-[10px]'
+              }`}
+            >
+              {minutesToLabel(block.startMin)}–{minutesToLabel(block.endMin)}
+            </div>
+          ) : null}
         </div>
 
-        {editing || block.orderId ? (
+        {showSections && (editing || block.orderId) ? (
           <PlannerBlockOrderAttach
             orderId={block.orderId}
             orderLabel={block.orderLabel}
@@ -215,129 +252,105 @@ function PlannerDayBlock({
           />
         ) : null}
 
-        <div className={`flex min-h-0 flex-col gap-1 ${peekOpen ? '' : 'flex-1 overflow-hidden'}`}>
-        {editing
-          ? sections.map((section, index) => {
-              const accent = sectionAccentColor(index)
-              return (
-                <div
-                  key={section.id}
-                  className="mt-0.5 rounded-md px-1.5 py-1 shadow-sm"
-                  style={{
-                    backgroundColor: 'rgba(0,0,0,0.28)',
-                    borderLeft: `3px solid ${accent}`,
-                  }}
-                  onPointerDown={stopDrag}
-                >
-                  <div className="flex items-center gap-1">
-                    <span
-                      className="h-2 w-2 shrink-0 rounded-full"
-                      style={{ backgroundColor: accent }}
-                      aria-hidden
-                    />
-                    <input
-                      className="min-w-0 flex-1 bg-transparent text-[10px] font-bold uppercase tracking-wide text-white outline-none placeholder:text-white/50"
-                      value={section.title}
-                      placeholder={`Sekcja ${index + 1}`}
-                      onChange={(e) => updateSection(section.id, { title: e.target.value })}
+        {showSections ? (
+          <div className={`flex min-h-0 flex-col gap-1 ${peekOpen ? '' : 'flex-1 overflow-hidden'}`}>
+            {editing
+              ? sections.map((section, index) => {
+                  const accent = sectionAccentColor(index)
+                  return (
+                    <div
+                      key={section.id}
+                      className="mt-0.5 rounded-md px-1.5 py-1 shadow-sm"
+                      style={{
+                        backgroundColor: 'rgba(0,0,0,0.28)',
+                        borderLeft: `3px solid ${accent}`,
+                      }}
                       onPointerDown={stopDrag}
-                    />
-                    <button
-                      type="button"
-                      className="shrink-0 text-white/70 hover:text-white"
-                      onClick={() => removeSection(section.id)}
-                      onPointerDown={stopDrag}
-                      aria-label="Usuń sekcję"
                     >
-                      <Trash2 size={10} />
-                    </button>
-                  </div>
-                  <textarea
-                    className={`mt-0.5 w-full bg-transparent text-[10px] font-normal leading-snug text-white/95 outline-none placeholder:text-white/45 ${
-                      peekOpen ? 'min-h-[4.5rem] resize-y' : 'max-h-16 resize-none'
-                    }`}
-                    rows={peekOpen ? 4 : 2}
-                    value={section.text}
-                    placeholder="Treść…"
-                    onChange={(e) => updateSection(section.id, { text: e.target.value })}
-                    onPointerDown={stopDrag}
-                  />
-                </div>
-              )
-            })
-          : sections.map((section, index) =>
-              section.title.trim() || section.text.trim() ? (
-                <div
-                  key={section.id}
-                  className="mt-0.5 rounded-md px-1.5 py-1 leading-snug"
-                  style={{
-                    backgroundColor: 'rgba(0,0,0,0.22)',
-                    borderLeft: `3px solid ${sectionAccentColor(index)}`,
-                  }}
-                >
-                  {section.title.trim() ? (
-                    <div className="mb-0.5 flex items-center gap-1">
-                      <span
-                        className="h-1.5 w-1.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: sectionAccentColor(index) }}
-                        aria-hidden
-                      />
-                      <div className="truncate text-[10px] font-bold uppercase tracking-wide text-white">
-                        {section.title}
+                      <div className="flex items-center gap-1">
+                        <span
+                          className="h-2 w-2 shrink-0 rounded-full"
+                          style={{ backgroundColor: accent }}
+                          aria-hidden
+                        />
+                        <input
+                          className="min-w-0 flex-1 bg-transparent text-[10px] font-bold uppercase tracking-wide text-white outline-none placeholder:text-white/50"
+                          value={section.title}
+                          placeholder={`Sekcja ${index + 1}`}
+                          onChange={(e) => updateSection(section.id, { title: e.target.value })}
+                          onPointerDown={stopDrag}
+                        />
+                        <button
+                          type="button"
+                          className="shrink-0 text-white/70 hover:text-white"
+                          onClick={() => removeSection(section.id)}
+                          onPointerDown={stopDrag}
+                          aria-label="Usuń sekcję"
+                        >
+                          <Trash2 size={10} />
+                        </button>
                       </div>
+                      <textarea
+                        className={`mt-0.5 w-full bg-transparent text-[10px] font-normal leading-snug text-white/95 outline-none placeholder:text-white/45 ${
+                          peekOpen ? 'min-h-[4.5rem] resize-y' : 'max-h-16 resize-none'
+                        }`}
+                        rows={peekOpen ? 4 : 2}
+                        value={section.text}
+                        placeholder="Treść…"
+                        onChange={(e) => updateSection(section.id, { text: e.target.value })}
+                        onPointerDown={stopDrag}
+                      />
                     </div>
-                  ) : null}
-                  {section.text.trim() ? (
-                    <p className="whitespace-pre-wrap break-words text-[10px] font-normal text-white/90">
-                      {section.text}
-                    </p>
-                  ) : null}
-                </div>
-              ) : null
-            )}
+                  )
+                })
+              : sections.map((section, index) =>
+                  section.title.trim() || section.text.trim() ? (
+                    <div
+                      key={section.id}
+                      className="mt-0.5 rounded-md px-1.5 py-1 leading-snug"
+                      style={{
+                        backgroundColor: 'rgba(0,0,0,0.22)',
+                        borderLeft: `3px solid ${sectionAccentColor(index)}`,
+                      }}
+                    >
+                      {section.title.trim() ? (
+                        <div className="mb-0.5 flex items-center gap-1">
+                          <span
+                            className="h-1.5 w-1.5 shrink-0 rounded-full"
+                            style={{ backgroundColor: sectionAccentColor(index) }}
+                            aria-hidden
+                          />
+                          <div className="truncate text-[10px] font-bold uppercase tracking-wide text-white">
+                            {section.title}
+                          </div>
+                        </div>
+                      ) : null}
+                      {section.text.trim() ? (
+                        <p className="whitespace-pre-wrap break-words text-[10px] font-normal text-white/90">
+                          {section.text}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null
+                )}
 
-        {editing ? (
-          <button
-            type="button"
-            className="mt-0.5 inline-flex w-fit shrink-0 items-center gap-0.5 rounded bg-black/30 px-1.5 py-0.5 text-[9px] font-medium text-white/90 hover:bg-black/45"
-            onClick={addSection}
-            onPointerDown={stopDrag}
-          >
-            <Plus size={10} /> sekcja
-          </button>
+            {editing ? (
+              <button
+                type="button"
+                className="mt-0.5 inline-flex w-fit shrink-0 items-center gap-0.5 rounded bg-black/30 px-1.5 py-0.5 text-[9px] font-medium text-white/90 hover:bg-black/45"
+                onClick={addSection}
+                onPointerDown={stopDrag}
+              >
+                <Plus size={10} /> sekcja
+              </button>
+            ) : null}
+          </div>
+        ) : overflows || (sections.some((s) => s.title.trim() || s.text.trim()) && isCompact) ? (
+          <div className="pointer-events-none mt-auto truncate text-[8px] leading-none text-white/55">
+            … szczegóły
+          </div>
         ) : null}
-        </div>
       </div>
-      {peekOpen ? (
-        <button
-          type="button"
-          className="sticky bottom-1 float-right z-[2] inline-flex items-center gap-0.5 rounded bg-black/55 px-1.5 py-0.5 text-[9px] text-white hover:bg-black/70"
-          title="Zwiń do wysokości czasu"
-          onPointerDown={stopDrag}
-          onClick={(e) => {
-            e.stopPropagation()
-            setPeekOpen(false)
-          }}
-        >
-          <Minimize2 size={10} /> zwiń
-        </button>
-      ) : overflows ? (
-        <>
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-black/50 to-transparent" />
-          <button
-            type="button"
-            className="absolute bottom-2 right-1 z-[2] inline-flex items-center gap-0.5 rounded bg-black/45 px-1 py-0.5 text-[9px] text-white hover:bg-black/60"
-            title="Rozszerz na boki do czytania i edycji"
-            onPointerDown={stopDrag}
-            onClick={(e) => {
-              e.stopPropagation()
-              openPeek()
-            }}
-          >
-            <Maximize2 size={10} /> więcej
-          </button>
-        </>
-      ) : null}
       {!peekOpen ? (
         <>
           <div
@@ -504,27 +517,27 @@ export default function PlannerWorkspace({
     setSelectedNoteId(null)
   }
 
-  // Skróty narzędzi: V = zaznacz, B = utwórz, Del = usuń, Esc = zaznacz + odznacz
+  // V / B zawsze przełączają narzędzie (nawet przy fokusie w polu tytułu).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      const key = e.key.length === 1 ? e.key.toLowerCase() : e.key.toLowerCase()
+
+      if (key === 'v' || key === 'b') {
+        e.preventDefault()
+        e.stopPropagation()
+        const active = document.activeElement as HTMLElement | null
+        if (active && typeof active.blur === 'function') active.blur()
+        setTool(key === 'v' ? 'select' : 'create')
+        return
+      }
+
       const target = e.target as HTMLElement | null
       if (target?.closest('input, textarea, select, [contenteditable="true"]')) return
       if (expandedBlockId) return
 
-      const key = e.key.toLowerCase()
-      if (key === 'v') {
-        e.preventDefault()
-        setTool('select')
-        return
-      }
-      if (key === 'b') {
-        e.preventDefault()
-        setTool('create')
-        return
-      }
       if (key === 'escape') {
         e.preventDefault()
-        setTool('select')
         setSelectedBlockId(null)
         setSelectedNoteId(null)
         return
@@ -534,8 +547,8 @@ export default function PlannerWorkspace({
         removeBlock(selectedBlockId)
       }
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
   }, [expandedBlockId, selectedBlockId])
 
   const beginBlockDrag = (
@@ -872,8 +885,8 @@ export default function PlannerWorkspace({
         </div>
         <span className="text-[10px] text-muted-foreground">
           {tool === 'create'
-            ? 'Klik w pustkę = nowy blok. Alt+klik nad blokiem = równoległy.'
-            : 'Klik pustkę = odznacz. Przeciągaj bloki. Del = usuń. Esc = odznacz.'}
+            ? 'Klik w pustkę = nowy blok · V = zaznacz · Alt+klik = równoległy'
+            : 'Przeciągaj bloki · B = utwórz · Del = usuń · Esc = odznacz'}
         </span>
       </div>
 
