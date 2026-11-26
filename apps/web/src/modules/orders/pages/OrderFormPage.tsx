@@ -74,6 +74,34 @@ import { useEquipment } from '../../equipment/hooks/useEquipment';
 const UNSAVED_LEAVE_MSG =
   'Masz niezapisane zmiany w zleceniu. Opuścić stronę bez zapisywania?';
 
+const ORDER_FORM_SUBMIT_ERROR_ID = 'order-form-submit-error';
+const ORDER_FORM_TOP_ID = 'order-form-top';
+
+/**
+ * Po nieudanym Zapisz: przewiń kontener layoutu (`main` overflow) do czerwonego komunikatu.
+ * Element może pojawić się dopiero po commitcie React — stąd retry po paint + fallback na kotwicę u góry.
+ */
+function scrollOrderFormSubmitErrorIntoView() {
+  const scrollTo = (id: string) => {
+    const el = document.getElementById(id);
+    if (!el) return false;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return true;
+  };
+  const attempt = () =>
+    scrollTo(ORDER_FORM_SUBMIT_ERROR_ID) || scrollTo(ORDER_FORM_TOP_ID);
+
+  requestAnimationFrame(() => {
+    if (attempt()) return;
+    requestAnimationFrame(() => {
+      if (attempt()) return;
+      window.setTimeout(() => {
+        attempt();
+      }, 50);
+    });
+  });
+}
+
 /** Przejście z formularza zlecenia na podstronę dokumentów tego samego zlecenia — bez pytania (zapis jest po stronie przycisku). */
 function isOrderEditToSameOrderDocumentRoute(fromPath: string, toPath: string): boolean {
   const m = fromPath.match(/^\/orders\/([^/]+)$/);
@@ -1181,10 +1209,7 @@ export default function OrderFormPage() {
     if (validationError) {
       setSubmitError(validationError);
       submitInFlightRef.current = false;
-      // Błąd jest na górze formularza — bez scrolla „Zapisz” wygląda jakby nie działał.
-      requestAnimationFrame(() => {
-        document.getElementById('order-form-submit-error')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
+      scrollOrderFormSubmitErrorIntoView();
       return;
     }
     try {
@@ -1209,9 +1234,7 @@ export default function OrderFormPage() {
         const firstFieldError = Object.values(validationDetails.fieldErrors).flat().find(Boolean);
         if (typeof firstFieldError === 'string') {
           setSubmitError(firstFieldError);
-          requestAnimationFrame(() => {
-            document.getElementById('order-form-submit-error')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          });
+          scrollOrderFormSubmitErrorIntoView();
           return;
         }
       }
@@ -1229,9 +1252,7 @@ export default function OrderFormPage() {
             : 'Nie udało się zapisać zlecenia.';
 
       setSubmitError(msg);
-      requestAnimationFrame(() => {
-        document.getElementById('order-form-submit-error')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
+      scrollOrderFormSubmitErrorIntoView();
     } finally {
       submitInFlightRef.current = false;
     }
@@ -1328,7 +1349,7 @@ export default function OrderFormPage() {
       {/* noValidate: własne validateOrderPayload zamiast cichego HTML5 (date min / number min poza viewportem). */}
       <form noValidate onSubmit={handleSubmit(() => onSubmit())}>
         <div>
-          <div className="flex items-center justify-between mb-4">
+          <div id={ORDER_FORM_TOP_ID} className="flex items-center justify-between mb-4 scroll-mt-2">
             <button
               type="button"
               onClick={() => tryNavigateAway('/orders')}
@@ -1349,15 +1370,20 @@ export default function OrderFormPage() {
             </div>
           </div>
 
-          {submitError && (
-            <div
-              id="order-form-submit-error"
-              role="alert"
-              className="mb-3 px-3 py-2 rounded bg-red-500/10 border border-red-500/30 text-red-600 text-sm"
-            >
-              {submitError}
-            </div>
-          )}
+          {/* Zawsze w DOM — scroll działa zanim React dorysuje treść błędu po setState. */}
+          <div
+            id={ORDER_FORM_SUBMIT_ERROR_ID}
+            role={submitError ? 'alert' : undefined}
+            aria-live="polite"
+            aria-hidden={!submitError}
+            className={
+              submitError
+                ? 'mb-3 px-3 py-2 rounded bg-red-500/10 border border-red-500/30 text-red-600 text-sm scroll-mt-2'
+                : 'sr-only'
+            }
+          >
+            {submitError ?? ''}
+          </div>
           <div className="bg-surface rounded-xl border border-border overflow-hidden">
             <div className="p-3 border-b border-border">
               <h1 className="text-xl font-bold">
