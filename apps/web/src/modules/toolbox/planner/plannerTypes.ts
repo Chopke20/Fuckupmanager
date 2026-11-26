@@ -205,15 +205,19 @@ export function isBlockInRange(block: PlannerBlock, dayCount: number): boolean {
   return block.dayOffset >= 0 && block.dayOffset < dayCount
 }
 
-/** Odzysk z screena tablicy (23–29.11.2026): Arche / Załadunek / Cygan. */
+/**
+ * Odzysk z PDF „Planer-Listopad-2026-11-23_7d” (23–29.11.2026).
+ * Źródło: szczegóły bloków z eksportu PDF.
+ */
 export function plannerScreenshotRecoveryBlocks2026_11(): PlannerBlock[] {
+  const hm = (h: number, m = 0) => h * 60 + m
   const mk = (
     date: string,
     title: string,
     startMin: number,
     endMin: number,
     color: string,
-    people: string
+    people?: string
   ): PlannerBlock => ({
     id: newId('blk'),
     date,
@@ -222,23 +226,86 @@ export function plannerScreenshotRecoveryBlocks2026_11(): PlannerBlock[] {
     endMin,
     title,
     color,
-    sections: [{ id: newId('sec'), title: 'LUDZIE', text: people }],
+    sections: [
+      {
+        id: newId('sec'),
+        title: people ? 'LUDZIE' : '',
+        text: people ?? '',
+      },
+    ],
   })
+
   return [
-    mk('2026-11-25', 'Arche demontaż', 60, 180, '#3b82f6', 'Rafał\nMichał\nHubert\nBob'),
+    // wt. 24.11
+    mk('2026-11-24', 'Arche', hm(15), hm(24), '#3b82f6'),
+    // śr. 25.11
+    mk(
+      '2026-11-25',
+      'Arche demontaż',
+      hm(1),
+      hm(3),
+      '#3b82f6',
+      'Rafał\nMichał\nHubert\nBob'
+    ),
+    mk('2026-11-25', 'Ładowanie Barska', hm(12), hm(14), '#22c55e'),
+    mk(
+      '2026-11-25',
+      'Montaz i wydarzenie',
+      hm(14),
+      hm(20, 30),
+      '#eab308',
+      'Rafał\nMichał\nBob\nJarek\nJędrek'
+    ),
+    mk('2026-11-25', 'Demontaż', hm(20, 30), hm(21, 30), '#f97316'),
+    // pt. 27.11
     mk(
       '2026-11-27',
-      'Załadunek Filharmonia + Jamka',
-      10 * 60 + 15,
-      12 * 60,
+      'Załadunek Filharomonia + Jamka+ Planetariom',
+      hm(10, 15),
+      hm(12),
       '#a855f7',
       'Michał\nRafał\nBob'
     ),
     mk(
+      '2026-11-27',
+      'Montaż Filharmonia',
+      hm(12),
+      hm(14),
+      '#a855f7',
+      'Michał\nRafał\nBob\nAlicja'
+    ),
+    mk(
+      '2026-11-27',
+      'Filharmonia Próba/wykon',
+      hm(14),
+      hm(22),
+      '#14b8a6',
+      'Rafał\nAlicja'
+    ),
+    mk(
+      '2026-11-27',
+      'Montaż Planetarium',
+      hm(15),
+      hm(17),
+      '#22c55e',
+      'Michał\nBob'
+    ),
+    mk('2026-11-27', 'Jamka', hm(17), hm(21), '#eab308', 'Bob i Michał'),
+    mk('2026-11-27', 'Demontaż Planetarium', hm(21), hm(22), '#f97316'),
+    mk(
+      '2026-11-27',
+      'Cygan załadunek',
+      hm(22),
+      hm(24),
+      '#ef4444',
+      'Michał\nBob\nRafał\nAlicja'
+    ),
+    // sob. 28.11
+    mk(
       '2026-11-28',
       'Cygan Montaż',
-      8 * 60 + 30,
-      12 * 60 + 30,
+      hm(8),
+      hm(12, 30),
       '#ef4444',
       'Rafał\nMichał\nBob\nMichał od Boba\nNatasza'
     ),

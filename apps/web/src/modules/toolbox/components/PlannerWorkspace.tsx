@@ -696,9 +696,14 @@ export default function PlannerWorkspace({
     const existingTitles = new Set(board.blocks.map((b) => `${b.date}|${b.title}`))
     const toAdd = recovered.filter((b) => !existingTitles.has(`${b.date}|${b.title}`))
     if (toAdd.length === 0) {
-      window.alert('Te bloki już są na tablicy.')
+      window.alert('Te bloki z PDF już są na tablicy.')
       return
     }
+    const ok = window.confirm(
+      `Dodać ${toAdd.length} bloków z PDF „Planer-Listopad-2026-11-23_7d”?\n` +
+        `(Start najlepiej 23.11.2026, Dni = 7)`
+    )
+    if (!ok) return
     onChange({ ...board, blocks: [...board.blocks, ...toAdd] })
   }
 
@@ -796,9 +801,9 @@ export default function PlannerWorkspace({
           type="button"
           onClick={restoreScreenshotBlocks}
           className="inline-flex items-center gap-1 rounded border border-amber-500/50 px-2 py-1.5 text-xs text-amber-200 hover:border-amber-400"
-          title="Przywróć Arche / Załadunek / Cygan ze screena z 26.11"
+          title="Przywróć bloki z PDF Planer-Listopad-2026-11-23_7d (13 bloków)"
         >
-          Odzyskaj 3 bloki
+          Odzyskaj z PDF
         </button>
         <button
           type="button"
