@@ -174,6 +174,33 @@ export function addDaysIso(isoDate: string, offset: number): string {
   return todayIsoDate(new Date(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate()))
 }
 
+/** Liczba dni kalendarzowych od `fromIso` do `toIso` (może być ujemna). */
+export function diffDaysIso(fromIso: string, toIso: string): number {
+  const a = parseIsoParts(fromIso)
+  const b = parseIsoParts(toIso)
+  const t0 = Date.UTC(a.y, a.m - 1, a.d)
+  const t1 = Date.UTC(b.y, b.m - 1, b.d)
+  return Math.round((t1 - t0) / (24 * 60 * 60 * 1000))
+}
+
+/**
+ * Po zmianie startDate bloki zostają na tych samych datach kalendarzowych.
+ * Te poza nowym oknem [start, start+dayCount) są ucinane.
+ */
+export function rebasePlannerBlocksToStartDate(
+  blocks: PlannerBlock[],
+  oldStartDate: string,
+  newStartDate: string,
+  dayCount: number
+): PlannerBlock[] {
+  if (!oldStartDate || !newStartDate || oldStartDate === newStartDate) return blocks
+  const shift = diffDaysIso(oldStartDate, newStartDate)
+  if (shift === 0) return blocks
+  return blocks
+    .map((b) => ({ ...b, dayOffset: b.dayOffset - shift }))
+    .filter((b) => b.dayOffset >= 0 && b.dayOffset < dayCount)
+}
+
 export function formatDayHeader(isoDate: string): string {
   const { y, m, d } = parseIsoParts(isoDate)
   const dt = new Date(y, m - 1, d)

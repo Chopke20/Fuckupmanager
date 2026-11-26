@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   addDaysIso,
   clampBlockToDay,
+  diffDaysIso,
   emptyPlannerBoard,
   layoutOverlappingBlocks,
   normalizePlannerBoard,
   parsePlannerBoardJson,
+  rebasePlannerBlocksToStartDate,
   serializePlannerBoard,
   snapMinutes,
   type PlannerBlock,
@@ -27,6 +29,24 @@ describe('plannerTypes', () => {
 
   it('adds days to ISO date', () => {
     expect(addDaysIso('2026-10-13', 2)).toBe('2026-10-15')
+  })
+
+  it('diffs ISO dates in calendar days', () => {
+    expect(diffDaysIso('2026-11-23', '2026-11-27')).toBe(4)
+    expect(diffDaysIso('2026-11-27', '2026-11-23')).toBe(-4)
+  })
+
+  it('rebases blocks to new start date and cuts outside window', () => {
+    const blocks: PlannerBlock[] = [
+      { id: 'wed', dayOffset: 2, startMin: 60, endMin: 180, title: 'Arche', sections: [] },
+      { id: 'fri', dayOffset: 4, startMin: 615, endMin: 720, title: 'Załadunek', sections: [] },
+      { id: 'sat', dayOffset: 5, startMin: 510, endMin: 750, title: 'Cygan', sections: [] },
+    ]
+    const next = rebasePlannerBlocksToStartDate(blocks, '2026-11-23', '2026-11-27', 7)
+    expect(next.map((b) => ({ id: b.id, dayOffset: b.dayOffset }))).toEqual([
+      { id: 'fri', dayOffset: 0 },
+      { id: 'sat', dayOffset: 1 },
+    ])
   })
 
   it('round-trips empty board JSON', () => {

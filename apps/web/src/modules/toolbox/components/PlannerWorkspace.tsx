@@ -14,6 +14,7 @@ import {
   layoutOverlappingBlocks,
   minutesToLabel,
   newId,
+  rebasePlannerBlocksToStartDate,
   sectionAccentColor,
   snapMinutes,
   type PlannerBlock,
@@ -687,11 +688,27 @@ export default function PlannerWorkspace({
             type="date"
             className="rounded border border-border bg-background px-2 py-1 text-sm"
             value={board.range.startDate}
-            onChange={(e) =>
-              patch({
-                range: { ...board.range, startDate: e.target.value || board.range.startDate },
+            onChange={(e) => {
+              const nextStart = e.target.value || board.range.startDate
+              if (nextStart === board.range.startDate) return
+              const nextBlocks = rebasePlannerBlocksToStartDate(
+                board.blocks,
+                board.range.startDate,
+                nextStart,
+                board.range.dayCount
+              )
+              onChange({
+                ...board,
+                range: { ...board.range, startDate: nextStart },
+                blocks: nextBlocks,
               })
-            }
+              if (selectedBlockId && !nextBlocks.some((b) => b.id === selectedBlockId)) {
+                setSelectedBlockId(null)
+              }
+              if (expandedBlockId && !nextBlocks.some((b) => b.id === expandedBlockId)) {
+                setExpandedBlockId(null)
+              }
+            }}
           />
         </label>
         <label className="text-xs">
@@ -707,14 +724,18 @@ export default function PlannerWorkspace({
                 PLANNER_MAX_DAY_COUNT,
                 Math.max(PLANNER_MIN_DAY_COUNT, Number(e.target.value) || 1)
               )
+              const nextBlocks = board.blocks.filter((b) => b.dayOffset < dayCount)
               onChange({
                 ...board,
                 range: { ...board.range, dayCount },
-                blocks: board.blocks.map((b) => ({
-                  ...b,
-                  dayOffset: Math.min(b.dayOffset, dayCount - 1),
-                })),
+                blocks: nextBlocks,
               })
+              if (selectedBlockId && !nextBlocks.some((b) => b.id === selectedBlockId)) {
+                setSelectedBlockId(null)
+              }
+              if (expandedBlockId && !nextBlocks.some((b) => b.id === expandedBlockId)) {
+                setExpandedBlockId(null)
+              }
             }}
           />
         </label>
