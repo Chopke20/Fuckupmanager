@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { Maximize2, Minimize2, Plus, Trash2 } from 'lucide-react'
+import { Maximize2, Minimize2, MousePointer2, Plus, SquarePlus, Trash2 } from 'lucide-react'
 import {
   PLANNER_BLOCK_COLORS,
   PLANNER_DEFAULT_BLOCK_DURATION_MIN,
@@ -30,6 +30,8 @@ const TIME_GUTTER_W = 52
 const NOTES_RAIL_W = 240
 
 type DragMode = 'move' | 'resize-start' | 'resize-end'
+/** select = zaznacz/przesuń; create = klik w pustkę tworzy blok */
+type PlannerTool = 'select' | 'create'
 
 interface ActiveDrag {
   mode: DragMode
@@ -371,6 +373,7 @@ export default function PlannerWorkspace({
   const [expandedBlockId, setExpandedBlockId] = useState<string | null>(null)
   const [drag, setDrag] = useState<ActiveDrag | null>(null)
   const [noteDrag, setNoteDrag] = useState<NoteDrag | null>(null)
+  const [tool, setTool] = useState<PlannerTool>('select')
 
   const dayStartMin = board.time.startHour * 60
   const dayEndMin = board.time.endHour * 60
@@ -485,11 +488,55 @@ export default function PlannerWorkspace({
   const onColumnPointerDown = (dayOffset: number, e: ReactPointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return
     const onBlock = (e.target as HTMLElement).closest('[data-planner-block]')
-    // Alt/Ctrl+klik — nowy blok nawet nad istniejącym (równolegle w czasie)
-    if (onBlock && !(e.altKey || e.ctrlKey || e.metaKey)) return
+    const forceCreate = e.altKey || e.ctrlKey || e.metaKey
+    // Nad istniejącym blokiem: tylko Alt/Ctrl tworzy równoległy
+    if (onBlock && !forceCreate) return
+
+    if (tool === 'create' || forceCreate) {
+      e.preventDefault()
+      createBlockAt(dayOffset, e.clientY, e.currentTarget)
+      return
+    }
+
+    // Tryb zaznacz: klik w pustkę odznacza
     e.preventDefault()
-    createBlockAt(dayOffset, e.clientY, e.currentTarget)
+    setSelectedBlockId(null)
+    setSelectedNoteId(null)
   }
+
+  // Skróty narzędzi: V = zaznacz, B = utwórz, Del = usuń, Esc = zaznacz + odznacz
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return
+      if (expandedBlockId) return
+
+      const key = e.key.toLowerCase()
+      if (key === 'v') {
+        e.preventDefault()
+        setTool('select')
+        return
+      }
+      if (key === 'b') {
+        e.preventDefault()
+        setTool('create')
+        return
+      }
+      if (key === 'escape') {
+        e.preventDefault()
+        setTool('select')
+        setSelectedBlockId(null)
+        setSelectedNoteId(null)
+        return
+      }
+      if ((key === 'delete' || key === 'backspace') && selectedBlockId) {
+        e.preventDefault()
+        removeBlock(selectedBlockId)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [expandedBlockId, selectedBlockId])
 
   const beginBlockDrag = (
     mode: DragMode,
@@ -791,6 +838,45 @@ export default function PlannerWorkspace({
         </button>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2">
+        <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          Narzędzie
+        </span>
+        <div className="inline-flex overflow-hidden rounded-md border border-border">
+          <button
+            type="button"
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs ${
+              tool === 'select'
+                ? 'bg-primary/15 font-medium text-primary'
+                : 'text-muted-foreground hover:bg-background'
+            }`}
+            onClick={() => setTool('select')}
+            title="Zaznacz / przesuń (V)"
+          >
+            <MousePointer2 size={13} /> Zaznacz
+            <kbd className="ml-0.5 rounded border border-border/80 px-1 text-[9px] opacity-70">V</kbd>
+          </button>
+          <button
+            type="button"
+            className={`inline-flex items-center gap-1.5 border-l border-border px-2.5 py-1.5 text-xs ${
+              tool === 'create'
+                ? 'bg-primary/15 font-medium text-primary'
+                : 'text-muted-foreground hover:bg-background'
+            }`}
+            onClick={() => setTool('create')}
+            title="Utwórz blok kliknięciem (B)"
+          >
+            <SquarePlus size={13} /> Utwórz
+            <kbd className="ml-0.5 rounded border border-border/80 px-1 text-[9px] opacity-70">B</kbd>
+          </button>
+        </div>
+        <span className="text-[10px] text-muted-foreground">
+          {tool === 'create'
+            ? 'Klik w pustkę = nowy blok. Alt+klik nad blokiem = równoległy.'
+            : 'Klik pustkę = odznacz. Przeciągaj bloki. Del = usuń. Esc = odznacz.'}
+        </span>
+      </div>
+
       {hiddenBlockCount > 0 ? (
         <p className="rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
           {hiddenBlockCount}{' '}
@@ -909,7 +995,9 @@ export default function PlannerWorkspace({
                 <div
                   key={offset}
                   data-planner-day={offset}
-                  className="relative cursor-crosshair border-r border-border last:border-r-0"
+                  className={`relative border-r border-border last:border-r-0 ${
+                    tool === 'create' ? 'cursor-crosshair' : 'cursor-default'
+                  }`}
                   onPointerDown={(e) => onColumnPointerDown(offset, e)}
                 >
                   {hours.map((min) => (
