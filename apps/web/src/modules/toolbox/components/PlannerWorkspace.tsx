@@ -15,7 +15,6 @@ import {
   layoutOverlappingBlocks,
   minutesToLabel,
   newId,
-  plannerScreenshotRecoveryBlocks2026_11,
   sectionAccentColor,
   snapMinutes,
   syncPlannerBlocksToStartDate,
@@ -182,21 +181,24 @@ function PlannerDayBlock({
     >
       <div
         ref={contentRef}
-        className={`flex flex-col gap-1 pb-3 ${peekOpen ? '' : 'h-full overflow-hidden'}`}
+        className={`flex flex-col gap-0.5 pb-3 ${peekOpen ? '' : 'h-full min-h-0'}`}
       >
-        {editing ? (
-          <input
-            className="w-full truncate bg-transparent text-[13px] font-bold leading-tight text-white outline-none placeholder:text-white/60"
-            value={block.title}
-            placeholder="Tytuł bloku"
-            onChange={(e) => onChangeBlock({ title: e.target.value })}
-            onPointerDown={stopDrag}
-          />
-        ) : (
-          <div className="truncate text-[13px] font-bold leading-tight">{block.title}</div>
-        )}
-        <div className="truncate text-[10px] font-medium text-white/75">
-          {minutesToLabel(block.startMin)}–{minutesToLabel(block.endMin)}
+        {/* Nagłówek zawsze widoczny — overflow tylko na sekcjach poniżej */}
+        <div className="shrink-0 pt-0.5">
+          {editing ? (
+            <input
+              className="box-border h-[1.15rem] w-full truncate border-0 bg-transparent p-0 text-[13px] font-bold leading-none text-white outline-none placeholder:text-white/60"
+              value={block.title}
+              placeholder="Tytuł bloku"
+              onChange={(e) => onChangeBlock({ title: e.target.value })}
+              onPointerDown={stopDrag}
+            />
+          ) : (
+            <div className="truncate text-[13px] font-bold leading-none">{block.title}</div>
+          )}
+          <div className="mt-0.5 truncate text-[10px] font-medium leading-none text-white/75">
+            {minutesToLabel(block.startMin)}–{minutesToLabel(block.endMin)}
+          </div>
         </div>
 
         {editing || block.orderId ? (
@@ -211,6 +213,7 @@ function PlannerDayBlock({
           />
         ) : null}
 
+        <div className={`flex min-h-0 flex-col gap-1 ${peekOpen ? '' : 'flex-1 overflow-hidden'}`}>
         {editing
           ? sections.map((section, index) => {
               const accent = sectionAccentColor(index)
@@ -294,13 +297,14 @@ function PlannerDayBlock({
         {editing ? (
           <button
             type="button"
-            className="mt-0.5 inline-flex w-fit items-center gap-0.5 rounded bg-black/30 px-1.5 py-0.5 text-[9px] font-medium text-white/90 hover:bg-black/45"
+            className="mt-0.5 inline-flex w-fit shrink-0 items-center gap-0.5 rounded bg-black/30 px-1.5 py-0.5 text-[9px] font-medium text-white/90 hover:bg-black/45"
             onClick={addSection}
             onPointerDown={stopDrag}
           >
             <Plus size={10} /> sekcja
           </button>
         ) : null}
+        </div>
       </div>
       {peekOpen ? (
         <button
@@ -688,25 +692,6 @@ export default function PlannerWorkspace({
   const hiddenBlockCount = board.blocks.length - visibleBlocks.length
   const notesHeight = Math.max(gridHeight, ...board.notes.map((n) => n.y + 140), 320)
 
-  const restoreScreenshotBlocks = () => {
-    const recovered = syncPlannerBlocksToStartDate(
-      plannerScreenshotRecoveryBlocks2026_11(),
-      board.range.startDate
-    )
-    const existingTitles = new Set(board.blocks.map((b) => `${b.date}|${b.title}`))
-    const toAdd = recovered.filter((b) => !existingTitles.has(`${b.date}|${b.title}`))
-    if (toAdd.length === 0) {
-      window.alert('Te bloki z PDF już są na tablicy.')
-      return
-    }
-    const ok = window.confirm(
-      `Dodać ${toAdd.length} bloków z PDF „Planer-Listopad-2026-11-23_7d”?\n` +
-        `(Start najlepiej 23.11.2026, Dni = 7)`
-    )
-    if (!ok) return
-    onChange({ ...board, blocks: [...board.blocks, ...toAdd] })
-  }
-
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-surface px-3 py-2">
@@ -797,14 +782,6 @@ export default function PlannerWorkspace({
             <option value={30}>30 min</option>
           </select>
         </label>
-        <button
-          type="button"
-          onClick={restoreScreenshotBlocks}
-          className="inline-flex items-center gap-1 rounded border border-amber-500/50 px-2 py-1.5 text-xs text-amber-200 hover:border-amber-400"
-          title="Przywróć bloki z PDF Planer-Listopad-2026-11-23_7d (13 bloków)"
-        >
-          Odzyskaj z PDF
-        </button>
         <button
           type="button"
           onClick={addNote}
