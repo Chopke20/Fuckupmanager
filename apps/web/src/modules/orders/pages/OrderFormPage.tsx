@@ -1181,6 +1181,10 @@ export default function OrderFormPage() {
     if (validationError) {
       setSubmitError(validationError);
       submitInFlightRef.current = false;
+      // Błąd jest na górze formularza — bez scrolla „Zapisz” wygląda jakby nie działał.
+      requestAnimationFrame(() => {
+        document.getElementById('order-form-submit-error')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
       return;
     }
     try {
@@ -1205,6 +1209,9 @@ export default function OrderFormPage() {
         const firstFieldError = Object.values(validationDetails.fieldErrors).flat().find(Boolean);
         if (typeof firstFieldError === 'string') {
           setSubmitError(firstFieldError);
+          requestAnimationFrame(() => {
+            document.getElementById('order-form-submit-error')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
           return;
         }
       }
@@ -1222,6 +1229,9 @@ export default function OrderFormPage() {
             : 'Nie udało się zapisać zlecenia.';
 
       setSubmitError(msg);
+      requestAnimationFrame(() => {
+        document.getElementById('order-form-submit-error')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
     } finally {
       submitInFlightRef.current = false;
     }
@@ -1315,7 +1325,8 @@ export default function OrderFormPage() {
 
   return (
     <FormProvider {...methods}>
-      <form onSubmit={handleSubmit(() => onSubmit())}>
+      {/* noValidate: własne validateOrderPayload zamiast cichego HTML5 (date min / number min poza viewportem). */}
+      <form noValidate onSubmit={handleSubmit(() => onSubmit())}>
         <div>
           <div className="flex items-center justify-between mb-4">
             <button
@@ -1339,7 +1350,11 @@ export default function OrderFormPage() {
           </div>
 
           {submitError && (
-            <div className="mb-3 px-3 py-2 rounded bg-red-500/10 border border-red-500/30 text-red-600 text-sm">
+            <div
+              id="order-form-submit-error"
+              role="alert"
+              className="mb-3 px-3 py-2 rounded bg-red-500/10 border border-red-500/30 text-red-600 text-sm"
+            >
               {submitError}
             </div>
           )}
