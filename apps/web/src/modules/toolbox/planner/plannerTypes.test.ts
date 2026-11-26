@@ -7,9 +7,9 @@ import {
   layoutOverlappingBlocks,
   normalizePlannerBoard,
   parsePlannerBoardJson,
-  rebasePlannerBlocksToStartDate,
   serializePlannerBoard,
   snapMinutes,
+  syncPlannerBlocksToStartDate,
   type PlannerBlock,
 } from './plannerTypes'
 
@@ -36,16 +36,41 @@ describe('plannerTypes', () => {
     expect(diffDaysIso('2026-11-27', '2026-11-23')).toBe(-4)
   })
 
-  it('rebases blocks to new start date and cuts outside window', () => {
+  it('syncs dayOffset from absolute date without deleting blocks', () => {
     const blocks: PlannerBlock[] = [
-      { id: 'wed', dayOffset: 2, startMin: 60, endMin: 180, title: 'Arche', sections: [] },
-      { id: 'fri', dayOffset: 4, startMin: 615, endMin: 720, title: 'Załadunek', sections: [] },
-      { id: 'sat', dayOffset: 5, startMin: 510, endMin: 750, title: 'Cygan', sections: [] },
+      {
+        id: 'wed',
+        date: '2026-11-25',
+        dayOffset: 2,
+        startMin: 60,
+        endMin: 180,
+        title: 'Arche',
+        sections: [],
+      },
+      {
+        id: 'fri',
+        date: '2026-11-27',
+        dayOffset: 4,
+        startMin: 615,
+        endMin: 720,
+        title: 'Załadunek',
+        sections: [],
+      },
+      {
+        id: 'sat',
+        date: '2026-11-28',
+        dayOffset: 5,
+        startMin: 510,
+        endMin: 750,
+        title: 'Cygan',
+        sections: [],
+      },
     ]
-    const next = rebasePlannerBlocksToStartDate(blocks, '2026-11-23', '2026-11-27', 7)
-    expect(next.map((b) => ({ id: b.id, dayOffset: b.dayOffset }))).toEqual([
-      { id: 'fri', dayOffset: 0 },
-      { id: 'sat', dayOffset: 1 },
+    const next = syncPlannerBlocksToStartDate(blocks, '2026-11-27')
+    expect(next.map((b) => ({ id: b.id, dayOffset: b.dayOffset, date: b.date }))).toEqual([
+      { id: 'wed', dayOffset: -2, date: '2026-11-25' },
+      { id: 'fri', dayOffset: 0, date: '2026-11-27' },
+      { id: 'sat', dayOffset: 1, date: '2026-11-28' },
     ])
   })
 
@@ -84,9 +109,33 @@ describe('plannerTypes', () => {
 
   it('lays out concurrent blocks side by side', () => {
     const blocks: PlannerBlock[] = [
-      { id: 'a', dayOffset: 0, startMin: 9 * 60, endMin: 11 * 60, title: 'A', sections: [] },
-      { id: 'b', dayOffset: 0, startMin: 10 * 60, endMin: 12 * 60, title: 'B', sections: [] },
-      { id: 'c', dayOffset: 0, startMin: 14 * 60, endMin: 15 * 60, title: 'C', sections: [] },
+      {
+        id: 'a',
+        date: '2026-11-23',
+        dayOffset: 0,
+        startMin: 9 * 60,
+        endMin: 11 * 60,
+        title: 'A',
+        sections: [],
+      },
+      {
+        id: 'b',
+        date: '2026-11-23',
+        dayOffset: 0,
+        startMin: 10 * 60,
+        endMin: 12 * 60,
+        title: 'B',
+        sections: [],
+      },
+      {
+        id: 'c',
+        date: '2026-11-23',
+        dayOffset: 0,
+        startMin: 14 * 60,
+        endMin: 15 * 60,
+        title: 'C',
+        sections: [],
+      },
     ]
     const layout = layoutOverlappingBlocks(blocks)
     expect(layout.get('a')).toEqual({ col: 0, colCount: 2 })

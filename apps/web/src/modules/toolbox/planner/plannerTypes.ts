@@ -58,6 +58,9 @@ export interface PlannerBlockSection {
 
 export interface PlannerBlock {
   id: string
+  /** Absolutna data kalendarzowa (ISO) — źródło prawdy przy zmianie Start. */
+  date: string
+  /** Offset względem range.startDate (może być poza oknem — wtedy niewidoczny). */
   dayOffset: number
   startMin: number
   endMin: number
@@ -171,7 +174,10 @@ export function addDaysIso(isoDate: string, offset: number): string {
   const { y, m, d } = parseIsoParts(isoDate)
   const dt = new Date(Date.UTC(y, m - 1, d))
   dt.setUTCDate(dt.getUTCDate() + offset)
-  return todayIsoDate(new Date(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate()))
+  const yy = dt.getUTCFullYear()
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(dt.getUTCDate()).padStart(2, '0')
+  return `${yy}-${mm}-${dd}`
 }
 
 /** Liczba dni kalendarzowych od `fromIso` do `toIso` (może być ujemna). */
@@ -183,22 +189,60 @@ export function diffDaysIso(fromIso: string, toIso: string): number {
   return Math.round((t1 - t0) / (24 * 60 * 60 * 1000))
 }
 
-/**
- * Po zmianie startDate bloki zostają na tych samych datach kalendarzowych.
- * Te poza nowym oknem [start, start+dayCount) są ucinane.
- */
-export function rebasePlannerBlocksToStartDate(
+/** Przelicz dayOffset z absolutnej daty bloku względem startDate. Nic nie usuwa. */
+export function syncPlannerBlocksToStartDate(
   blocks: PlannerBlock[],
-  oldStartDate: string,
-  newStartDate: string,
-  dayCount: number
+  startDate: string
 ): PlannerBlock[] {
-  if (!oldStartDate || !newStartDate || oldStartDate === newStartDate) return blocks
-  const shift = diffDaysIso(oldStartDate, newStartDate)
-  if (shift === 0) return blocks
-  return blocks
-    .map((b) => ({ ...b, dayOffset: b.dayOffset - shift }))
-    .filter((b) => b.dayOffset >= 0 && b.dayOffset < dayCount)
+  if (!isIsoDate(startDate)) return blocks
+  return blocks.map((b) => {
+    const date = isIsoDate(b.date) ? b.date : addDaysIso(startDate, b.dayOffset)
+    return { ...b, date, dayOffset: diffDaysIso(startDate, date) }
+  })
+}
+
+export function isBlockInRange(block: PlannerBlock, dayCount: number): boolean {
+  return block.dayOffset >= 0 && block.dayOffset < dayCount
+}
+
+/** Odzysk z screena tablicy (23–29.11.2026): Arche / Załadunek / Cygan. */
+export function plannerScreenshotRecoveryBlocks2026_11(): PlannerBlock[] {
+  const mk = (
+    date: string,
+    title: string,
+    startMin: number,
+    endMin: number,
+    color: string,
+    people: string
+  ): PlannerBlock => ({
+    id: newId('blk'),
+    date,
+    dayOffset: 0,
+    startMin,
+    endMin,
+    title,
+    color,
+    sections: [{ id: newId('sec'), title: 'LUDZIE', text: people }],
+  })
+  return [
+    mk('2026-11-25', 'Arche demontaż', 60, 180, '#3b82f6', 'Rafał\nMichał\nHubert\nBob'),
+    mk(
+      '2026-11-27',
+      'Załadunek Filharmonia + Jamka',
+      10 * 60 + 15,
+      12 * 60,
+      '#a855f7',
+      'Michał\nRafał\nBob'
+    ),
+    mk(
+      '2026-11-28',
+      'Cygan Montaż',
+      8 * 60 + 30,
+      12 * 60 + 30,
+      '#ef4444',
+      'Rafał\nMichał\nBob\nMichał od Boba\nNatasza'
+    ),
+  ]
 }
 
 export function formatDayHeader(isoDate: string): string {
@@ -354,7 +398,13 @@ export function normalizePlannerBoard(raw: unknown): PlannerBoardPayload | null 
     if (!item || typeof item !== 'object') continue
     const b = item as Record<string, unknown>
     if (typeof b.id !== 'string' || !b.id) continue
-    const dayOffset = clampInt(Number(b.dayOffset), 0, dayCount - 1)
+    const rawOffset = Number(b.dayOffset)
+    const fallbackOffset = Number.isFinite(rawOffset) ? Math.floor(rawOffset) : 0
+    const date =
+      typeof b.date === 'string' && isIsoDate(b.date)
+        ? b.date
+        : addDaysIso(rangeObj.startDate, fallbackOffset)
+    const dayOffset = diffDaysIso(rangeObj.startDate, date)
     const clamped = clampBlockToDay(Number(b.startMin), Number(b.endMin), time)
     const title = typeof b.title === 'string' && b.title.trim() ? b.title.trim().slice(0, 120) : 'Blok'
     const color = typeof b.color === 'string' ? b.color.slice(0, 32) : undefined
@@ -384,6 +434,7 @@ export function normalizePlannerBoard(raw: unknown): PlannerBoardPayload | null 
     }
     blocks.push({
       id: b.id.slice(0, 80),
+      date,
       dayOffset,
       startMin: clamped.startMin,
       endMin: clamped.endMin,

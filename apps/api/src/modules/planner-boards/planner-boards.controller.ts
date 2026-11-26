@@ -13,7 +13,10 @@ const blockSectionSchema = z.object({
 
 const blockSchema = z.object({
   id: z.string().min(1).max(80),
-  dayOffset: z.number().int().min(0).max(13),
+  /** Absolutna data (ISO); bloki poza oknem Start+Dni zostają w JSON. */
+  date: z.string().regex(ISO_DATE).optional(),
+  /** Może być poza 0..dayCount-1 (niewidoczny, ale zachowany). */
+  dayOffset: z.number().int().min(-400).max(400),
   startMin: z.number().int().min(0).max(24 * 60),
   endMin: z.number().int().min(0).max(24 * 60),
   title: z.string().trim().min(1).max(120),
@@ -65,13 +68,7 @@ export const boardPayloadSchema = z
           message: 'endMin musi być większe od startMin.',
         })
       }
-      if (b.dayOffset >= val.range.dayCount) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['blocks', i, 'dayOffset'],
-          message: 'dayOffset poza zakresem dayCount.',
-        })
-      }
+      // dayOffset może być poza oknem Start+Dni — blok zostaje w JSON, UI go ukrywa.
     }
   })
 

@@ -11,12 +11,14 @@ import {
   emptyBlockSection,
   formatDayHeader,
   hourMarks,
+  isBlockInRange,
   layoutOverlappingBlocks,
   minutesToLabel,
   newId,
-  rebasePlannerBlocksToStartDate,
+  plannerScreenshotRecoveryBlocks2026_11,
   sectionAccentColor,
   snapMinutes,
+  syncPlannerBlocksToStartDate,
   type PlannerBlock,
   type PlannerBoardPayload,
   type PlannerNote,
@@ -377,11 +379,13 @@ export default function PlannerWorkspace({
     for (const offset of days) {
       map.set(
         offset,
-        layoutOverlappingBlocks(board.blocks.filter((b) => b.dayOffset === offset))
+        layoutOverlappingBlocks(
+          board.blocks.filter((b) => b.dayOffset === offset && isBlockInRange(b, board.range.dayCount))
+        )
       )
     }
     return map
-  }, [board.blocks, days])
+  }, [board.blocks, board.range.dayCount, days])
 
   const patch = (partial: Partial<PlannerBoardPayload>) => {
     onChange({ ...board, ...partial })
@@ -434,8 +438,10 @@ export default function PlannerWorkspace({
     title?: string
   }) => {
     const color = PLANNER_BLOCK_COLORS[board.blocks.length % PLANNER_BLOCK_COLORS.length]
+    const date = addDaysIso(board.range.startDate, partial.dayOffset)
     const block: PlannerBlock = {
       id: newId('blk'),
+      date,
       dayOffset: partial.dayOffset,
       startMin: partial.startMin,
       endMin: partial.endMin,
@@ -573,6 +579,7 @@ export default function PlannerWorkspace({
               ? {
                   ...b,
                   dayOffset: nextDay,
+                  date: addDaysIso(current.range.startDate, nextDay),
                   startMin: clamped.startMin,
                   endMin: clamped.endMin,
                 }
@@ -677,7 +684,23 @@ export default function PlannerWorkspace({
   }, [noteDrag])
 
   const selectedBlock = board.blocks.find((b) => b.id === selectedBlockId) ?? null
+  const visibleBlocks = board.blocks.filter((b) => isBlockInRange(b, board.range.dayCount))
+  const hiddenBlockCount = board.blocks.length - visibleBlocks.length
   const notesHeight = Math.max(gridHeight, ...board.notes.map((n) => n.y + 140), 320)
+
+  const restoreScreenshotBlocks = () => {
+    const recovered = syncPlannerBlocksToStartDate(
+      plannerScreenshotRecoveryBlocks2026_11(),
+      board.range.startDate
+    )
+    const existingTitles = new Set(board.blocks.map((b) => `${b.date}|${b.title}`))
+    const toAdd = recovered.filter((b) => !existingTitles.has(`${b.date}|${b.title}`))
+    if (toAdd.length === 0) {
+      window.alert('Te bloki już są na tablicy.')
+      return
+    }
+    onChange({ ...board, blocks: [...board.blocks, ...toAdd] })
+  }
 
   return (
     <div className="space-y-3">
@@ -691,23 +714,12 @@ export default function PlannerWorkspace({
             onChange={(e) => {
               const nextStart = e.target.value || board.range.startDate
               if (nextStart === board.range.startDate) return
-              const nextBlocks = rebasePlannerBlocksToStartDate(
-                board.blocks,
-                board.range.startDate,
-                nextStart,
-                board.range.dayCount
-              )
+              // Okno się przesuwa — bloki zostają na datach kalendarzowych (nic nie kasujemy).
               onChange({
                 ...board,
                 range: { ...board.range, startDate: nextStart },
-                blocks: nextBlocks,
+                blocks: syncPlannerBlocksToStartDate(board.blocks, nextStart),
               })
-              if (selectedBlockId && !nextBlocks.some((b) => b.id === selectedBlockId)) {
-                setSelectedBlockId(null)
-              }
-              if (expandedBlockId && !nextBlocks.some((b) => b.id === expandedBlockId)) {
-                setExpandedBlockId(null)
-              }
             }}
           />
         </label>
@@ -724,18 +736,10 @@ export default function PlannerWorkspace({
                 PLANNER_MAX_DAY_COUNT,
                 Math.max(PLANNER_MIN_DAY_COUNT, Number(e.target.value) || 1)
               )
-              const nextBlocks = board.blocks.filter((b) => b.dayOffset < dayCount)
               onChange({
                 ...board,
                 range: { ...board.range, dayCount },
-                blocks: nextBlocks,
               })
-              if (selectedBlockId && !nextBlocks.some((b) => b.id === selectedBlockId)) {
-                setSelectedBlockId(null)
-              }
-              if (expandedBlockId && !nextBlocks.some((b) => b.id === expandedBlockId)) {
-                setExpandedBlockId(null)
-              }
             }}
           />
         </label>
@@ -790,12 +794,29 @@ export default function PlannerWorkspace({
         </label>
         <button
           type="button"
+          onClick={restoreScreenshotBlocks}
+          className="inline-flex items-center gap-1 rounded border border-amber-500/50 px-2 py-1.5 text-xs text-amber-200 hover:border-amber-400"
+          title="Przywróć Arche / Załadunek / Cygan ze screena z 26.11"
+        >
+          Odzyskaj 3 bloki
+        </button>
+        <button
+          type="button"
           onClick={addNote}
           className="ml-auto inline-flex items-center gap-1 rounded border border-border px-2 py-1.5 text-xs hover:border-primary/40"
         >
           <Plus size={12} /> Notatka
         </button>
       </div>
+
+      {hiddenBlockCount > 0 ? (
+        <p className="rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+          {hiddenBlockCount}{' '}
+          {hiddenBlockCount === 1 ? 'blok jest' : 'bloków jest'} poza widocznym zakresem dat —
+          cofnij <strong>Start</strong> albo zwiększ <strong>Dni</strong>, żeby je zobaczyć. Nic nie
+          zostało skasowane.
+        </p>
+      ) : null}
 
       <div className="overflow-auto rounded-lg border border-border bg-background">
         <div className="flex min-w-[640px]">
