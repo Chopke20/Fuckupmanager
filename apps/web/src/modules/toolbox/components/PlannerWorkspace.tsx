@@ -27,7 +27,7 @@ const PX_PER_HOUR = 56
 const TIME_GUTTER_W = 52
 const NOTES_RAIL_W = 240
 
-type DragMode = 'move' | 'resize'
+type DragMode = 'move' | 'resize-start' | 'resize-end'
 
 interface ActiveDrag {
   mode: DragMode
@@ -56,7 +56,8 @@ function PlannerDayBlock({
   selected,
   dragging,
   onMovePointerDown,
-  onResizePointerDown,
+  onResizeStartPointerDown,
+  onResizeEndPointerDown,
   onSelect,
   onChangeBlock,
 }: {
@@ -68,7 +69,8 @@ function PlannerDayBlock({
   selected: boolean
   dragging: boolean
   onMovePointerDown: (e: ReactPointerEvent<HTMLElement>) => void
-  onResizePointerDown: (e: ReactPointerEvent<HTMLElement>) => void
+  onResizeStartPointerDown: (e: ReactPointerEvent<HTMLElement>) => void
+  onResizeEndPointerDown: (e: ReactPointerEvent<HTMLElement>) => void
   onSelect: () => void
   onChangeBlock: (patch: Partial<PlannerBlock>) => void
 }) {
@@ -328,10 +330,18 @@ function PlannerDayBlock({
         </>
       ) : null}
       {!peekOpen ? (
-        <div
-          className="absolute inset-x-0 bottom-0 h-2 cursor-ns-resize"
-          onPointerDown={onResizePointerDown}
-        />
+        <>
+          <div
+            className="absolute inset-x-0 top-0 z-[3] h-2 cursor-ns-resize"
+            title="Rozciągnij w górę"
+            onPointerDown={onResizeStartPointerDown}
+          />
+          <div
+            className="absolute inset-x-0 bottom-0 z-[3] h-2 cursor-ns-resize"
+            title="Rozciągnij w dół"
+            onPointerDown={onResizeEndPointerDown}
+          />
+        </>
       ) : null}
     </div>
   )
@@ -499,7 +509,8 @@ export default function PlannerWorkspace({
   useEffect(() => {
     if (!drag && !noteDrag) return
     const prev = document.body.style.cursor
-    document.body.style.cursor = drag?.mode === 'resize' ? 'ns-resize' : 'grabbing'
+    document.body.style.cursor =
+      drag?.mode === 'resize-start' || drag?.mode === 'resize-end' ? 'ns-resize' : 'grabbing'
     return () => {
       document.body.style.cursor = prev
     }
@@ -564,6 +575,20 @@ export default function PlannerWorkspace({
                   startMin: clamped.startMin,
                   endMin: clamped.endMin,
                 }
+              : b
+          ),
+        })
+      } else if (drag.mode === 'resize-start') {
+        const clamped = clampBlockToDay(
+          drag.originStartMin + deltaMin,
+          drag.originEndMin,
+          current.time
+        )
+        onChangeRef.current({
+          ...current,
+          blocks: current.blocks.map((b) =>
+            b.id === drag.blockId
+              ? { ...b, startMin: clamped.startMin, endMin: clamped.endMin }
               : b
           ),
         })
@@ -893,7 +918,8 @@ export default function PlannerWorkspace({
                           selected={selected}
                           dragging={drag?.blockId === block.id}
                           onMovePointerDown={(e) => beginBlockDrag('move', block, e)}
-                          onResizePointerDown={(e) => beginBlockDrag('resize', block, e)}
+                          onResizeStartPointerDown={(e) => beginBlockDrag('resize-start', block, e)}
+                          onResizeEndPointerDown={(e) => beginBlockDrag('resize-end', block, e)}
                           onSelect={() => {
                             setSelectedBlockId(block.id)
                             setSelectedNoteId(null)
